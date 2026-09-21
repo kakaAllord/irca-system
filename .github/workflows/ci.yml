@@ -1,0 +1,70 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # The same five roles and settings as docs/plan step 1.5, with the
+      # local-only passwords apps/api/.env.test expects.
+      - name: Create database roles and the test database
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 <<'SQL'
+          create role irca_owner    login password 'owner_local_pw' createdb;
+          create role irca_core     login password 'core_local_pw';
+          create role irca_app      login password 'app_local_pw';
+          create role irca_readonly login password 'ro_local_pw';
+          create role irca_backup   login password 'backup_local_pw';
+          create database irca_test owner irca_owner;
+          alter role irca_app      set statement_timeout = '10s';
+          alter role irca_readonly set statement_timeout = '10s';
+          alter role irca_core     set statement_timeout = '60s';
+          alter role irca_owner    set timezone = 'UTC';
+          alter role irca_core     set timezone = 'UTC';
+          alter role irca_app      set timezone = 'UTC';
+          alter role irca_readonly set timezone = 'UTC';
+          alter role irca_backup   set timezone = 'UTC';
+          SQL
+
+      - run: npm run build -w @irca/shared
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npx prettier --check .
+      - run: npm test
+      - run: npm run test:e2e -w @irca/api
+      - run: npm run build
+
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e
+        env:
+          CI: 'true'
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: test-results/
+          retention-days: 7
