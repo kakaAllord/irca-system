@@ -6,6 +6,9 @@ import { RequestContextModule } from './core/context/context.module.js';
 import { LoggingModule } from './core/logging/logging.module.js';
 import { DatabaseModule } from './core/database/database.module.js';
 import { CoreModule } from './core/core.module.js';
+import { EmailModule } from './core/email/email.module.js';
+import { InvitationsModule } from './core/invitations/invitations.module.js';
+import { AdminModule } from './modules/admin/admin.module.js';
 import { AllExceptionsFilter } from './core/http/all-exceptions.filter.js';
 import { NoStoreInterceptor } from './core/http/no-store.interceptor.js';
 import { HealthController } from './core/health/health.controller.js';
@@ -32,9 +35,12 @@ import { UsageInterceptor } from './core/usage/usage.interceptor.js';
       throttlers: [{ name: 'default', ttl: 60_000, limit: 300 }],
       errorMessage: 'Too many requests. Wait a minute and try again.',
     }),
+    EmailModule,
     CoreModule,
     AuthModule,
     ImpersonationModule,
+    InvitationsModule,
+    AdminModule,
   ],
   controllers: [HealthController],
   providers: [

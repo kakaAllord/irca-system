@@ -103,6 +103,28 @@ export class SessionService {
     });
   }
 
+  /** Signs someone out of one church, leaving their other churches alone. */
+  async revokeForChurch(userId: string, churchId: string, reason: string): Promise<void> {
+    await this.db.session.updateMany({
+      where: { userId, activeChurchId: churchId, revokedAt: null },
+      data: { revokedAt: new Date(), revokeReason: reason },
+    });
+    // Anyone viewing as them in that church stops viewing as them.
+    const open = await this.db.impersonationSession.findMany({
+      where: { subjectUserId: userId, churchId, endedAt: null },
+    });
+    for (const impersonation of open) {
+      await this.db.impersonationSession.update({
+        where: { id: impersonation.id },
+        data: { endedAt: new Date(), endReason: 'REVOKED' },
+      });
+      await this.db.session.updateMany({
+        where: { impersonationId: impersonation.id },
+        data: { impersonationId: null, activeChurchId: impersonation.previousChurchId },
+      });
+    }
+  }
+
   async revokeAllForUser(userId: string, reason: string, exceptSessionId?: string): Promise<void> {
     await this.db.session.updateMany({
       where: {

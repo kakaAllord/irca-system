@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaCore } from '../database/prisma-clients.js';
 import { ImpersonationService } from '../impersonation/impersonation.service.js';
+import { EmailService } from '../email/email.service.js';
 import { JobRunner } from './job-runner.service.js';
 
 /**
@@ -14,7 +15,14 @@ export class ScheduledJobs {
     private readonly jobs: JobRunner,
     private readonly impersonation: ImpersonationService,
     private readonly db: PrismaCore,
+    private readonly email: EmailService,
   ) {}
+
+  /** Often enough that an invitation feels immediate. */
+  @Cron('*/15 * * * * *', { name: 'email-outbox' })
+  sendQueuedEmails() {
+    return this.jobs.run('email-outbox', () => this.email.sendDue());
+  }
 
   @Cron(CronExpression.EVERY_MINUTE, { name: 'impersonation-expiry' })
   expireImpersonations() {

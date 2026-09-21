@@ -83,6 +83,7 @@ model User {
 
   memberships ChurchMembership[]
   sessions    Session[]
+  resetTokens PasswordResetToken[]
 
   @@map("users")
 }
@@ -99,9 +100,10 @@ model ChurchMembership {
   createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  church Church           @relation(fields: [churchId], references: [id])
-  user   User             @relation(fields: [userId], references: [id])
-  roles  MembershipRole[]
+  church      Church           @relation(fields: [churchId], references: [id])
+  user        User             @relation(fields: [userId], references: [id])
+  roles       MembershipRole[]
+  invitations Invitation[]
 
   @@unique([churchId, userId])
   /// So a role can be linked only to a membership of the same church.
@@ -356,4 +358,76 @@ model ChurchPlacement {
   church Church @relation(fields: [churchId], references: [id])
 
   @@map("church_placements")
+}
+
+enum EmailStatus {
+  PENDING
+  SENDING
+  SENT
+  /// Gave up after the last retry.
+  FAILED
+}
+
+/// Emails are written here with the change that causes them, in one
+/// transaction, and sent by a worker. A provider that is down delays an
+/// invitation; it never loses one.
+model EmailOutbox {
+  id                String      @id @default(uuid(7)) @db.Uuid
+  churchId          String?     @map("church_id") @db.Uuid
+  toEmail           String      @map("to_email") @db.VarChar(254)
+  template          String      @db.VarChar(60)
+  /// What the template needs. One-time links are scrubbed once sent.
+  payload           Json
+  subject           String?     @db.VarChar(200)
+  status            EmailStatus @default(PENDING)
+  attempts          Int         @default(0)
+  nextAttemptAt     DateTime    @default(now()) @map("next_attempt_at") @db.Timestamptz(6)
+  lastError         String?     @map("last_error")
+  providerMessageId String?     @map("provider_message_id") @db.VarChar(200)
+  createdAt         DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  sentAt            DateTime?   @map("sent_at") @db.Timestamptz(6)
+
+  @@index([status, nextAttemptAt])
+  @@index([churchId, createdAt(sort: Desc)])
+  @@map("email_outbox")
+}
+
+/// One invitation to one church. The person, their membership and their roles
+/// are created when it is sent, so an administrator can adjust the roles
+/// before it is accepted, and the People page can show who is still invited.
+/// Roles do nothing until the membership becomes active.
+model Invitation {
+  id           String    @id @default(uuid(7)) @db.Uuid
+  churchId     String    @map("church_id") @db.Uuid
+  membershipId String    @map("membership_id") @db.Uuid
+  email        String    @db.VarChar(254)
+  tokenHash    String    @unique @map("token_hash") @db.Char(64)
+  expiresAt    DateTime  @map("expires_at") @db.Timestamptz(6)
+  acceptedAt   DateTime? @map("accepted_at") @db.Timestamptz(6)
+  revokedAt    DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdById  String    @map("created_by_id") @db.Uuid
+  sentCount    Int       @default(1) @map("sent_count")
+  lastSentAt   DateTime  @default(now()) @map("last_sent_at") @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  membership ChurchMembership @relation(fields: [churchId, membershipId], references: [churchId, id], onDelete: Cascade)
+
+  @@index([churchId, createdAt(sort: Desc)])
+  @@index([membershipId])
+  @@map("invitations")
+}
+
+/// One-time password reset. Only the hash is stored, as with sessions.
+model PasswordResetToken {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash") @db.Char(64)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
 }

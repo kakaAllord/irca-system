@@ -21,6 +21,8 @@ import { UsageInterceptor } from './usage/usage.interceptor.js';
 import { NoStoreInterceptor } from './http/no-store.interceptor.js';
 import { RateLimitGuard } from './limits/rate-limit.guard.js';
 import { QuotaService } from './limits/quota.service.js';
+import { InvitationService } from './invitations/invitation.service.js';
+import { PasswordResetService } from './auth/password-reset.service.js';
 import { JobRunner } from './jobs/job-runner.service.js';
 import { ScheduledJobs } from './jobs/scheduled-jobs.service.js';
 
@@ -39,6 +41,8 @@ import { ScheduledJobs } from './jobs/scheduled-jobs.service.js';
     PasswordService,
     SessionService,
     MeService,
+    PasswordResetService,
+    InvitationService,
     PermissionResolver,
     ImpersonationService,
     AuditService,
@@ -63,6 +67,8 @@ import { ScheduledJobs } from './jobs/scheduled-jobs.service.js';
     PasswordService,
     SessionService,
     MeService,
+    PasswordResetService,
+    InvitationService,
     PermissionResolver,
     ImpersonationService,
     AuditService,
