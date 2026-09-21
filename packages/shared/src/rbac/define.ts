@@ -20,6 +20,10 @@ export type PermissionDef = {
  * name nothing can draw does not compile.
  */
 export type NavIcon =
+  | 'dashboard'
+  | 'applications'
+  | 'discipleship'
+  | 'insights'
   | 'overview'
   | 'transactions'
   | 'lists'

@@ -27,6 +27,37 @@ export function NavIcon({ name, size = 14 }: { name: Name; size?: number }) {
 }
 
 const PATHS: Record<Name, React.ReactNode> = {
+  // A house: where a portal starts.
+  dashboard: (
+    <>
+      <path d="M3 10.5 12 3l9 7.5" />
+      <path d="M5.5 9.3V20h13V9.3" />
+      <path d="M9.8 20v-5.4h4.4V20" />
+    </>
+  ),
+  // A form with a tick: someone asking to join.
+  applications: (
+    <>
+      <path d="M6 3h9l4 4v14H6Z" />
+      <path d="M14 3v4h4" />
+      <path d="m9 14 2 2 4-4" />
+    </>
+  ),
+  // Footsteps, one after another: the foundation class.
+  discipleship: (
+    <>
+      <path d="M12 21V3" />
+      <path d="M12 7H8.5a2.5 2.5 0 0 1 0-5H12M12 13h3.5a2.5 2.5 0 0 0 0-5H12" />
+      <circle cx="12" cy="18.5" r="2" />
+    </>
+  ),
+  // A rising line: what the form tells you.
+  insights: (
+    <>
+      <path d="M3 3v18h18" />
+      <path d="m7 15 4-5 3.5 3L20 7" />
+    </>
+  ),
   // Bars: how the month went.
   overview: <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />,
   // A receipt with its torn edge.
