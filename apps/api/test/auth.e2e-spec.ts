@@ -35,7 +35,7 @@ describe('signing in and out', () => {
 
     expect(res.body.user.email).toBe(u.email);
     expect(res.body.church.code).toBe('IRCA');
-    const cookie = ([] as string[]).concat(res.headers['set-cookie'])[0]!;
+    const cookie = ([] as string[]).concat(res.headers['set-cookie'] ?? [])[0]!;
     expect(cookie).toMatch(/HttpOnly/);
     expect(cookie).toMatch(/SameSite=Lax/);
     expect(cookie).toMatch(/Path=\//);
