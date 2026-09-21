@@ -3,6 +3,7 @@ import { ErrorCode } from '@irca/shared';
 import { JOINING, SERVING, t, UI, type Lang } from '@irca/shared/registration';
 import type { PersonNoteKind, PersonStage } from '../../../generated/prisma/client.js';
 import { Db } from '../../../core/database/db.service.js';
+import { empty, identifier, join, sql, type Sql } from '../../../core/database/sql.js';
 import { RequestAuth } from '../../../core/context/request-auth.js';
 import { AppError } from '../../../core/http/app-error.js';
 import { AuditService } from '../../../core/audit/audit.service.js';
@@ -36,18 +37,18 @@ export type PeopleQuery = {
 };
 
 // The office's word, then the form's, then no.
-const SAVED = `coalesce(p.saved, r.saved, false)`;
-const BAPTISED = `coalesce(p.baptised, r.bapt, false)`;
+const SAVED = sql`coalesce(p.saved, r.saved, false)`;
+const BAPTISED = sql`coalesce(p.baptised, r.bapt, false)`;
 
 /** Each tab as a condition, so the list and the counts use one definition. */
-const TAB_SQL: Record<Tab, string> = {
-  all: 'true',
-  joining: `'${JOINING}' = any(coalesce(r.interest, '{}'))`,
+const TAB_SQL: Record<Tab, Sql> = {
+  all: sql`true`,
+  joining: sql`${JOINING} = any(coalesce(r.interest, '{}'))`,
   salvation: SAVED,
   baptism: BAPTISED,
-  volunteers: `'${SERVING}' = any(coalesce(r.interest, '{}'))`,
-  new_converts: `${SAVED} and not ${BAPTISED}`,
-  incomplete: `r.status = 'in_progress'`,
+  volunteers: sql`${SERVING} = any(coalesce(r.interest, '{}'))`,
+  new_converts: sql`${SAVED} and not ${BAPTISED}`,
+  incomplete: sql`r.status = 'in_progress'`,
 };
 
 /**
@@ -75,13 +76,13 @@ export class PeopleService {
 
   async list(query: PeopleQuery) {
     const churchId = this.auth.requireChurch();
-    const { where, params } = this.filters(query, churchId);
+    const where = this.filters(query, churchId);
     const tab = TABS.includes(query.tab as Tab) ? (query.tab as Tab) : 'all';
     const pageSize = Math.min(query.pageSize ?? 25, 100);
     const page = Math.max(1, query.page ?? 1);
 
     const ids = await this.query<{ id: string }>(
-      `-- tenant: church_id = $1
+      sql`-- tenant: church_id is bound in the where clause
        select p.id from people p
        left join registrations r on r.id = p.registration_id and r.church_id = p.church_id
        where ${where} and ${TAB_SQL[tab]}
@@ -89,16 +90,17 @@ export class PeopleService {
        order by (r.status = 'in_progress') desc nulls last,
                 coalesce(r.updated_at, p.updated_at) desc
        limit ${pageSize} offset ${(page - 1) * pageSize}`,
-      ...params,
     );
 
     const counts = await this.query<Record<Tab, number>>(
-      `-- tenant: church_id = $1
-       select ${TABS.map((key) => `count(*) filter (where ${TAB_SQL[key]})::int as ${key}`).join(', ')}
+      sql`-- tenant: church_id is bound in the where clause
+       select ${join(
+         TABS.map((key) => sql`count(*) filter (where ${TAB_SQL[key]})::int as ${identifier(key)}`),
+         ', ',
+       )}
        from people p
        left join registrations r on r.id = p.registration_id and r.church_id = p.church_id
        where ${where}`,
-      ...params,
     );
 
     const people = await this.db.client.person.findMany({
@@ -116,35 +118,30 @@ export class PeopleService {
   }
 
   /** Every filter but the tab, as SQL, so the tab counts can share it. */
-  private filters(query: PeopleQuery, churchId: string) {
-    const params: unknown[] = [churchId];
-    const clauses = ['p.church_id = $1::uuid'];
-    const add = (sql: string, value: unknown) => {
-      params.push(value);
-      clauses.push(sql.replace('?', `$${params.length}`));
-    };
+  private filters(query: PeopleQuery, churchId: string): Sql {
+    const clauses: Sql[] = [sql`p.church_id = ${churchId}::uuid`];
 
     const q = query.q?.trim();
     if (q) {
-      params.push(`%${q.toLowerCase()}%`);
-      const n = `$${params.length}`;
+      const like = `%${q.toLowerCase()}%`;
       // Email only for people who may see it: searching by it would otherwise
       // tell someone whose address it is.
       clauses.push(
-        `(lower(p.full_name) like ${n} or (p.dial || p.phone) like ${n} or p.phone like ${n}` +
-          (this.canReadSensitive ? ` or lower(p.email) like ${n})` : ')'),
+        sql`(lower(p.full_name) like ${like} or (p.dial || p.phone) like ${like}
+             or p.phone like ${like}
+             ${this.canReadSensitive ? sql`or lower(p.email) like ${like}` : empty})`,
       );
     }
     if (query.salvation === 'saved') clauses.push(SAVED);
-    if (query.salvation === 'not') clauses.push(`not ${SAVED}`);
+    if (query.salvation === 'not') clauses.push(sql`not ${SAVED}`);
     if (query.baptism === 'baptised') clauses.push(BAPTISED);
-    if (query.baptism === 'not') clauses.push(`not ${BAPTISED}`);
-    if (query.gender) add('p.gender = ?', query.gender);
-    if (query.age) add('p.age_group = ?', query.age);
-    if (query.lives) add('r.where_at = ?', query.lives);
-    if (query.source) add("? = any(coalesce(r.heard, '{}'))", query.source);
+    if (query.baptism === 'not') clauses.push(sql`not ${BAPTISED}`);
+    if (query.gender) clauses.push(sql`p.gender = ${query.gender}`);
+    if (query.age) clauses.push(sql`p.age_group = ${query.age}`);
+    if (query.lives) clauses.push(sql`r.where_at = ${query.lives}`);
+    if (query.source) clauses.push(sql`${query.source} = any(coalesce(r.heard, '{}'))`);
 
-    return { where: clauses.join(' and '), params };
+    return join(clauses, ' and ');
   }
 
   async get(id: string) {
@@ -364,8 +361,8 @@ export class PeopleService {
   }
 
   /** Raw SQL through a transaction, which is what tells Postgres the church. */
-  private query<T>(sql: string, ...params: unknown[]): Promise<T[]> {
-    return this.db.tx((tx) => tx.$queryRawUnsafe<T[]>(sql, ...params));
+  private query<T>(query: Sql): Promise<T[]> {
+    return this.db.tx((tx) => tx.$queryRaw<T[]>(query));
   }
 }
 

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ErrorCode } from '@irca/shared';
 import { Db } from '../../core/database/db.service.js';
+import { identifier, sql, type Sql } from '../../core/database/sql.js';
 import { RequestAuth } from '../../core/context/request-auth.js';
 import { AppError } from '../../core/http/app-error.js';
 import { TransactionService } from './transactions.service.js';
@@ -96,107 +97,99 @@ export class ReportsService {
 
   private async monthTotals(churchId: string, year: number, month: number) {
     const rows = await this.query<{ kind: string; total: string; count: number }>(
-      `-- tenant: church_id = $1
+      sql`-- tenant: church_id is bound below
        select kind, sum(amount)::text as total, count(*)::int as count
        from finance_transactions
-       where church_id = $1::uuid and status = 'POSTED'
-         and period_year = $2 and period_month = $3
+       where church_id = ${churchId}::uuid and status = 'POSTED'
+         and period_year = ${year} and period_month = ${month}
        group by kind`,
-      churchId,
-      year,
-      month,
     );
     return summarise(rows);
   }
 
   private async rangeTotals(churchId: string, from: string, to: string) {
     const rows = await this.query<{ kind: string; total: string; count: number }>(
-      `-- tenant: church_id = $1
+      sql`-- tenant: church_id is bound below
        select kind, sum(amount)::text as total, count(*)::int as count
        from finance_transactions
-       where church_id = $1::uuid and status = 'POSTED' and txn_date between $2::date and $3::date
+       where church_id = ${churchId}::uuid and status = 'POSTED'
+         and txn_date between ${from}::date and ${to}::date
        group by kind`,
-      churchId,
-      from,
-      to,
     );
     return summarise(rows);
   }
 
   private groupBy(churchId: string, kind: 'INCOME' | 'EXPENSE', year: number, month: number) {
-    return this.groupQuery(churchId, kind, `and t.period_year = $3 and t.period_month = $4`, [
-      year,
-      month,
-    ]);
+    return this.groupQuery(
+      churchId,
+      kind,
+      sql`and t.period_year = ${year} and t.period_month = ${month}`,
+    );
   }
 
   private groupByRange(churchId: string, kind: 'INCOME' | 'EXPENSE', from: string, to: string) {
-    return this.groupQuery(churchId, kind, `and t.txn_date between $3::date and $4::date`, [
-      from,
-      to,
-    ]);
+    return this.groupQuery(
+      churchId,
+      kind,
+      sql`and t.txn_date between ${from}::date and ${to}::date`,
+    );
   }
 
+  /** The same grouping for a month or a range; only the dates differ. */
   private async groupQuery(
     churchId: string,
     kind: 'INCOME' | 'EXPENSE',
-    extra: string,
-    params: unknown[],
+    period: Sql,
   ): Promise<GroupRow[]> {
-    const table = kind === 'INCOME' ? 'finance_income_sources' : 'finance_expense_items';
-    const column = kind === 'INCOME' ? 'income_source_id' : 'expense_item_id';
+    const table = identifier(
+      kind === 'INCOME' ? 'finance_income_sources' : 'finance_expense_items',
+    );
+    const column = identifier(kind === 'INCOME' ? 'income_source_id' : 'expense_item_id');
     return this.query<GroupRow>(
-      `-- tenant: church_id = $1
+      sql`-- tenant: church_id is bound below
        select i.id, i.name, sum(t.amount)::text as total
        from finance_transactions t
        join ${table} i on i.id = t.${column} and i.church_id = t.church_id
-       where t.church_id = $1::uuid and t.status = 'POSTED' and t.kind = $2 ${extra}
+       where t.church_id = ${churchId}::uuid and t.status = 'POSTED' and t.kind = ${kind} ${period}
        group by i.id, i.name
        order by sum(t.amount) desc`,
-      churchId,
-      kind,
-      ...params,
     );
   }
 
   /** The last twelve months, ending with the month being shown. */
   private async trend(churchId: string, year: number, month: number): Promise<MonthRow[]> {
     const rows = await this.query<{ month: string; kind: string; total: string }>(
-      `-- tenant: church_id = $1
+      sql`-- tenant: church_id is bound below
        select to_char(make_date(period_year, period_month, 1), 'YYYY-MM') as month,
               kind, sum(amount)::text as total
        from finance_transactions
-       where church_id = $1::uuid and status = 'POSTED'
+       where church_id = ${churchId}::uuid and status = 'POSTED'
          and make_date(period_year, period_month, 1)
-             between make_date($2, $3, 1) - interval '11 months' and make_date($2, $3, 1)
+             between make_date(${year}, ${month}, 1) - interval '11 months'
+                 and make_date(${year}, ${month}, 1)
        group by 1, 2
        order by 1`,
-      churchId,
-      year,
-      month,
     );
     return byMonth(rows, lastMonths(year, month, 12));
   }
 
   private async monthsInRange(churchId: string, from: string, to: string): Promise<MonthRow[]> {
     const rows = await this.query<{ month: string; kind: string; total: string }>(
-      `-- tenant: church_id = $1
+      sql`-- tenant: church_id is bound below
        select to_char(make_date(period_year, period_month, 1), 'YYYY-MM') as month,
               kind, sum(amount)::text as total
        from finance_transactions
-       where church_id = $1::uuid and status = 'POSTED' and txn_date between $2::date and $3::date
+       where church_id = ${churchId}::uuid and status = 'POSTED'
+         and txn_date between ${from}::date and ${to}::date
        group by 1, 2
        order by 1`,
-      churchId,
-      from,
-      to,
     );
     return byMonth(rows, [...new Set(rows.map((r) => r.month))].sort());
   }
 
   /** Raw SQL goes through a transaction: that is what sets the church for RLS. */
-  private query<T>(sql: string, ...params: unknown[]): Promise<T[]> {
-    return this.db.tx((tx) => tx.$queryRawUnsafe<T[]>(sql, ...params));
+  private query<T>(query: Sql): Promise<T[]> {
+    return this.db.tx((tx) => tx.$queryRaw<T[]>(query));
   }
 }
 

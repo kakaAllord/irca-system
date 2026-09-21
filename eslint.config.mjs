@@ -37,6 +37,23 @@ export default tseslint.config(
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
   },
   {
+    // Raw SQL is written with the `sql` tag in core/database/sql.ts, which
+    // binds every value as a parameter. The Unsafe pair takes a string, so a
+    // query could be built by concatenation — one edit away from an injection
+    // in a query that looked fine when it was written.
+    files: ['apps/api/**/*.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'MemberExpression[property.name=/^\\$(query|execute)RawUnsafe$/]',
+          message:
+            'Use the sql tag from core/database/sql.ts with $queryRaw/$executeRaw: every value is then a bound parameter.',
+        },
+      ],
+    },
+  },
+  {
     // Feature modules reach the database only through Db, which picks the
     // right role and (from Phase 2) scopes every query to one church.
     files: ['apps/api/src/modules/**/*.ts'],

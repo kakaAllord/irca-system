@@ -1,5 +1,6 @@
 import pg from 'pg';
 import { PrismaCore } from '../../core/database/prisma-clients.js';
+import { identifier, join, sql } from '../../core/database/sql.js';
 
 /* eslint-disable no-console -- a command-line tool reports to its terminal */
 
@@ -59,6 +60,16 @@ const COLUMNS = [
 ] as const;
 
 const BATCH = 500;
+
+/** The same column names, quoted, for the statements built out of them. */
+const NAMES = COLUMNS.map(identifier);
+/** Every column but the token, which is what the rows are matched on. */
+const UPDATE_SET = join(
+  COLUMNS.filter((c) => c !== 'token').map(
+    (c) => sql`${identifier(c)} = excluded.${identifier(c)}`,
+  ),
+  ', ',
+);
 
 /**
  * Timestamps as the text Postgres sends, not as JavaScript Dates.
@@ -120,30 +131,28 @@ export async function importRegistrations(options: {
       await db.$transaction(async (tx) => {
         for (const row of rows) {
           const values = [church.id, row.id, ...COLUMNS.map((c) => row[c])];
-          const placeholders = values.map((_, i) => `$${i + 1}`);
-          await tx.$executeRawUnsafe(
-            `-- tenant: church_id is $1
-             insert into registrations (id, church_id, legacy_id, ${COLUMNS.join(', ')})
-             values (gen_random_uuid(), ${placeholders.join(', ')})
-             on conflict (token) do update set
-               ${COLUMNS.filter((c) => c !== 'token')
-                 .map((c) => `${c} = excluded.${c}`)
-                 .join(', ')}
+          await tx.$executeRaw(
+            sql`-- tenant: church_id is the first value
+             insert into registrations (id, church_id, legacy_id, ${join(NAMES, ', ')})
+             values (gen_random_uuid(), ${join(
+               values.map((v) => sql`${v}`),
+               ', ',
+             )})
+             on conflict (token) do update set ${UPDATE_SET}
              where registrations.updated_at < excluded.updated_at`,
-            ...values,
           );
         }
         // Everyone who registered is somebody the church cares for, finished
         // or not; the Members list shows them as "Unknown — +255 622…".
-        await tx.$executeRawUnsafe(
-          `-- tenant: church_id is $1
-           insert into people (id, church_id, registration_id, full_name, gender, age_group, dial, phone, email, updated_at)
+        await tx.$executeRaw(
+          sql`-- tenant: church_id is bound below
+           insert into people (id, church_id, registration_id, full_name, gender, age_group,
+                               dial, phone, email, updated_at)
            select gen_random_uuid(), r.church_id, r.id, left(r.fullname, 120), left(r.gender, 20),
                   left(r.age, 20), left(r.dial, 6), left(r.phone, 20), left(r.email, 254), now()
            from registrations r
            left join people p on p.registration_id = r.id
-           where r.church_id = $1::uuid and p.id is null`,
-          church.id,
+           where r.church_id = ${church.id}::uuid and p.id is null`,
         );
         copied += rows.length;
         if (options.dryRun) throw new RolledBack();
@@ -182,14 +191,18 @@ export async function exportRegistrationsBack(options: {
   try {
     // Timestamps as text for the same reason as on the way in: Prisma would
     // hand them back as Dates and lose the microseconds.
-    const select = COLUMNS.map((c) => (c.endsWith('_at') ? `${c}::text as ${c}` : c)).join(', ');
-    const rows = await db.$queryRawUnsafe<Record<string, unknown>[]>(
-      `-- tenant: church_id is $1
+    const select = join(
+      COLUMNS.map((c) => {
+        const name = identifier(c);
+        return c.endsWith('_at') ? sql`${name}::text as ${name}` : name;
+      }),
+      ', ',
+    );
+    const rows = await db.$queryRaw<Record<string, unknown>[]>(
+      sql`-- tenant: church_id is bound below
        select ${select} from registrations
-       where church_id = $1::uuid and updated_at >= $2::timestamptz
+       where church_id = ${church.id}::uuid and updated_at >= ${options.since}::timestamptz
        order by updated_at`,
-      church.id,
-      options.since,
     );
     for (const row of rows) {
       const values = COLUMNS.map((c) => row[c]);
@@ -223,27 +236,25 @@ async function report(
   // Only the copied rows are compared. Once the form is pointed here, this
   // database also holds registrations of its own, and counting those in would
   // report a difference that is not one.
-  const newCounts = await db.$queryRawUnsafe<{ status: string; count: string }[]>(
-    `select status, count(*)::text as count from registrations
-     where church_id = $1::uuid and legacy_id is not null
+  const newCounts = await db.$queryRaw<{ status: string; count: string }[]>(
+    sql`select status, count(*)::text as count from registrations
+     where church_id = ${churchId}::uuid and legacy_id is not null
      group by status order by status`,
-    churchId,
   );
-  const [own] = await db.$queryRawUnsafe<{ count: string }[]>(
-    `select count(*)::text as count from registrations
-     where church_id = $1::uuid and legacy_id is null`,
-    churchId,
+  const [own] = await db.$queryRaw<{ count: string }[]>(
+    sql`select count(*)::text as count from registrations
+     where church_id = ${churchId}::uuid and legacy_id is null`,
   );
   // The instant, not its text: the two databases may print a timestamp in
   // different time zones and mean the same moment.
-  const fingerprint = `md5(string_agg(token || ':' || extract(epoch from updated_at)::text, ',' order by token))`;
+  const fingerprint =
+    "md5(string_agg(token || ':' || extract(epoch from updated_at)::text, ',' order by token))";
   const oldPrint = await old.query<{ md5: string }>(
     `select ${fingerprint} as md5 from registrations`,
   );
-  const newPrint = await db.$queryRawUnsafe<{ md5: string }[]>(
-    `select ${fingerprint} as md5
-     from registrations where church_id = $1::uuid and legacy_id is not null`,
-    churchId,
+  const newPrint = await db.$queryRaw<{ md5: string }[]>(
+    sql`select md5(string_agg(token || ':' || extract(epoch from updated_at)::text, ',' order by token)) as md5
+     from registrations where church_id = ${churchId}::uuid and legacy_id is not null`,
   );
 
   console.log('');

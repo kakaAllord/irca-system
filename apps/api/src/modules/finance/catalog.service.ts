@@ -7,6 +7,7 @@ import {
   type CreateCatalogItemInput,
 } from '@irca/shared';
 import { Db, type TenantTx } from '../../core/database/db.service.js';
+import { identifier, sql, type Sql } from '../../core/database/sql.js';
 import { RequestAuth } from '../../core/context/request-auth.js';
 import { AppError } from '../../core/http/app-error.js';
 import { AuditService } from '../../core/audit/audit.service.js';
@@ -57,8 +58,8 @@ export class CatalogService {
    * Raw SQL through a transaction, because the tenant extension cannot see
    * inside raw queries: db.tx() is what tells Postgres which church this is.
    */
-  private query<T>(sql: string, ...params: unknown[]): Promise<T[]> {
-    return this.db.tx((tx) => tx.$queryRawUnsafe<T[]>(sql, ...params));
+  private query<T>(query: Sql): Promise<T[]> {
+    return this.db.tx((tx) => tx.$queryRaw<T[]>(query));
   }
 
   /**
@@ -74,30 +75,29 @@ export class CatalogService {
     const key = nameKey(q ?? '');
     const table = TABLES[kind];
 
+    const items = identifier(table.items);
+    const column = identifier(table.column);
     const rows = await this.query<{ id: string; name: string; description: string; uses: number }>(
-      `-- tenant: church_id = $1
+      sql`-- tenant: church_id is bound below
        select i.id, i.name, i.description, coalesce(u.uses, 0)::int as uses
-       from ${table.items} i
+       from ${items} i
        left join lateral (
          select count(*)::int as uses from finance_transactions t
-         where t.church_id = i.church_id and t.${table.column} = i.id
+         where t.church_id = i.church_id and t.${column} = i.id
            and t.status = 'POSTED' and t.txn_date > current_date - 180
        ) u on true
-       where i.church_id = $1::uuid and i.is_active
-         and ($2 = '' or i.name_key like '%' || $2 || '%' or i.name_key % $2)
-       order by (i.name_key like $2 || '%') desc, similarity(i.name_key, $2) desc, uses desc, i.name
-       limit $3`,
-      churchId,
-      key,
-      limit,
+       where i.church_id = ${churchId}::uuid and i.is_active
+         and (${key} = '' or i.name_key like '%' || ${key} || '%' or i.name_key % ${key})
+       order by (i.name_key like ${key} || '%') desc, similarity(i.name_key, ${key}) desc,
+                uses desc, i.name
+       limit ${limit}`,
     );
 
     const exact = key
       ? await this.query<{ id: string; name: string; is_active: boolean }>(
-          `-- tenant: church_id = $1
-           select id, name, is_active from ${table.items} where church_id = $1::uuid and name_key = $2`,
-          churchId,
-          key,
+          sql`-- tenant: church_id is bound below
+           select id, name, is_active from ${items}
+           where church_id = ${churchId}::uuid and name_key = ${key}`,
         )
       : [];
 
@@ -120,36 +120,30 @@ export class CatalogService {
     const status = query.status ?? 'active';
     const page = Math.max(1, query.page ?? 1);
 
-    const where = `i.church_id = $1::uuid
-      and ($2 = '' or i.name_key like '%' || $2 || '%')
-      and ($3 = 'all' or i.is_active = ($3 = 'active'))`;
+    const items = identifier(table.items);
+    const column = identifier(table.column);
+    const where = sql`i.church_id = ${churchId}::uuid
+      and (${key} = '' or i.name_key like '%' || ${key} || '%')
+      and (${status} = 'all' or i.is_active = (${status} = 'active'))`;
 
     const rows = await this.query<ItemRow>(
-      `-- tenant: church_id = $1
+      sql`-- tenant: church_id is bound in the where clause
        select i.id, i.name, i.description, i.is_active,
               coalesce(u.uses, 0)::int as uses, u.last_used_on
-       from ${table.items} i
+       from ${items} i
        left join lateral (
          select count(*)::int as uses, max(t.txn_date) as last_used_on
          from finance_transactions t
-         where t.church_id = i.church_id and t.${table.column} = i.id and t.status = 'POSTED'
+         where t.church_id = i.church_id and t.${column} = i.id and t.status = 'POSTED'
        ) u on true
        where ${where}
        order by i.name
-       limit $4 offset $5`,
-      churchId,
-      key,
-      status,
-      PAGE_SIZE,
-      (page - 1) * PAGE_SIZE,
+       limit ${PAGE_SIZE} offset ${(page - 1) * PAGE_SIZE}`,
     );
 
     const counted = await this.query<{ count: bigint }>(
-      `-- tenant: church_id = $1
-       select count(*) as count from ${table.items} i where ${where}`,
-      churchId,
-      key,
-      status,
+      sql`-- tenant: church_id is bound in the where clause
+       select count(*) as count from ${items} i where ${where}`,
     );
     const total = Number(counted[0]?.count ?? 0);
 
@@ -333,11 +327,11 @@ export class CatalogService {
     const churchId = this.auth.requireChurch();
     const table = TABLES[kind];
 
+    const items = identifier(table.items);
     const exact = await this.query<{ id: string; name: string; is_active: boolean }>(
-      `-- tenant: church_id = $1
-       select id, name, is_active from ${table.items} where church_id = $1::uuid and name_key = $2`,
-      churchId,
-      key,
+      sql`-- tenant: church_id is bound below
+       select id, name, is_active from ${items}
+       where church_id = ${churchId}::uuid and name_key = ${key}`,
     );
     if (exact[0]) {
       throw new AppError(409, ErrorCode.ALREADY_EXISTS, `"${exact[0].name}" already exists.`, {
@@ -348,14 +342,11 @@ export class CatalogService {
 
     if (confirmDistinct) return;
     const similar = await this.query<{ id: string; name: string }>(
-      `-- tenant: church_id = $1
-       select id, name from ${table.items}
-       where church_id = $1::uuid and similarity(name_key, $2) >= $3
-       order by similarity(name_key, $2) desc
+      sql`-- tenant: church_id is bound below
+       select id, name from ${items}
+       where church_id = ${churchId}::uuid and similarity(name_key, ${key}) >= ${SIMILAR_ENOUGH}
+       order by similarity(name_key, ${key}) desc
        limit 3`,
-      churchId,
-      key,
-      SIMILAR_ENOUGH,
     );
     if (similar.length) {
       throw new AppError(409, ErrorCode.SIMILAR_EXISTS, `Did you mean "${similar[0]!.name}"?`, {
