@@ -5,6 +5,9 @@ import { defineConfig, devices } from '@playwright/test';
 // development.
 const API_PORT = 4100;
 const PORTAL_PORT = 3100;
+const FORM_PORT = 3101;
+/** The seed's key for IRCA's form. Test and development only. */
+const FORM_KEY = 'irk_local_registration_form_key_not_for_production';
 
 export default defineConfig({
   testDir: 'e2e',
@@ -34,6 +37,7 @@ export default defineConfig({
         NODE_ENV: 'test',
         PORT: String(API_PORT),
         PORTAL_ORIGIN: `http://localhost:${PORTAL_PORT}`,
+        REGISTRATION_ORIGIN: `http://localhost:${FORM_PORT}`,
       },
       reuseExistingServer: false,
       timeout: 120_000,
@@ -48,6 +52,18 @@ export default defineConfig({
       env: {
         API_INTERNAL_URL: `http://localhost:${API_PORT}`,
         SESSION_COOKIE_NAME: 'irca_session',
+      },
+      reuseExistingServer: false,
+      timeout: 240_000,
+    },
+    {
+      // The visitor's form, on the API, as it runs after the cutover.
+      command: `npm run -s build -w @irca/registration && npm run -s start -w @irca/registration -- -p ${FORM_PORT}`,
+      url: `http://localhost:${FORM_PORT}/`,
+      env: {
+        REGISTRATION_BACKEND: 'api',
+        API_INTERNAL_URL: `http://localhost:${API_PORT}`,
+        REGISTRATION_API_KEY: FORM_KEY,
       },
       reuseExistingServer: false,
       timeout: 240_000,

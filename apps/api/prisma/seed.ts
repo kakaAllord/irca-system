@@ -5,6 +5,7 @@
 // passwords. TEST exists from the start, with records that overlap IRCA's,
 // so a leak between churches shows up as a wrong row in a test rather than
 // an empty page (docs/plan/multi-tenancy.md, section 15).
+import { createHash } from 'node:crypto';
 import { config } from 'dotenv';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/generated/prisma/client.js';
@@ -133,6 +134,23 @@ await member(
 await member(test.id, (await user('admin@test.local', 'Test Admin', 'admin-password-123')).id, [
   'admin.administrator',
 ]);
+
+// The registration form's key, for development and the browser tests. A known
+// value only because this seed refuses to run anywhere else: production keys
+// come from `api-client:create` and are never written down.
+const LOCAL_FORM_KEY = 'irk_local_registration_form_key_not_for_production';
+const keyHash = createHash('sha256').update(LOCAL_FORM_KEY).digest('hex');
+await db.apiClient.upsert({
+  where: { keyHash },
+  update: { revokedAt: null, churchId: irca.id },
+  create: {
+    churchId: irca.id,
+    name: 'Registration form (local)',
+    kind: 'REGISTRATION',
+    keyPrefix: LOCAL_FORM_KEY.slice(0, 12),
+    keyHash,
+  },
+});
 
 console.log(
   'seeded: IRCA (with Membership and Finance) and TEST, with dev@, admin@, pastor@, office@, followup@, clerk@ and mhazini@irca.local, admin@test.local',
