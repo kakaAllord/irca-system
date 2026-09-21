@@ -21,12 +21,14 @@ import type { RequestContext } from '../context/request-context.js';
       useFactory: (config: AppConfig, cls: ClsService<RequestContext>) => ({
         pinoHttp: {
           level: config.get('LOG_LEVEL'),
-          transport: config.isProduction
-            ? undefined
-            : {
-                target: 'pino-pretty',
-                options: { singleLine: true, translateTime: 'SYS:HH:MM:ss' },
-              },
+          // Readable lines only in development; JSON everywhere else, tests included.
+          transport:
+            config.get('NODE_ENV') === 'development'
+              ? {
+                  target: 'pino-pretty',
+                  options: { singleLine: true, translateTime: 'SYS:HH:MM:ss' },
+                }
+              : undefined,
           genReqId: () => cls.getId(),
           // What a request line needs, not every header the response carried.
           serializers: {

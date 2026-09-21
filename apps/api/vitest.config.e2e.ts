@@ -6,6 +6,12 @@ export default defineConfig({
   test: {
     globals: true,
     root: './',
-    include: ['**/*.e2e-spec.ts'],
+    include: ['test/**/*.e2e-spec.ts'],
+    // Resets irca_test once per run.
+    globalSetup: ['./test/global-setup.ts'],
+    // One database, so test files take turns rather than trampling each other.
+    fileParallelism: false,
+    testTimeout: 20_000,
+    hookTimeout: 60_000,
   },
 });

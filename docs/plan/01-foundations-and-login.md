@@ -314,6 +314,17 @@ machine.
    alter role irca_app      set statement_timeout = '10s';
    alter role irca_readonly set statement_timeout = '10s';
    alter role irca_core     set statement_timeout = '60s';
+
+   -- Every role talks UTC. Prisma's pg adapter sends timestamps without a time
+   -- zone, so on a connection in any other zone every stored time is hours off
+   -- (found in testing: sessions were created four hours in the future on a
+   -- server set to America/New_York). Role settings also hold behind Neon's
+   -- pooler, which drops connection-time options.
+   alter role irca_owner    set timezone = 'UTC';
+   alter role irca_core     set timezone = 'UTC';
+   alter role irca_app      set timezone = 'UTC';
+   alter role irca_readonly set timezone = 'UTC';
+   alter role irca_backup   set timezone = 'UTC';
    ```
 
    `createdb` on the owner is needed because `prisma migrate dev` creates a
@@ -1120,36 +1131,44 @@ first dev account from the command line".
 
 ## Step 1.15 — API tests
 
-**Goal:** the login behaviour is pinned by tests running against a real
-database.
+**Goal:** the sign-in behaviour is pinned by tests against a real database.
 
 **Do**
 
-1. `apps/api/.env.test` (committed, local-only credentials) pointing at
-   `irca_test` for all four URLs.
-2. `test/setup-e2e.ts`: loads `.env.test`, runs `prisma migrate reset --force
-   --skip-seed` **once** per run, and exposes helpers:
-   `createUser({ platformRole?, churchId?, password? })`, `createChurch()`,
-   `login(agent, email, password)`, and `truncateAll()`, which truncates every
-   table except `_prisma_migrations` between test files.
-3. `test/auth.e2e-spec.ts`. Every one of these is its own `it`:
-   - correct credentials → 200, `Set-Cookie` is `HttpOnly`, `SameSite=Lax`,
-     `Path=/`;
-   - email is case- and whitespace-insensitive;
-   - wrong password → 401 with the generic message;
-   - unknown email → 401 with **the identical body**;
-   - disabled user with the right password → 401, identical body;
-   - 5 wrong attempts → the 6th, even with the right password → 429;
-   - after 15 minutes (move `lockedUntil` back in the DB) the right password works;
-   - `/me` without cookie → 401; with cookie → the user;
-   - logout → the same cookie now gets 401;
-   - a password change (update `passwordChangedAt`) → old cookie gets 401;
-   - a request without `X-IRCA-Client` → 403 `CSRF_REJECTED`;
-   - `Origin: https://evil.example` → 403;
-   - the raw token does not appear anywhere in the `sessions` table.
-4. Add `"test:e2e"` to CI (Step 1.21).
+1. `apps/api/.env.test` (committed, local-only credentials) pointing all four
+   URLs at `irca_test`, with `NODE_ENV=test` and `LOG_LEVEL=error`.
+2. Move the app setup out of `main.ts` into `src/bootstrap.ts`
+   (`configureApp(app)`), so the tests run the same middleware, in the same order,
+   as production.
+3. `vitest.config.e2e.ts`: `include: ['test/**/*.e2e-spec.ts']`,
+   `globalSetup: ['./test/global-setup.ts']` and `fileParallelism: false` (one
+   database, so files take turns).
+4. `test/global-setup.ts` runs **`prisma migrate deploy`** once per run. This
+   is not `migrate reset`: deploy only applies what is missing and never drops
+   anything. (Prisma also refuses `migrate reset` when a coding agent runs it
+   without the owner's explicit consent.) To rebuild the test database from
+   nothing, run `NODE_ENV=test npm run db:reset -w @irca/api` yourself.
+5. `test/helpers.ts`: `createApp()`, `ownerDb()` (a pg client as `irca_owner`
+   for arranging data behind the API's back), `truncateAll(db)` (every table but
+   the migration log, run in `beforeEach`), `createChurch`, `createUser`,
+   `portal(app, ip?)` (requests with `X-IRCA-Client: portal` and a **different
+   client address per call**, so the per-address sign-in limit bites only in the
+   test about it), and `sessionCookie(res)`.
+6. `test/auth.e2e-spec.ts`, each case its own `it`:
+   - correct credentials → 200, and the cookie is `HttpOnly`, `SameSite=Lax`, `Path=/`;
+   - email case and whitespace are ignored;
+   - wrong password, unknown email and disabled account → **identical** 401 bodies;
+   - five failures → the right password gets 429 `ACCOUNT_LOCKED`; after the lock passes, it works;
+   - eleven attempts from one address → 429 `RATE_LIMITED`;
+   - `/me` without a cookie → 401, with one → the user; after sign-out → 401;
+   - a password change signs out older sessions; 13 hours idle ends a session;
+   - a disabled membership drops the church but keeps the person signed in;
+   - no `X-IRCA-Client`, or a foreign `Origin` → 403 `CSRF_REJECTED`;
+   - **stored times match the database clock** (catches a role not set to UTC);
+   - the raw token appears nowhere in `sessions`;
+   - every error has the one shape, with the request id from the header.
 
-**Check:** `npm run test:e2e -w @irca/api` is green.
+**Check:** `npm run test:e2e -w @irca/api` → 13 passed.
 
 **Commit:** "Pin down sign-in behaviour with tests against a real database".
 

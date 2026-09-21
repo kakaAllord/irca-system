@@ -397,7 +397,8 @@ subdomains of one domain the church controls, so email DNS is in one place.
 2. Create the database `irca` owned by `irca_owner`, and a branch `staging`.
    Set the statement timeouts from 1.5 (`alter role irca_app set
    statement_timeout = '10s'`, the same for `irca_readonly`, and `'60s'` for
-   `irca_core`) as the role that created them.
+   `irca_core`) as the role that created them, and `set timezone = 'UTC'` for
+   all five roles (why: 01 step 1.5).
 3. `DIRECT_DATABASE_URL` = the owner on the direct host;
    `DATABASE_URL` = the app role on the pooled host;
    `DATABASE_URL_CORE` = the core role on the pooled host;
