@@ -235,11 +235,11 @@ describe('running a church: people, roles and portals', () => {
     expect(core.body.error.message).toMatch(/always on/);
 
     // Only portals that exist in the code can be turned on at all, which is
-    // what stops anyone inventing one. Finance arrives in the next phase.
+    // what stops anyone inventing one. Media arrives in a later phase.
     await portal(app).put('/v1/admin/modules/media', { enabled: true }, cookie).expect(404);
 
     const listed = await portal(app).get('/v1/admin/modules', cookie).expect(200);
-    expect(listed.body.map((m: { key: string }) => m.key)).toEqual(['admin']);
+    expect(listed.body.map((m: { key: string }) => m.key)).toEqual(['finance', 'admin']);
   });
 
   it('shows what changed in the church, and never a view-as', async () => {

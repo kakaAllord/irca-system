@@ -10,6 +10,7 @@ import { EmailModule } from './core/email/email.module.js';
 import { TestEmailController } from './core/email/test-email.controller.js';
 import { InvitationsModule } from './core/invitations/invitations.module.js';
 import { AdminModule } from './modules/admin/admin.module.js';
+import { FinanceModule } from './modules/finance/finance.module.js';
 import { AllExceptionsFilter } from './core/http/all-exceptions.filter.js';
 import { NoStoreInterceptor } from './core/http/no-store.interceptor.js';
 import { HealthController } from './core/health/health.controller.js';
@@ -42,6 +43,7 @@ import { UsageInterceptor } from './core/usage/usage.interceptor.js';
     ImpersonationModule,
     InvitationsModule,
     AdminModule,
+    FinanceModule,
   ],
   controllers: [
     HealthController,
