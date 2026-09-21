@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState, type FormEvent } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { LoginSchema, type MeResponse } from '@irca/shared';
 import { clientApi } from '@/lib/api/client';
@@ -94,6 +95,12 @@ export function LoginForm({ next }: { next: string }) {
       <Button type="submit" loading={busy} className="mt-1 w-full">
         Sign in
       </Button>
+      <Link
+        href="/forgot-password"
+        className="text-center text-[12px] text-fg2 underline hover:text-fg"
+      >
+        Forgot your password?
+      </Link>
     </form>
   );
 }
