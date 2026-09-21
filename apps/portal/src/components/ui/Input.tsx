@@ -1,4 +1,4 @@
-import { useId, type InputHTMLAttributes, type ReactNode } from 'react';
+import { useId, type InputHTMLAttributes, type ReactNode, type Ref } from 'react';
 import { cn } from '@/lib/cn';
 
 export type InputProps = InputHTMLAttributes<HTMLInputElement> & {
@@ -7,6 +7,8 @@ export type InputProps = InputHTMLAttributes<HTMLInputElement> & {
   error?: string;
   /** Rendered inside the field, on the right (e.g. a show/hide button). */
   trailing?: ReactNode;
+  /** React 19 passes refs as ordinary props. */
+  ref?: Ref<HTMLInputElement>;
 };
 
 /**
@@ -14,7 +16,7 @@ export type InputProps = InputHTMLAttributes<HTMLInputElement> & {
  * screen readers through aria-describedby. Every form in the portal uses it,
  * so no field is ever unlabelled.
  */
-export function Input({ label, hint, error, trailing, className, id, ...rest }: InputProps) {
+export function Input({ label, hint, error, trailing, className, id, ref, ...rest }: InputProps) {
   const auto = useId();
   const inputId = id ?? auto;
   const hintId = hint ? `${inputId}-hint` : undefined;
@@ -27,6 +29,7 @@ export function Input({ label, hint, error, trailing, className, id, ...rest }: 
       </label>
       <div className="relative">
         <input
+          ref={ref}
           id={inputId}
           aria-invalid={error ? true : undefined}
           aria-describedby={[hintId, errorId].filter(Boolean).join(' ') || undefined}
