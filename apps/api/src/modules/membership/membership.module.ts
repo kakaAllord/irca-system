@@ -7,6 +7,8 @@ import { ApplicationsService } from './applications/applications.service.js';
 import { ApplicationsController } from './applications/applications.controller.js';
 import { DiscipleshipService } from './discipleship/discipleship.service.js';
 import { DiscipleshipController } from './discipleship/discipleship.controller.js';
+import { DashboardService } from './dashboard/dashboard.service.js';
+import { DashboardController } from './dashboard/dashboard.controller.js';
 
 /**
  * The people the church cares for: what the visitor typed, and what the
@@ -22,12 +24,14 @@ import { DiscipleshipController } from './discipleship/discipleship.controller.j
     PeopleController,
     ApplicationsController,
     DiscipleshipController,
+    DashboardController,
   ],
   providers: [
     PublicRegistrationService,
     PeopleService,
     ApplicationsService,
     DiscipleshipService,
+    DashboardService,
   ],
 })
 export class MembershipModule {}
