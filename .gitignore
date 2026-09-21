@@ -1,0 +1,16 @@
+# Dependencies and build output
+node_modules/
+.next/
+dist/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# Local environment. .env.example files are committed; real values never are.
+.env
+.env.local
+.env.*.local
+
+# Test output
+playwright-report/
+test-results/
