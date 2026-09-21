@@ -3,7 +3,7 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import {
-  EMPTY_VALUES, LANGS, screenIds, stepById, t, UI,
+  EMPTY_VALUES, FIRST_STEP, LANGS, screenIds, stepById, t, UI,
   type Lang, type Values,
 } from './flow';
 import { keysForStep, validateStep } from './validate';
@@ -29,7 +29,7 @@ export async function startRegistration(formData: FormData) {
     maxAge: 60 * 60 * 24 * 90,
   });
 
-  redirect(`/r/${reg.token}/heard`);
+  redirect(`/r/${reg.token}/${FIRST_STEP}`);
 }
 
 /**

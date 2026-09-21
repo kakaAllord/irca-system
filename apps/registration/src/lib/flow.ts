@@ -351,14 +351,35 @@ export const FRIEND = 'A friend';
 
 export const STEPS: Step[] = [
   {
-    // Chips rather than a column of checkboxes. This is the first thing anyone
-    // sees, and a stack of ticked boxes reads as a form to be filled in; a row
-    // of chips reads as a question being asked. The labels are short for the
-    // same reason — a chip is a word, not a sentence.
+    // Everything about the person and how to reach them, on one screen, and the
+    // first thing anyone is asked. A form that opens by learning your name
+    // reads as an introduction; one that opens by asking how you found us reads
+    // as a survey. It also means every screen after this one has a name to use.
+    //
+    // Six answers would not fit if each one kept its options on show: an
+    // earlier attempt at this scrolled past its own heading on a 360px phone.
+    // So a question folds the moment it is answered, down to its name and the
+    // answer as a badge. What is left open is the one question still to do,
+    // which keeps the screen the length of a single question however many it
+    // is actually carrying.
+    id: 'who', type: 'who', req: true,
+    q: T('Tell us about you.', 'Tujuane nawe.', 'Parlez-nous de vous.'),
+    sub: T('Start us off here.', 'Tuanzie hapa.', 'Commençons ici.'),
+    short: T('About you', 'Wewe ni nani', 'À propos de vous'),
+  },
+  {
+    // Chips rather than a column of checkboxes. A stack of ticked boxes reads
+    // as a form to be filled in; a row of chips reads as a question being
+    // asked. The labels are short for the same reason — a chip is a word, not
+    // a sentence.
+    //
+    // The thanks is by name, which only works because the screen before this
+    // one now asks for it; `fill` takes the name out cleanly for anyone who
+    // walked back past it.
     id: 'heard', type: 'pick', key: 'heard', multi: true, req: true,
     other: 'heardOtherText',
+    ack: T('Asante {name}.', 'Asante {name}.', 'Merci {name}.'),
     q: T('How did you hear about IRCA?', 'Uliifahamuje IRCA?', 'Comment avez-vous connu IRCA ?'),
-    sub: T('Start us off here.', 'Tuanzie hapa.', 'Commençons ici.'),
     short: T('How you heard', 'Uliifahamuje IRCA', 'Comment vous nous avez connus'),
     opts: [
       { val: 'A friend', label: T('A friend invited me', 'Rafiki alinialika', "Un ami m'a invité") },
@@ -377,20 +398,6 @@ export const STEPS: Step[] = [
       label: UI.lblFriend,
       ph: T("Your friend's name", 'Jina la rafiki yako', 'Le nom de votre ami'),
     },
-  },
-  {
-    // Everything about the person and how to reach them, on one screen.
-    //
-    // Six answers would not fit if each one kept its options on show: an
-    // earlier attempt at this scrolled past its own heading on a 360px phone.
-    // So a question folds the moment it is answered, down to its name and the
-    // answer as a badge. What is left open is the one question still to do,
-    // which keeps the screen the length of a single question however many it
-    // is actually carrying.
-    id: 'who', type: 'who', req: true,
-    ack: T('Asante. Now, so we know who we are talking to.', 'Asante. Sasa, tujuane.', 'Merci. Maintenant, faisons connaissance.'),
-    q: T('Tell us about you.', 'Tujuane nawe.', 'Parlez-nous de vous.'),
-    short: T('About you', 'Wewe ni nani', 'À propos de vous'),
   },
   {
     // Why they came, what they would like from us, and whether they live here:
@@ -507,6 +514,16 @@ export const STEPS: Step[] = [
     ],
   },
 ];
+
+/**
+ * Where a brand new registration starts.
+ *
+ * Taken from the list rather than written out again, because it was written out
+ * again in three places and reordering the first two screens quietly broke all
+ * of them. `STEPS[0]` is safe to read directly: the opening screen carries no
+ * `when` or `memberOnly`, so it is on everybody's path.
+ */
+export const FIRST_STEP = STEPS[0].id;
 
 // ---------------------------------------------------------------------------
 // Which steps apply, and where we are in them

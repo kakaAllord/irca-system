@@ -1,7 +1,7 @@
 import 'server-only';
 import { randomBytes } from 'node:crypto';
 import { query } from './db';
-import { EMPTY_VALUES, screenIds, type Lang, type Values } from './flow';
+import { EMPTY_VALUES, FIRST_STEP, screenIds, type Lang, type Values } from './flow';
 
 export type Registration = {
   id: number;
@@ -78,9 +78,9 @@ function newToken() {
 export async function createRegistration(lang: Lang): Promise<Registration> {
   const { rows } = await query<Row>(
     `insert into registrations (token, lang, current_step)
-     values ($1, $2, 'heard')
+     values ($1, $2, $3)
      returning ${COLS}`,
-    [newToken(), lang],
+    [newToken(), lang, FIRST_STEP],
   );
   return toRegistration(rows[0]);
 }

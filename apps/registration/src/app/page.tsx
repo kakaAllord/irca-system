@@ -3,7 +3,7 @@ import { Device, TopBar } from '@/components/Device';
 import { Logo } from '@/components/Logo';
 import { changeLanguage, startRegistration, currentToken } from '@/lib/actions';
 import { getByToken } from '@/lib/registration';
-import { UI, t, type Lang } from '@/lib/flow';
+import { FIRST_STEP, UI, t, type Lang } from '@/lib/flow';
 import { ArrowRight, Check } from '@/components/icons';
 
 const CHOICES: { code: Lang; label: string; note: string }[] = [
@@ -33,7 +33,7 @@ export default async function LanguagePage({
       const s = (txt: Parameters<typeof t>[0]) => t(txt, reg.lang);
       return (
         <Device>
-          <TopBar backHref={`/r/${reg.token}/${from || 'heard'}`} pct={0} />
+          <TopBar backHref={`/r/${reg.token}/${from || FIRST_STEP}`} pct={0} />
           <div className="screen">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
               <div style={{ display: 'flex', justifyContent: 'center' }}>
