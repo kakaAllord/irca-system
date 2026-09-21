@@ -780,29 +780,31 @@ code calls it.
 
 **Do**
 
-1. `src/core/database/prisma-core.service.ts`:
+1. `src/core/database/prisma-clients.ts` holds all three clients. In Prisma 7
+   each one is built with its **own driver adapter**, a small pg pool connected
+   as its role:
 
    ```ts
-   // sketch
-   /**
-    * Core's own connection, as irca_core. Row-level security lets this role see
-    * every church, because signing in, resolving permissions, writing the audit
-    * log and running jobs all happen before or across any one church. That is
-    * exactly why feature code must never be handed it.
-    */
+   import { PrismaPg } from '@prisma/adapter-pg';
+   import { PrismaClient } from '../../generated/prisma/client.js';
+
+   function client(connectionString: string) {
+     return { adapter: new PrismaPg({ connectionString, max: 5, connectionTimeoutMillis: 5_000 }) };
+   }
+
+   /** Core's own connection, as irca_core: sees every church (row-level security, 2.4a). */
    @Injectable()
-   export class PrismaCore extends PrismaClient implements OnModuleInit, OnModuleDestroy {
-     constructor(config: AppConfig) {
-       super({ datasourceUrl: config.get('DATABASE_URL_CORE') });
-     }
-     async onModuleInit() { await this.$connect(); }
+   export class PrismaCore extends PrismaClient implements OnModuleDestroy {
+     constructor(config: AppConfig) { super(client(config.get('DATABASE_URL_CORE'))); }
      async onModuleDestroy() { await this.$disconnect(); }
    }
+   // PrismaRw (DATABASE_URL, irca_app) and PrismaRo (DATABASE_URL_READONLY,
+   // irca_readonly): the same shape. These two are used only inside Db.
    ```
 
-2. `prisma-rw.service.ts` (`PrismaRw`, with `DATABASE_URL`, as `irca_app`) and
-   `prisma-ro.service.ts` (`PrismaRo`, with `DATABASE_URL_READONLY`): the same
-   shape. **These two are used only inside `Db`.**
+2. Pools stay small (five connections each): several roles share one
+   Postgres, and on Neon a pooler sits in front of it anyway. A connection that
+   cannot be made gives up after five seconds instead of hanging a request.
 3. `db.service.ts`:
 
    ```ts
@@ -832,13 +834,15 @@ code calls it.
    usage, email, jobs) and the dev console (`src/modules/platform`) may inject
    `PrismaCore`. **Nobody** outside `src/core/database` injects `PrismaRw` or
    `PrismaRo`. Feature modules inject `Db`. Enforce it with ESLint
-   `no-restricted-imports` for `prisma-core.service`, `prisma-rw.service` and
-   `prisma-ro.service` under `src/modules/**` (with an override that allows
-   `prisma-core.service` in `src/modules/platform/**`).
+   `@typescript-eslint/no-restricted-imports` under `src/modules/**`: no import
+   of `core/database/prisma-clients`, and from `generated/prisma` **types
+   only** (`allowTypeImports: true`), since features need model and input types
+   but never a client of their own. `src/modules/platform/**` is exempt.
 5. Wire `/health` to run `select 1` through `PrismaCore`.
 
-**Check:** `curl localhost:4000/health` → `"db":"ok"`. Stop Postgres and try
-again: `"db":"down"`, with status `503`.
+**Check:** `curl localhost:4000/health` → `200 {"status":"ok","db":"ok"}`.
+Start the API with `DATABASE_URL_CORE` pointing at a closed port (a real
+environment variable overrides `.env`): `503 {"status":"degraded","db":"down"}`.
 
 **Commit:** "Give the API core, read-write and read-only database clients".
 

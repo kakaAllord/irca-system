@@ -30,4 +30,35 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // Feature modules reach the database only through Db, which picks the
+    // right role and (from Phase 2) scopes every query to one church.
+    files: ['apps/api/src/modules/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/core/database/prisma-clients*'],
+              message:
+                'Inject Db instead. Only core code and the dev console use the Prisma clients directly.',
+            },
+            {
+              // Types (models, Prisma.*Input) are fine; a client instance is not.
+              group: ['**/generated/prisma/*'],
+              allowTypeImports: true,
+              message:
+                'Import only types from the generated client (import type ...). Use Db for queries.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // The dev console must see every church, so it may use PrismaCore.
+    files: ['apps/api/src/modules/platform/**/*.ts'],
+    rules: { '@typescript-eslint/no-restricted-imports': 'off' },
+  },
 );
