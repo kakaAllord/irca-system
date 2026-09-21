@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { useMe } from '@/lib/session';
+import { Logo } from '@/components/Logo';
+import { NavIcon } from './NavIcon';
 import { cn } from '@/lib/cn';
 import { UserMenu } from './UserMenu';
 
@@ -38,12 +40,7 @@ export function Sidebar({
       )}
     >
       <div className="flex items-center gap-2.5 px-1.5 py-2">
-        <span
-          aria-hidden="true"
-          className="flex size-7 flex-none items-center justify-center rounded-[7px] bg-accent text-[12.5px] font-semibold text-accent-ink"
-        >
-          {(me.church?.code ?? 'I').slice(0, 1)}
-        </span>
+        <Logo size={28} />
         {!collapsed && (
           <span className="flex min-w-0 flex-col leading-tight">
             <span className="truncate text-[12.5px] font-semibold text-fg">
@@ -78,13 +75,12 @@ export function Sidebar({
                   )}
                 >
                   <span
-                    aria-hidden="true"
                     className={cn(
-                      'flex size-[22px] flex-none items-center justify-center rounded-[6px] border text-[10.5px] font-semibold',
+                      'flex size-[22px] flex-none items-center justify-center rounded-[6px] border',
                       on ? 'border-accent bg-accent text-accent-ink' : 'border-border text-fg3',
                     )}
                   >
-                    {item.mark}
+                    <NavIcon name={item.icon} />
                   </span>
                   {!collapsed && <span className="truncate">{item.label}</span>}
                   {/* Something waiting should be visible without opening the page. */}

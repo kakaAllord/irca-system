@@ -2,6 +2,6 @@ export type Theme = 'light' | 'dark';
 
 export const THEME_COOKIE = 'irca_theme';
 
-/** The design opens in dark, so that is the default until someone chooses. */
+/** Light until someone chooses otherwise; the choice is kept in a cookie. */
 export const themeFrom = (value: string | undefined): Theme =>
-  value === 'light' ? 'light' : 'dark';
+  value === 'dark' ? 'dark' : 'light';

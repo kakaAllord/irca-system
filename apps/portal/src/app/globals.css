@@ -1,5 +1,9 @@
 @import 'tailwindcss';
 
+/* The theme is an attribute the server sets from a cookie, not the system
+ * preference, so Tailwind's own dark variant would never match. */
+@custom-variant dark ([data-theme='dark'] &);
+
 /*
  * The design's colours (../design/admin, its vars() function), as variables.
  * Light is the default; dark applies under [data-theme="dark"], which the root

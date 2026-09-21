@@ -65,7 +65,9 @@ from these files.
    export type NavItem = {
      label: string;
      href: string;           // absolute portal path, e.g. '/finance/transactions'
-     mark: string;           // the one-letter square in the design's sidebar
+     icon: NavIcon;          // which of the sidebar's drawings goes beside it
+                             // (letters in the design's sidebar until the
+                             // owner asked for real icons; see NavIcon.tsx)
      permission: string;     // shown only if the user has this permission
    };
 
@@ -138,10 +140,10 @@ from these files.
          permissions: ['admin.users.read','admin.roles.read','admin.modules.read','admin.audit.read'] },
      ],
      nav: [
-       { label: 'People',   href: '/admin/users',   mark: 'P', permission: 'admin.users.read' },
-       { label: 'Roles',    href: '/admin/roles',   mark: 'R', permission: 'admin.roles.read' },
-       { label: 'Portals',  href: '/admin/portals', mark: 'O', permission: 'admin.modules.read' },
-       { label: 'Activity', href: '/admin/audit',   mark: 'L', permission: 'admin.audit.read' },
+       { label: 'People',   href: '/admin/users',   icon: 'people',   permission: 'admin.users.read' },
+       { label: 'Roles',    href: '/admin/roles',   icon: 'roles',    permission: 'admin.roles.read' },
+       { label: 'Portals',  href: '/admin/portals', icon: 'portals',  permission: 'admin.modules.read' },
+       { label: 'Activity', href: '/admin/audit',   icon: 'activity', permission: 'admin.audit.read' },
      ],
    });
    ```

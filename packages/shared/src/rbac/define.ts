@@ -14,12 +14,31 @@ export type PermissionDef = {
   hint?: string;
 };
 
+/**
+ * The drawings the sidebar has. A module picks one by name rather than
+ * shipping a picture, so every portal's sidebar is drawn in one style and a
+ * name nothing can draw does not compile.
+ */
+export type NavIcon =
+  | 'overview'
+  | 'transactions'
+  | 'lists'
+  | 'requests'
+  | 'reports'
+  | 'people'
+  | 'roles'
+  | 'portals'
+  | 'activity'
+  | 'churches'
+  | 'terminal'
+  | 'health';
+
 export type NavItem = {
   label: string;
   /** Absolute portal path, e.g. /finance/transactions. */
   href: string;
-  /** The one-letter square in the design's sidebar. */
-  mark: string;
+  /** Which of the sidebar's drawings goes beside it. */
+  icon: NavIcon;
   /** Shown only to people who hold this permission. */
   permission: string;
 };

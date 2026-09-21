@@ -38,7 +38,7 @@ describe('module definitions', () => {
       defineModule({
         ...base,
         systemRoles: [],
-        nav: [{ label: 'A', href: '/f', mark: 'F', permission: 'f.b.read' }],
+        nav: [{ label: 'A', href: '/f', icon: 'overview', permission: 'f.b.read' }],
       }),
     ).toThrow(/unknown permission f.b.read/);
   });

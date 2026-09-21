@@ -21,8 +21,8 @@ test.describe('signing in', () => {
   test('the right password lands home, and signing out returns to sign-in', async ({ page }) => {
     await page.goto('/');
     await expect(page).toHaveURL(/\/login\?next=%2F$/);
-    // The design opens in dark.
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    // It opens in light, and remembers dark for whoever switches to it.
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 
     await page.getByLabel('Email').fill(ADMIN.email);
     await page.getByLabel('Password').fill(ADMIN.password);

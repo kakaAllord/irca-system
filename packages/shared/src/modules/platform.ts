@@ -27,13 +27,23 @@ export const platformModule = defineModule({
   },
   systemRoles: [],
   nav: [
-    { label: 'Churches', href: '/platform', mark: 'C', permission: 'platform.churches.read' },
+    {
+      label: 'Churches',
+      href: '/platform',
+      icon: 'churches',
+      permission: 'platform.churches.read',
+    },
     {
       label: 'View-as log',
       href: '/platform/impersonations',
-      mark: '>',
+      icon: 'terminal',
       permission: 'platform.impersonations.read',
     },
-    { label: 'Health', href: '/platform/health', mark: 'H', permission: 'platform.health.read' },
+    {
+      label: 'Health',
+      href: '/platform/health',
+      icon: 'health',
+      permission: 'platform.health.read',
+    },
   ],
 });

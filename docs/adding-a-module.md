@@ -26,12 +26,16 @@ export const mediaModule = defineModule({
     { key: 'media.viewer', name: 'Media viewer', description: '…', permissions: ['media.items.read'] },
     { key: 'media.editor', name: 'Media editor', description: '…', permissions: ['media.items.read', 'media.items.manage'] },
   ],
-  nav: [{ label: 'Library', href: '/media', mark: 'M', permission: 'media.items.read' }],
+  nav: [{ label: 'Library', href: '/media', icon: 'lists', permission: 'media.items.read' }],
 });
 ```
 
 - Permission keys are `<module>.<resource>.<action>` and must start with the
   module key; the definition refuses anything else.
+- `icon` names one of the sidebar's drawings (`NavIcon` in
+  `packages/shared/src/rbac/define.ts`). If none of them fits, add one to that
+  list and draw it in `apps/portal/src/components/shell/NavIcon.tsx`, in the
+  same weight as the others.
 - Mark each one `read` or `write` honestly. That single flag is what makes
   viewing as someone read-only, and what stops a write route being guarded by
   a read permission.

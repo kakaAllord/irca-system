@@ -79,20 +79,25 @@ export const financeModule = defineModule({
     },
   ],
   nav: [
-    { label: 'Overview', href: '/finance', mark: 'F', permission: 'finance.overview.read' },
+    { label: 'Overview', href: '/finance', icon: 'overview', permission: 'finance.overview.read' },
     {
       label: 'Transactions',
       href: '/finance/transactions',
-      mark: 'T',
+      icon: 'transactions',
       permission: 'finance.transactions.read',
     },
-    { label: 'Lists', href: '/finance/lists', mark: 'L', permission: 'finance.catalog.read' },
+    { label: 'Lists', href: '/finance/lists', icon: 'lists', permission: 'finance.catalog.read' },
     {
       label: 'Requests',
       href: '/finance/requests',
-      mark: 'Q',
+      icon: 'requests',
       permission: 'finance.transactions.read',
     },
-    { label: 'Reports', href: '/finance/reports', mark: 'R', permission: 'finance.reports.read' },
+    {
+      label: 'Reports',
+      href: '/finance/reports',
+      icon: 'reports',
+      permission: 'finance.reports.read',
+    },
   ],
 });

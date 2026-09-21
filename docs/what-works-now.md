@@ -52,7 +52,7 @@ in development).
 - A sidebar with the portals this church has turned on, showing only the pages
   you are allowed to open.
 - Your name, your roles and a menu to sign out.
-- Light and dark, remembered per browser.
+- Light by default, with a sun-or-moon switch for dark, remembered per browser.
 - On a phone the sidebar becomes a drawer; everything works at 360 pixels wide.
 - A number appears beside **Requests** when something is waiting for you.
 

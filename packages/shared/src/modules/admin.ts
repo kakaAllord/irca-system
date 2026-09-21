@@ -63,10 +63,15 @@ export const adminModule = defineModule({
     },
   ],
   nav: [
-    { label: 'Requests', href: '/admin/requests', mark: 'Q', permission: 'admin.requests.read' },
-    { label: 'People', href: '/admin/users', mark: 'P', permission: 'admin.users.read' },
-    { label: 'Roles', href: '/admin/roles', mark: 'R', permission: 'admin.roles.read' },
-    { label: 'Portals', href: '/admin/portals', mark: 'O', permission: 'admin.modules.read' },
-    { label: 'Activity', href: '/admin/audit', mark: 'L', permission: 'admin.audit.read' },
+    {
+      label: 'Requests',
+      href: '/admin/requests',
+      icon: 'requests',
+      permission: 'admin.requests.read',
+    },
+    { label: 'People', href: '/admin/users', icon: 'people', permission: 'admin.users.read' },
+    { label: 'Roles', href: '/admin/roles', icon: 'roles', permission: 'admin.roles.read' },
+    { label: 'Portals', href: '/admin/portals', icon: 'portals', permission: 'admin.modules.read' },
+    { label: 'Activity', href: '/admin/audit', icon: 'activity', permission: 'admin.audit.read' },
   ],
 });
