@@ -184,7 +184,10 @@ describe('the books: numbers, items and corrections', () => {
     it('refuses a date in the future and a year that cannot be right', async () => {
       const { cookie } = await church();
       const item = await newItem(cookie, 'Generator fuel');
-      const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+      // Tomorrow where the church is, not in UTC: at 22:00 UTC it is already
+      // tomorrow in Arusha, and "UTC + one day" would be today there.
+      const here = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Dar_es_Salaam' });
+      const tomorrow = here.format(new Date(Date.now() + 86_400_000));
 
       await record(cookie, {
         kind: 'EXPENSE',
