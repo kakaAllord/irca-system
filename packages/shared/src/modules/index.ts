@@ -1,17 +1,18 @@
 import type { ModuleDef, PermissionDef, PermissionKind } from '../rbac/define';
 import { adminModule } from './admin';
+import { financeModule } from './finance';
 import { platformModule } from './platform';
 
 /**
  * Every module a church can have. Order is the sidebar's order, except that
  * admin is always shown last.
  *
- * Phase 4 adds finance, Phase 5 membership. Adding one here, and nowhere else,
- * is what makes it appear in the Portals page, the role editor and the sidebar.
+ * Phase 5 adds membership. Adding one here, and nowhere else, is what makes it
+ * appear in the Portals page, the role editor and the sidebar.
  */
-export const CHURCH_MODULES: ModuleDef[] = [adminModule];
+export const CHURCH_MODULES: ModuleDef[] = [financeModule, adminModule];
 
-export { adminModule, platformModule };
+export { adminModule, financeModule, platformModule };
 
 export const ALL_MODULES: ModuleDef[] = [...CHURCH_MODULES, platformModule];
 
