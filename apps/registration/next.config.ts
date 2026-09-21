@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next';
+import { securityHeaders } from '@irca/shared';
 
 const nextConfig: NextConfig = {
   typedRoutes: false,
@@ -9,6 +10,12 @@ const nextConfig: NextConfig = {
   // whenever it detects a coding agent. Agent notes live outside the
   // repository, in the working folder around it.
   agentRules: false,
+  // Nothing gains from announcing the framework and its version.
+  poweredByHeader: false,
+  async headers() {
+    // The per-request content policy, with its nonce, is set in proxy.ts.
+    return [{ source: '/:path*', headers: securityHeaders() }];
+  },
   images: {
     // AVIF first: the logo's globe is full of fine network lines, which is
     // exactly the kind of detail AVIF carries at a much lower bitrate than
