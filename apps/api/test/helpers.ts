@@ -171,6 +171,14 @@ export function portal(app: NestExpressApplication, ip = `10.0.${rand()}.${rand(
       withHeaders(agent.post(path))
         .set('Cookie', cookie ?? '')
         .send(body ?? {}),
+    put: (path: string, body?: object, cookie?: string) =>
+      withHeaders(agent.put(path))
+        .set('Cookie', cookie ?? '')
+        .send(body ?? {}),
+    patch: (path: string, body?: object, cookie?: string) =>
+      withHeaders(agent.patch(path))
+        .set('Cookie', cookie ?? '')
+        .send(body ?? {}),
     del: (path: string, cookie?: string) =>
       withHeaders(agent.delete(path)).set('Cookie', cookie ?? ''),
   };
