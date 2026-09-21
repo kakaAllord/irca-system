@@ -17,6 +17,7 @@ import { ReadOnlyGuard } from './impersonation/read-only.guard.js';
 import { AuditService } from './audit/audit.service.js';
 import { AuditInterceptor } from './audit/audit.interceptor.js';
 import { UsageService } from './usage/usage.service.js';
+import { UsageSnapshot } from './usage/usage-snapshot.service.js';
 import { UsageInterceptor } from './usage/usage.interceptor.js';
 import { NoStoreInterceptor } from './http/no-store.interceptor.js';
 import { RateLimitGuard } from './limits/rate-limit.guard.js';
@@ -52,6 +53,7 @@ import { ScheduledJobs } from './jobs/scheduled-jobs.service.js';
     ImpersonationService,
     AuditService,
     UsageService,
+    UsageSnapshot,
     QuotaService,
     JobRunner,
     ScheduledJobs,
@@ -83,6 +85,7 @@ import { ScheduledJobs } from './jobs/scheduled-jobs.service.js';
     ImpersonationService,
     AuditService,
     UsageService,
+    UsageSnapshot,
     QuotaService,
     JobRunner,
     RegistrySync,

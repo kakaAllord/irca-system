@@ -4,6 +4,7 @@ import { PrismaCore } from '../database/prisma-clients.js';
 import { ImpersonationService } from '../impersonation/impersonation.service.js';
 import { EmailService } from '../email/email.service.js';
 import { JobRunner } from './job-runner.service.js';
+import { UsageSnapshot } from '../usage/usage-snapshot.service.js';
 
 /**
  * The work that happens on a clock rather than on a request. Each runs through
@@ -16,7 +17,20 @@ export class ScheduledJobs {
     private readonly impersonation: ImpersonationService,
     private readonly db: PrismaCore,
     private readonly email: EmailService,
+    private readonly snapshot: UsageSnapshot,
   ) {}
+
+  /** How much of the database each church uses, before anyone is awake. */
+  @Cron('0 2 * * *', { name: 'usage-snapshot', timeZone: 'Africa/Dar_es_Salaam' })
+  snapshotUsage() {
+    return this.jobs.run('usage-snapshot', () => this.snapshot.run());
+  }
+
+  /** Connections are a moment-to-moment thing; the day keeps the peak. */
+  @Cron('0 */5 * * * *', { name: 'db-sample' })
+  sampleDatabase() {
+    return this.jobs.run('db-sample', () => this.snapshot.sampleConnections());
+  }
 
   /** Often enough that an invitation feels immediate. */
   @Cron('*/15 * * * * *', { name: 'email-outbox' })

@@ -28,6 +28,9 @@
 //   registrations:export-back --to <old database url> --church <CODE> --since <iso time>
 //       The other direction, for rolling a cutover back.
 //
+//   job:run <usage-snapshot | db-sample>
+//       Runs a scheduled job now, recorded like any other run.
+//
 //   api-client:list [--church <CODE>]
 //   api-client:revoke --id <uuid>
 //       A revoked key stops working at once; the row stays, so the log of
@@ -40,6 +43,9 @@ import { PrismaCore } from '../core/database/prisma-clients.js';
 import { PasswordService } from '../core/auth/password.service.js';
 import { RegistrySync } from '../core/rbac/registry-sync.service.js';
 import { ApiClientService } from '../core/clients/api-client.service.js';
+import { JobRunner } from '../core/jobs/job-runner.service.js';
+import { UsageService } from '../core/usage/usage.service.js';
+import { UsageSnapshot } from '../core/usage/usage-snapshot.service.js';
 import { exportRegistrationsBack, importRegistrations } from './commands/registrations-import.js';
 import { promptHidden } from './prompt.js';
 
@@ -219,7 +225,24 @@ async function exportRegistrationsCommand(args: string[]) {
   );
 }
 
+async function runJob(args: string[]) {
+  const [name] = args;
+  await withApp(async (app) => {
+    const snapshot = app.get(UsageSnapshot);
+    const jobs: Record<string, () => Promise<Record<string, unknown>>> = {
+      'usage-snapshot': () => snapshot.run(),
+      'db-sample': () => snapshot.sampleConnections(),
+    };
+    const job = name ? jobs[name] : undefined;
+    if (!job) throw new Error(`Jobs: ${Object.keys(jobs).join(', ')}`);
+    await app.get(JobRunner).run(name!, job);
+    await app.get(UsageService).flush();
+    console.log(`${name} ran; see job_runs for how it went.`);
+  });
+}
+
 const COMMANDS: Record<string, (args: string[]) => Promise<void>> = {
+  'job:run': runJob,
   'user:create-dev': createDev,
   'registry:sync': syncRegistry,
   'api-client:create': createApiClient,
