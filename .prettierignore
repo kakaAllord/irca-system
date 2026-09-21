@@ -6,3 +6,4 @@ package-lock.json
 apps/registration
 docs
 apps/api/src/generated
+apps/api/src/core/auth/common-passwords.ts

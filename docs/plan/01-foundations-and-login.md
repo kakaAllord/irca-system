@@ -871,20 +871,17 @@ policy.
    needsRehash(hash: string): boolean                           // params changed since it was made
    ```
 
-3. Password policy in **`packages/shared/src/auth.ts`**, because the portal
-   shows the same rules as you type:
-
-   ```ts
-   export const PASSWORD_MIN = 10;
-   export const PASSWORD_MAX = 128;
-   export const PasswordSchema = z.string().min(PASSWORD_MIN).max(PASSWORD_MAX)
-     .refine(p => !COMMON_PASSWORDS.has(p.toLowerCase()), 'This password is too common');
-   ```
-
-   No "must contain a symbol" rules. Length is what matters (NIST SP 800-63B).
-   `COMMON_PASSWORDS` is a `Set` of the 1,000 most common passwords (commit it as
-   `packages/shared/src/common-passwords.ts`), plus church-specific obvious ones:
-   `irca2026`, `arusha123`, `password1`, `jesus12345`, `church1234`.
+3. **Password policy, split in two.** The length rule (`PASSWORD_MIN = 10`,
+   `PASSWORD_MAX = 128`, `PasswordSchema`) lives in `packages/shared/src/auth.ts`,
+   so the portal shows it live as you type. The **common-password list** lives
+   only in the API (`src/core/auth/common-passwords.ts`): 9,126 breached
+   passwords of 10+ characters from the UK NCSC's top-100,000 list, about 115 KB,
+   which is too heavy to ship to browsers. Regenerate it with
+   `node apps/api/scripts/gen-common-passwords.mjs [downloaded-file]`. Pass a file
+   when Node's `fetch` cannot reach GitHub (it ignores proxies that `curl`
+   honours). `PasswordService.check()` adds church-obvious ones (`jesusislord`,
+   `arusha2026`, `ircaarusha`…) and returns `too_short | too_long | too_common | null`.
+   No "must contain a symbol" rules: length is what matters (NIST SP 800-63B).
 4. Unit tests: hash/verify round trip; `verify(null, …)` is false and takes
    roughly as long as a real verify (assert > 5 ms); the policy rejects 9
    characters, 129 characters and `Password123`.
