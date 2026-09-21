@@ -8,6 +8,7 @@ import { AppError } from '../http/app-error.js';
 import type { RequestContext } from '../context/request-context.js';
 import { PermissionResolver } from '../rbac/permission-resolver.service.js';
 import { ImpersonationService } from '../impersonation/impersonation.service.js';
+import { PUBLIC_CLIENT_KEY } from '../rbac/decorators.js';
 import { IS_PUBLIC } from './decorators.js';
 import { SessionService } from './session.service.js';
 
@@ -68,11 +69,12 @@ export class SessionGuard implements CanActivate {
       }
     }
 
-    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC, [
-      ctx.getHandler(),
-      ctx.getClass(),
-    ]);
-    if (isPublic) return true;
+    const targets = [ctx.getHandler(), ctx.getClass()];
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC, targets);
+    // A church's own app has a key rather than a session; its own guard has
+    // already said which church, and there is no person to find.
+    const byClient = this.reflector.getAllAndOverride<string>(PUBLIC_CLIENT_KEY, targets);
+    if (isPublic || byClient) return true;
     if (!resolved) throw new AppError(401, ErrorCode.UNAUTHENTICATED, 'Please sign in.');
     return true;
   }

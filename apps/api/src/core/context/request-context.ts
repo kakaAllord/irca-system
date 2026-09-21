@@ -20,4 +20,6 @@ export interface RequestContext extends ClsStore {
   impersonationId: string | null;
   permissions: ReadonlySet<string>;
   platformRole: 'NONE' | 'DEV' | null;
+  /** Set when a church's own app is calling with its key, instead of a person. */
+  apiClientId: string | null;
 }

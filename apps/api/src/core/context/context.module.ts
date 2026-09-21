@@ -30,6 +30,7 @@ export const requestContextOptions: ClsMiddlewareOptions = {
     cls.set('impersonationId', null);
     cls.set('permissions', new Set<string>());
     cls.set('platformRole', null);
+    cls.set('apiClientId', null);
   },
 };
 

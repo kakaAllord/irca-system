@@ -2,7 +2,7 @@ import { SetMetadata } from '@nestjs/common';
 
 export const PERMISSIONS_KEY = 'irca:permissions';
 export const WRITE_WITH_READ_KEY = 'irca:write-with-read';
-/** Phase 5: routes a church's own app (the registration form) calls with its key. */
+/** Routes a church's own app (the registration form) calls with its key. */
 export const PUBLIC_CLIENT_KEY = 'irca:public-client';
 
 export type PermissionRule = { all: string[]; any?: never } | { any: string[]; all?: never };
@@ -13,6 +13,13 @@ export const RequirePermission = (...keys: string[]) => SetMetadata(PERMISSIONS_
 /** The request must hold at least one of these. */
 export const RequireAnyPermission = (...keys: string[]) =>
   SetMetadata(PERMISSIONS_KEY, { any: keys });
+
+/**
+ * A route a church's own app calls with its key, not a person's session: the
+ * registration form. The kind is checked against the key, so a key made for
+ * the form cannot be used anywhere else.
+ */
+export const PublicClient = (kind: 'REGISTRATION') => SetMetadata(PUBLIC_CLIENT_KEY, kind);
 
 /**
  * For the rare write route that legitimately needs only a read permission,

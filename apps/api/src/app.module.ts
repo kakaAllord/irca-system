@@ -17,6 +17,7 @@ import { HealthController } from './core/health/health.controller.js';
 import { AuthModule } from './core/auth/auth.module.js';
 import { SessionGuard } from './core/auth/session.guard.js';
 import { CsrfGuard } from './core/auth/csrf.guard.js';
+import { PublicClientGuard } from './core/clients/public-client.guard.js';
 import { ReadOnlyGuard } from './core/impersonation/read-only.guard.js';
 import { ImpersonationModule } from './core/impersonation/impersonation.module.js';
 import { PermissionsGuard } from './core/rbac/permissions.guard.js';
@@ -58,6 +59,7 @@ import { UsageInterceptor } from './core/usage/usage.interceptor.js';
     // whether this person may do this particular thing.
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useExisting: CsrfGuard },
+    { provide: APP_GUARD, useExisting: PublicClientGuard },
     { provide: APP_GUARD, useExisting: SessionGuard },
     { provide: APP_GUARD, useExisting: RateLimitGuard },
     { provide: APP_GUARD, useExisting: ReadOnlyGuard },
