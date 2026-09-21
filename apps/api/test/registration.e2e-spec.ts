@@ -229,4 +229,14 @@ describe('the registration form, served by the API', () => {
     const read = await form.get(`/v1/public/registrations/${token}`);
     expect(read.body.values.fullname).toBe('Neema Mollel');
   });
+
+  it('slows down one visitor starting registration after registration', async () => {
+    const { c } = await church();
+    // One visitor address for all of them; the limit is per visitor.
+    const form = asForm(app, await createApiClient(db, c.id), '41.1.2.3');
+    for (let i = 0; i < 20; i++) {
+      await form.post('/v1/public/registrations', { lang: 'en' }).expect(201);
+    }
+    await form.post('/v1/public/registrations', { lang: 'en' }).expect(429);
+  });
 });

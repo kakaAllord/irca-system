@@ -382,4 +382,126 @@ describe('the Membership portal', () => {
       expect(sent.rows[0].channel).toBe('WHATSAPP');
     });
   });
+
+  describe('the built-in roles', () => {
+    /** What each role must be able to do, and what it must be refused. */
+    const ROLES = Object.fromEntries(
+      membershipModule.systemRoles.map((role) => [role.key, role.permissions]),
+    );
+    const ROUTES: { need: string; call: (cookie: string, personId: string) => Promise<number> }[] =
+      [
+        {
+          need: 'membership.people.read',
+          call: async (c) => (await portal(app).get('/v1/membership/people', c)).status,
+        },
+        {
+          need: 'membership.people.update',
+          call: async (c, id) =>
+            (await portal(app).post(`/v1/membership/people/${id}/baptised`, { value: true }, c))
+              .status,
+        },
+        {
+          need: 'membership.people.export',
+          call: async (c) => (await portal(app).get('/v1/membership/people/export.csv', c)).status,
+        },
+        {
+          need: 'membership.notes.write',
+          call: async (c, id) =>
+            (
+              await portal(app).post(
+                `/v1/membership/people/${id}/notes`,
+                { kind: 'VISIT', body: 'Visited' },
+                c,
+              )
+            ).status,
+        },
+        {
+          need: 'membership.applications.read',
+          call: async (c) => (await portal(app).get('/v1/membership/applications', c)).status,
+        },
+        {
+          need: 'membership.insights.read',
+          call: async (c) => (await portal(app).get('/v1/membership/insights', c)).status,
+        },
+        {
+          need: 'membership.discipleship.manage',
+          call: async (c) =>
+            (
+              await portal(app).post(
+                '/v1/membership/discipleship/groups',
+                { name: `Group ${Math.random()}` },
+                c,
+              )
+            ).status,
+        },
+      ];
+
+    it.each(Object.keys(ROLES))('%s can do exactly what it says', async (roleKey) => {
+      const { c, form } = await church();
+      const { personId } = await registered(form);
+      const cookie = await also(c.id, ROLES[roleKey]!);
+
+      for (const route of ROUTES) {
+        const status = await route.call(cookie, personId);
+        const allowed = ROLES[roleKey]!.includes(route.need);
+        expect({ route: route.need, ok: status < 300 }).toEqual({ route: route.need, ok: allowed });
+        if (!allowed) expect(status).toBe(403);
+      }
+    });
+  });
+
+  describe('while being viewed as', () => {
+    it('refuses every change, and still shows the pages', async () => {
+      const { c, form } = await church();
+      const { personId } = await registered(form);
+      const pastor = await createUserWithPermissions(db, c.id, ALL, { moduleKey: 'membership' });
+      const admin = await createUserWithPermissions(
+        db,
+        c.id,
+        ['admin.users.impersonate', 'admin.users.read'],
+        { moduleKey: 'admin' },
+      );
+      const cookie = await signIn(admin.email, admin.password);
+      await portal(app).post('/v1/impersonation', { subjectUserId: pastor.id }, cookie).expect(200);
+
+      for (const call of [
+        () => portal(app).post(`/v1/membership/people/${personId}/saved`, { value: true }, cookie),
+        () =>
+          portal(app).post(
+            `/v1/membership/people/${personId}/notes`,
+            { kind: 'NOTE', body: 'x x' },
+            cookie,
+          ),
+        () => portal(app).post('/v1/membership/applications', { personId }, cookie),
+        () => portal(app).post('/v1/membership/discipleship/groups', { name: 'Tuesday' }, cookie),
+      ]) {
+        const res = await call();
+        expect(res.status).toBe(403);
+      }
+      await portal(app).get(`/v1/membership/people/${personId}`, cookie).expect(200);
+    });
+  });
+
+  describe('member numbers', () => {
+    it('are never given twice, even when two are confirmed at once', async () => {
+      const { form, cookie } = await church();
+      const ids: string[] = [];
+      for (const phone of ['712000001', '712000002']) {
+        const { personId } = await registered(form, { phone });
+        const app_ = await portal(app)
+          .post('/v1/membership/applications', { personId }, cookie)
+          .expect(201);
+        await portal(app)
+          .post(`/v1/membership/applications/${app_.body.id}/approve`, {}, cookie)
+          .expect(204);
+        ids.push(app_.body.id);
+      }
+      await db.query(`update membership_applications set decided_at = now() - interval '31 days'`);
+
+      const [a, b] = await Promise.all(
+        ids.map((id) => portal(app).post(`/v1/membership/applications/${id}/confirm`, {}, cookie)),
+      );
+      expect([a!.body.memberNumber, b!.body.memberNumber].sort((x, y) => x - y)).toEqual([1, 2]);
+    });
+  });
 });
