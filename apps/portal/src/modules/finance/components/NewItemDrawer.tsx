@@ -5,7 +5,7 @@ import { clientApi } from '@/lib/api/client';
 import { ApiRequestError } from '@/lib/api/errors';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
-import { Dialog } from '@/components/ui/Dialog';
+import { Drawer } from '@/components/ui/Drawer';
 import { Input } from '@/components/ui/Input';
 
 type Item = { id: string; name: string };
@@ -19,7 +19,7 @@ const NOUN = { income: 'income source', expense: 'expense item' } as const;
  * the useful part of this dialog: it is where "Electricity", "Electricity
  * bill" and "Umeme" stop becoming three items.
  */
-export function NewItemDialog({
+export function NewItemDrawer({
   kind,
   name,
   onClose,
@@ -77,7 +77,7 @@ export function NewItemDialog({
 
   if (similar) {
     return (
-      <Dialog
+      <Drawer
         open
         onClose={onClose}
         title="Did you mean one of these?"
@@ -100,12 +100,12 @@ export function NewItemDialog({
             </Button>
           ))}
         </div>
-      </Dialog>
+      </Drawer>
     );
   }
 
   return (
-    <Dialog
+    <Drawer
       open={name !== null}
       onClose={onClose}
       title={`New ${NOUN[kind]}`}
@@ -130,6 +130,6 @@ export function NewItemDialog({
           onChange={(e) => setDescription(e.target.value)}
         />
       </div>
-    </Dialog>
+    </Drawer>
   );
 }

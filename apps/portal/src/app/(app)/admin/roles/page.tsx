@@ -5,7 +5,7 @@ import { can } from '@/lib/auth/guards';
 import { PageHeader } from '@/components/shell/PageHeader';
 import { ForbiddenState } from '@/components/shell/States';
 import { Badge } from '@/components/ui/Badge';
-import { RoleDialog } from './RoleDialog';
+import { RoleDrawer } from './RoleDrawer';
 
 export const metadata: Metadata = { title: 'Roles' };
 
@@ -67,7 +67,7 @@ export default async function RolesPage() {
                 {!group.enabled && <Badge tone="muted">Portal off</Badge>}
               </h2>
               {editable && group.enabled && (
-                <RoleDialog
+                <RoleDrawer
                   moduleKey={group.moduleKey}
                   moduleName={group.moduleName}
                   permissions={catalogues[group.moduleKey] ?? []}
@@ -98,7 +98,7 @@ export default async function RolesPage() {
                       {role.memberCount} {role.memberCount === 1 ? 'person' : 'people'}
                     </span>
                     {editable && !role.isSystem && (
-                      <RoleDialog
+                      <RoleDrawer
                         moduleKey={group.moduleKey}
                         moduleName={group.moduleName}
                         permissions={catalogues[group.moduleKey] ?? []}

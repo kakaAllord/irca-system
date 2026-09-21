@@ -8,9 +8,10 @@ import { ApiRequestError } from '@/lib/api/errors';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
+import { Drawer } from '@/components/ui/Drawer';
 import { Input } from '@/components/ui/Input';
 import { Can } from '@/lib/session';
-import { NewItemDialog } from '@/modules/finance/components/NewItemDialog';
+import { NewItemDrawer } from '@/modules/finance/components/NewItemDrawer';
 
 type Kind = 'income' | 'expense';
 const NOUN = { income: 'income source', expense: 'expense item' } as const;
@@ -62,7 +63,7 @@ export function ItemActions({ kind, item }: { kind: Kind; item: CatalogItem }) {
         )}
       </span>
 
-      <Dialog
+      <Drawer
         open={open === 'rename'}
         onClose={() => setOpen(null)}
         title={`Rename "${item.name}"`}
@@ -90,7 +91,7 @@ export function ItemActions({ kind, item }: { kind: Kind; item: CatalogItem }) {
           {error && <Alert tone="error">{error}</Alert>}
           <Input label="Name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
         </div>
-      </Dialog>
+      </Drawer>
 
       <Dialog
         open={open === 'off'}
@@ -127,7 +128,7 @@ export function NewItemButton({ kind }: { kind: Kind }) {
   return (
     <Can permission="finance.catalog.create">
       <Button onClick={() => setName('')}>+ New {NOUN[kind]}</Button>
-      <NewItemDialog
+      <NewItemDrawer
         kind={kind}
         name={name}
         onClose={() => setName(null)}

@@ -12,7 +12,7 @@ import type { CatalogSuggestResponse, CatalogSuggestion } from '@irca/shared';
 import { clientApi } from '@/lib/api/client';
 import { useCan } from '@/lib/session';
 import { Spinner } from '@/components/ui/Spinner';
-import { NewItemDialog } from './NewItemDialog';
+import { NewItemDrawer } from './NewItemDrawer';
 
 export type CatalogValue = { id: string; name: string } | null;
 
@@ -168,7 +168,7 @@ export function CatalogCombobox({
       {note && <p className="text-[11.5px] text-fg3">{note}</p>}
       {error && <p className="text-[11.5px] text-danger">{error}</p>}
 
-      <NewItemDialog
+      <NewItemDrawer
         kind={kind}
         name={creating}
         onClose={() => setCreating(null)}

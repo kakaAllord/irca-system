@@ -6,7 +6,7 @@ import { clientApi } from '@/lib/api/client';
 import { ApiRequestError } from '@/lib/api/errors';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
-import { Dialog } from '@/components/ui/Dialog';
+import { Drawer } from '@/components/ui/Drawer';
 import { Input } from '@/components/ui/Input';
 import type { PermissionDef } from './page';
 
@@ -23,7 +23,7 @@ type Role = {
  * lets someone see and what it lets them change, because that is the
  * distinction that matters when handing out access.
  */
-export function RoleDialog({
+export function RoleDrawer({
   moduleKey,
   moduleName,
   permissions,
@@ -111,7 +111,7 @@ export function RoleDialog({
       <Button variant={role ? 'ghost' : 'secondary'} size="sm" onClick={() => setOpen(true)}>
         {role ? 'Edit' : '+ New role'}
       </Button>
-      <Dialog
+      <Drawer
         open={open}
         onClose={() => setOpen(false)}
         title={role ? `Edit ${role.name}` : `New ${moduleName} role`}
@@ -155,7 +155,7 @@ export function RoleDialog({
           {list('Can change', writes)}
           {error && <Alert tone="error">{error}</Alert>}
         </div>
-      </Dialog>
+      </Drawer>
     </>
   );
 }

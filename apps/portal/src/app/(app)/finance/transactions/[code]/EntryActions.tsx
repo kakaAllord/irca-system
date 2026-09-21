@@ -8,7 +8,7 @@ import { clientApi } from '@/lib/api/client';
 import { ApiRequestError } from '@/lib/api/errors';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
-import { Dialog } from '@/components/ui/Dialog';
+import { Drawer } from '@/components/ui/Drawer';
 import { Input } from '@/components/ui/Input';
 import { useCan } from '@/lib/session';
 import { EntryFields, type EntryValues } from '@/modules/finance/components/EntryFields';
@@ -111,7 +111,7 @@ export function EntryActions({ entry, currency }: { entry: Entry; currency: stri
         </MenuItems>
       </Menu>
 
-      <Dialog
+      <Drawer
         open={open === 'edit'}
         onClose={() => setOpen(null)}
         title={`Ask to correct ${entry.code}`}
@@ -153,9 +153,9 @@ export function EntryActions({ entry, currency }: { entry: Entry; currency: stri
             placeholder="Typed an extra zero"
           />
         </div>
-      </Dialog>
+      </Drawer>
 
-      <Dialog
+      <Drawer
         open={open === 'void'}
         onClose={() => setOpen(null)}
         title={`Ask to void ${entry.code}?`}
@@ -185,7 +185,7 @@ export function EntryActions({ entry, currency }: { entry: Entry; currency: stri
             placeholder="Entered twice — duplicate of 000013"
           />
         </div>
-      </Dialog>
+      </Drawer>
     </>
   );
 }

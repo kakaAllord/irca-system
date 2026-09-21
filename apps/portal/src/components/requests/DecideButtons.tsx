@@ -7,7 +7,7 @@ import { clientApi } from '@/lib/api/client';
 import { ApiRequestError } from '@/lib/api/errors';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
-import { Dialog } from '@/components/ui/Dialog';
+import { Drawer } from '@/components/ui/Drawer';
 import { Input } from '@/components/ui/Input';
 
 /**
@@ -58,7 +58,7 @@ export function DecideButtons({ request }: { request: ChangeRequestView }) {
       </Button>
       <Button onClick={() => setConfirm('approve')}>Approve</Button>
 
-      <Dialog
+      <Drawer
         open={confirm !== null}
         onClose={() => setConfirm(null)}
         title={confirm === 'reject' ? `Reject this change?` : summary}
@@ -89,7 +89,7 @@ export function DecideButtons({ request }: { request: ChangeRequestView }) {
           onChange={(e) => setNote(e.target.value)}
           placeholder={confirm === 'reject' ? 'The receipt says otherwise' : ''}
         />
-      </Dialog>
+      </Drawer>
     </>
   );
 }

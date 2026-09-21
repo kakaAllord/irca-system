@@ -54,6 +54,9 @@ in development).
 - Your name, your roles and a menu to sign out.
 - Light by default, with a sun-or-moon switch for dark, remembered per browser.
 - On a phone the sidebar becomes a drawer; everything works at 360 pixels wide.
+- Anything you fill in — inviting someone, a new role, a new item, asking for a
+  correction — slides in from the right, over the page you were reading. Plain
+  yes-or-no questions still open in the middle.
 - A number appears beside **Requests** when something is waiting for you.
 
 ---

@@ -6,7 +6,7 @@ import { clientApi } from '@/lib/api/client';
 import { ApiRequestError } from '@/lib/api/errors';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
-import { Dialog } from '@/components/ui/Dialog';
+import { Drawer } from '@/components/ui/Drawer';
 import { Input } from '@/components/ui/Input';
 
 type RoleGroup = {
@@ -69,7 +69,7 @@ export function InviteButton({ roleGroups }: { roleGroups: RoleGroup[] }) {
       {sentTo && <Alert>Invitation sent to {sentTo}.</Alert>}
       <Button onClick={() => setOpen(true)}>+ Invite person</Button>
 
-      <Dialog
+      <Drawer
         open={open}
         onClose={close}
         title="Invite a person"
@@ -137,7 +137,7 @@ export function InviteButton({ roleGroups }: { roleGroups: RoleGroup[] }) {
 
           {error && <Alert tone="error">{error}</Alert>}
         </form>
-      </Dialog>
+      </Drawer>
     </>
   );
 }
