@@ -55,6 +55,9 @@ model Church {
   updatedAt DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   memberships ChurchMembership[]
+  modules     ChurchModule[]
+  roles       Role[]
+  placement   ChurchPlacement?
 
   @@map("churches")
 }
@@ -96,8 +99,9 @@ model ChurchMembership {
   createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  church Church @relation(fields: [churchId], references: [id])
-  user   User   @relation(fields: [userId], references: [id])
+  church Church           @relation(fields: [churchId], references: [id])
+  user   User             @relation(fields: [userId], references: [id])
+  roles  MembershipRole[]
 
   @@unique([churchId, userId])
   @@index([userId])
@@ -124,8 +128,227 @@ model Session {
   revokedAt       DateTime? @map("revoked_at") @db.Timestamptz(6)
   revokeReason    String?   @map("revoke_reason") @db.VarChar(40)
 
-  user User @relation(fields: [userId], references: [id])
+  user          User                  @relation(fields: [userId], references: [id])
+  impersonation ImpersonationSession? @relation(fields: [impersonationId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@map("sessions")
+}
+
+enum PermissionKindDb {
+  READ
+  WRITE
+}
+
+/// Mirror of the permissions defined in code, so roles can point at them with
+/// a foreign key. Written only by the boot-time sync.
+model Permission {
+  key       String           @id @db.VarChar(80)
+  moduleKey String           @map("module_key") @db.VarChar(40)
+  kind      PermissionKindDb
+  label     String           @db.VarChar(200)
+  /// Set when the permission disappears from code. Retired permissions are
+  /// ignored when resolving and never deleted, so old roles still load.
+  retiredAt DateTime?        @map("retired_at") @db.Timestamptz(6)
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+/// Which modules a church has switched on. Turning one off keeps the row, its
+/// roles and its data, so turning it back on restores everything.
+model ChurchModule {
+  churchId     String    @map("church_id") @db.Uuid
+  moduleKey    String    @map("module_key") @db.VarChar(40)
+  enabled      Boolean   @default(true)
+  enabledAt    DateTime? @map("enabled_at") @db.Timestamptz(6)
+  enabledById  String?   @map("enabled_by_id") @db.Uuid
+  disabledAt   DateTime? @map("disabled_at") @db.Timestamptz(6)
+  disabledById String?   @map("disabled_by_id") @db.Uuid
+
+  church Church @relation(fields: [churchId], references: [id])
+
+  @@id([churchId, moduleKey])
+  @@map("church_modules")
+}
+
+model Role {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  churchId    String    @map("church_id") @db.Uuid
+  moduleKey   String    @map("module_key") @db.VarChar(40)
+  name        String    @db.VarChar(80)
+  description String    @default("") @db.VarChar(300)
+  /// Set for roles created from a module's systemRoles. Their permissions are
+  /// kept in step with code by the sync and cannot be edited in the portal.
+  systemKey   String?   @map("system_key") @db.VarChar(80)
+  createdById String?   @map("created_by_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  church      Church           @relation(fields: [churchId], references: [id])
+  permissions RolePermission[]
+  members     MembershipRole[]
+
+  @@unique([churchId, moduleKey, name])
+  @@unique([churchId, systemKey])
+  @@map("roles")
+}
+
+model RolePermission {
+  churchId      String @map("church_id") @db.Uuid
+  roleId        String @map("role_id") @db.Uuid
+  permissionKey String @map("permission_key") @db.VarChar(80)
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionKey], references: [key])
+
+  @@id([roleId, permissionKey])
+  @@index([churchId])
+  @@map("role_permissions")
+}
+
+model MembershipRole {
+  churchId     String   @map("church_id") @db.Uuid
+  membershipId String   @map("membership_id") @db.Uuid
+  roleId       String   @map("role_id") @db.Uuid
+  grantedById  String?  @map("granted_by_id") @db.Uuid
+  grantedAt    DateTime @default(now()) @map("granted_at") @db.Timestamptz(6)
+
+  membership ChurchMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  role       Role             @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([membershipId, roleId])
+  @@index([churchId])
+  @@index([roleId])
+  @@map("membership_roles")
+}
+
+enum ImpersonationEndReason {
+  STOPPED
+  EXPIRED
+  LOGOUT
+  REVOKED
+}
+
+/// Every view-as: who, whom, where and when. No reason is asked for, and only
+/// devs can read it (docs/plan/00-decisions.md, D16).
+model ImpersonationSession {
+  id               String                  @id @default(uuid(7)) @db.Uuid
+  /// The actor's own session, the one doing the impersonating.
+  sessionId        String                  @map("session_id") @db.Uuid
+  actorUserId      String                  @map("actor_user_id") @db.Uuid
+  subjectUserId    String                  @map("subject_user_id") @db.Uuid
+  churchId         String                  @map("church_id") @db.Uuid
+  /// The church the actor's session was in before, restored when it ends.
+  previousChurchId String?                 @map("previous_church_id") @db.Uuid
+  startedAt        DateTime                @default(now()) @map("started_at") @db.Timestamptz(6)
+  expiresAt        DateTime                @map("expires_at") @db.Timestamptz(6)
+  endedAt          DateTime?               @map("ended_at") @db.Timestamptz(6)
+  endReason        ImpersonationEndReason? @map("end_reason")
+
+  sessions Session[]
+
+  @@index([churchId, startedAt(sort: Desc)])
+  @@index([subjectUserId, startedAt(sort: Desc)])
+  @@index([actorUserId, startedAt(sort: Desc)])
+  @@map("impersonation_sessions")
+}
+
+/// Append-only. The app may insert and read, never update or delete.
+model AuditEvent {
+  id              String   @id @default(uuid(7)) @db.Uuid
+  churchId        String?  @map("church_id") @db.Uuid
+  /// 'core' for sign-ins and impersonation (platform plane), 'feature' for a
+  /// church's own records (moves with the church, multi-tenancy.md section 13).
+  source          String   @default("feature") @db.VarChar(10)
+  actorUserId     String?  @map("actor_user_id") @db.Uuid
+  subjectUserId   String?  @map("subject_user_id") @db.Uuid
+  impersonationId String?  @map("impersonation_id") @db.Uuid
+  action          String   @db.VarChar(80)
+  entityType      String?  @map("entity_type") @db.VarChar(60)
+  entityId        String?  @map("entity_id") @db.VarChar(80)
+  summary         String?  @db.VarChar(300)
+  before          Json?
+  after           Json?
+  meta            Json?
+  ip              String?  @db.VarChar(64)
+  userAgent       String?  @map("user_agent") @db.VarChar(400)
+  requestId       String?  @map("request_id") @db.VarChar(64)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([churchId, createdAt(sort: Desc)])
+  @@index([entityType, entityId])
+  @@index([actorUserId, createdAt(sort: Desc)])
+  @@index([subjectUserId, createdAt(sort: Desc)])
+  @@map("audit_events")
+}
+
+/// Counters and gauges per church per local day.
+model UsageDaily {
+  churchId String   @map("church_id") @db.Uuid
+  day      DateTime @db.Date
+  metric   String   @db.VarChar(80)
+  value    BigInt   @default(0)
+
+  @@id([churchId, day, metric])
+  @@index([day])
+  @@map("usage_daily")
+}
+
+/// Counters with no church: failed sign-ins for unknown emails, dev console use.
+model PlatformUsageDaily {
+  day    DateTime @db.Date
+  metric String   @db.VarChar(80)
+  value  BigInt   @default(0)
+
+  @@id([day, metric])
+  @@map("platform_usage_daily")
+}
+
+/// Who was active on which day, for daily, weekly and monthly active people.
+model UserActivityDaily {
+  churchId String   @map("church_id") @db.Uuid
+  userId   String   @map("user_id") @db.Uuid
+  day      DateTime @db.Date
+  requests Int      @default(0)
+
+  @@id([churchId, userId, day])
+  @@index([churchId, day])
+  @@map("user_activity_daily")
+}
+
+/// One row per background job run, or per church for a per-church job.
+model JobRun {
+  id         String    @id @default(uuid(7)) @db.Uuid
+  job        String    @db.VarChar(60)
+  churchId   String?   @map("church_id") @db.Uuid
+  startedAt  DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
+  finishedAt DateTime? @map("finished_at") @db.Timestamptz(6)
+  ok         Boolean?
+  error      String?
+  stats      Json?
+
+  @@index([job, startedAt(sort: Desc)])
+  @@map("job_runs")
+}
+
+enum PlacementState {
+  ACTIVE
+  /// Maintenance: writes are refused while the church's data is being moved.
+  MOVING
+}
+
+/// Which database cluster holds a church's own records. One cluster today;
+/// the column is what lets a large church move to its own database later.
+model ChurchPlacement {
+  churchId String         @id @map("church_id") @db.Uuid
+  cluster  String         @default("shared") @db.VarChar(40)
+  state    PlacementState @default(ACTIVE)
+  movedAt  DateTime?      @map("moved_at") @db.Timestamptz(6)
+
+  church Church @relation(fields: [churchId], references: [id])
+
+  @@map("church_placements")
 }

@@ -54,21 +54,43 @@ async function user(
   });
 }
 
-async function member(churchId: string, userId: string) {
-  return db.churchMembership.upsert({
+async function member(churchId: string, userId: string, systemRoleKeys: string[] = []) {
+  const membership = await db.churchMembership.upsert({
     where: { churchId_userId: { churchId, userId } },
     update: { status: 'ACTIVE' },
     create: { churchId, userId, status: 'ACTIVE', joinedAt: new Date() },
   });
+  // The roles themselves are created by the API's boot-time sync from the
+  // module definitions, so start the API once before seeding a fresh database.
+  for (const systemKey of systemRoleKeys) {
+    const role = await db.role.findUnique({
+      where: { churchId_systemKey: { churchId, systemKey } },
+    });
+    if (!role) {
+      console.warn(`role ${systemKey} does not exist yet: start the API once, then seed again`);
+      continue;
+    }
+    await db.membershipRole.upsert({
+      where: { membershipId_roleId: { membershipId: membership.id, roleId: role.id } },
+      update: {},
+      create: { churchId, membershipId: membership.id, roleId: role.id },
+    });
+  }
+  return membership;
 }
 
 const irca = await church('IRCA', 'irca', 'International Revival Church Arusha');
 const test = await church('TEST', 'test', 'Test Church');
 
 await user('dev@irca.local', 'Dev Account', 'dev-password-123', 'DEV');
-await member(irca.id, (await user('admin@irca.local', 'IRCA Admin', 'admin-password-123')).id);
+await member(irca.id, (await user('admin@irca.local', 'IRCA Admin', 'admin-password-123')).id, [
+  'admin.administrator',
+]);
+// No roles yet: Phase 4 makes this one a finance clerk.
 await member(irca.id, (await user('clerk@irca.local', 'Neema Mollel', 'clerk-password-123')).id);
-await member(test.id, (await user('admin@test.local', 'Test Admin', 'admin-password-123')).id);
+await member(test.id, (await user('admin@test.local', 'Test Admin', 'admin-password-123')).id, [
+  'admin.administrator',
+]);
 
 console.log(
   'seeded: IRCA and TEST, with dev@irca.local, admin@irca.local, clerk@irca.local, admin@test.local',
