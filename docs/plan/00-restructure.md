@@ -7,8 +7,8 @@ exactly as it is deployed. The design prototypes and agent working files sit
 in the working folder, outside the repository. The live site keeps running throughout, and moves to deploy
 from the new repository only after a preview deploy proves the build.
 
-**Status on 21 Sept 2026:** steps 0.1–0.6a are done (commits listed below).
-Steps 0.7–0.9 wait on the owner's choice of GitHub repository (0.7).
+**Status on 21 Sept 2026:** steps 0.1–0.7 are done (commits listed below). Steps
+0.8 and 0.9 are dashboard changes in Vercel and GitHub, for the owner.
 
 ```
 ~/dev/irca/                       ← working folder: NOT a repository
@@ -40,9 +40,9 @@ only standard build output and environment-file patterns.
 | 0.5 | Commit the unfinished "who first" screen change | Done: `1bdf8a3` |
 | 0.6 | Make the root an npm workspace | Done: `5732b8b` |
 | 0.6a | Stop `next dev` writing agent files into the app | Done: `72afac3` |
-| 0.7 | Connect a GitHub remote | **Waiting on the owner** |
-| 0.8 | Point the Vercel project at the new repository | After 0.7 |
-| 0.9 | Retire the old repository | After 0.8 |
+| 0.7 | Connect a GitHub remote | Done: `kakaAllord/irca-system` |
+| 0.8 | Point the Vercel project at the new repository | **Owner, in the Vercel dashboard** |
+| 0.9 | Retire the old repository | **Owner, on GitHub**, a week after 0.8 |
 | 0.10 | Phase check | |
 
 ---
@@ -149,7 +149,11 @@ in `node_modules/next/dist/docs/`) is in `~/dev/irca/AGENTS.md` instead.
 
 ## 0.7 — Connect a GitHub remote
 
-**Waiting on the owner.** The new history does not share any commit with
+**Done:** the owner chose option A. `main` was pushed to
+`git@github.com:kakaAllord/irca-system.git` after checking the repository was
+empty. The analysis is kept below for the record.
+
+The new history does not share any commit with
 `kakaAllord/irca-administration`, so it cannot simply be pushed there.
 
 | Option | Impact |
@@ -195,6 +199,6 @@ the only copy of the registration app's early history.
 - [x] `~/dev/irca/design/admin`, `~/dev/irca/AGENTS.md` and `~/dev/irca/CLAUDE.md` exist outside the repository, and `git ls-files` lists no `CLAUDE.md`, `AGENTS.md`, `.claude` or design file.
 - [x] `npm install`, `typecheck` and `build` pass from the root.
 - [ ] The "who first" form walked by hand on a phone-sized screen.
-- [ ] Pushed to the chosen GitHub repository.
+- [x] Pushed to the chosen GitHub repository (`kakaAllord/irca-system`).
 - [ ] Vercel builds production from `apps/registration` in the new repository.
 - [ ] The old repository is archived with a pointer.
