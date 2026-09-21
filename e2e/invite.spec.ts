@@ -68,7 +68,8 @@ test.describe('inviting someone', () => {
     await expect(theirRow).toBeVisible({ timeout: 15_000 });
     await theirRow.click();
     await page.getByRole('button', { name: /^View as/ }).click();
-    await expect(page.getByText(`Viewing as ${NEW_PERSON.name}`)).toBeVisible();
+    // Exactly, because Next's route announcer repeats the page's title.
+    await expect(page.getByText(`Viewing as ${NEW_PERSON.name}`, { exact: true })).toBeVisible();
     await page.goto('/admin/users');
     await expect(page.getByRole('button', { name: '+ Invite person' })).toHaveCount(0);
 

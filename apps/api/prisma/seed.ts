@@ -9,6 +9,8 @@ import { config } from 'dotenv';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/generated/prisma/client.js';
 import { PasswordService } from '../src/core/auth/password.service.js';
+import { RegistrySync } from '../src/core/rbac/registry-sync.service.js';
+import type { PrismaCore } from '../src/core/database/prisma-clients.js';
 
 config({ path: process.env.NODE_ENV === 'test' ? '.env.test' : '.env', quiet: true });
 
@@ -54,20 +56,30 @@ async function user(
   });
 }
 
+/** A portal the church uses. Its built-in roles follow from the sync below. */
+async function portal(churchId: string, moduleKey: string) {
+  await db.churchModule.upsert({
+    where: { churchId_moduleKey: { churchId, moduleKey } },
+    update: { enabled: true },
+    create: { churchId, moduleKey, enabled: true, enabledAt: new Date() },
+  });
+}
+
 async function member(churchId: string, userId: string, systemRoleKeys: string[] = []) {
   const membership = await db.churchMembership.upsert({
     where: { churchId_userId: { churchId, userId } },
     update: { status: 'ACTIVE' },
     create: { churchId, userId, status: 'ACTIVE', joinedAt: new Date() },
   });
-  // The roles themselves are created by the API's boot-time sync from the
-  // module definitions, so start the API once before seeding a fresh database.
+  // The roles themselves come from the module definitions, written by the
+  // same sync the API runs at boot (called below), so a fresh database can be
+  // seeded without starting the API first.
   for (const systemKey of systemRoleKeys) {
     const role = await db.role.findUnique({
       where: { churchId_systemKey: { churchId, systemKey } },
     });
     if (!role) {
-      console.warn(`role ${systemKey} does not exist yet: start the API once, then seed again`);
+      console.warn(`no role ${systemKey} in this church: is its portal on?`);
       continue;
     }
     await db.membershipRole.upsert({
@@ -82,17 +94,35 @@ async function member(churchId: string, userId: string, systemRoleKeys: string[]
 const irca = await church('IRCA', 'irca', 'International Revival Church Arusha');
 const test = await church('TEST', 'test', 'Test Church');
 
+// IRCA runs Finance; TEST does not, so a test can prove a portal that is off
+// is off, and that the two churches number their entries independently.
+await portal(irca.id, 'finance');
+
+// The permissions and built-in roles the code defines, written before anyone
+// is given one.
+await new RegistrySync(db as unknown as PrismaCore).sync();
+
 await user('dev@irca.local', 'Dev Account', 'dev-password-123', 'DEV');
 await member(irca.id, (await user('admin@irca.local', 'IRCA Admin', 'admin-password-123')).id, [
   'admin.administrator',
 ]);
-// No roles yet: Phase 4 makes this one a finance clerk.
-await member(irca.id, (await user('clerk@irca.local', 'Neema Mollel', 'clerk-password-123')).id);
+// A second administrator, because nobody decides their own change request.
+await member(irca.id, (await user('pastor@irca.local', 'Pastor Sarah', 'pastor-password-123')).id, [
+  'admin.administrator',
+]);
+await member(irca.id, (await user('clerk@irca.local', 'Neema Mollel', 'clerk-password-123')).id, [
+  'finance.clerk',
+]);
+await member(
+  irca.id,
+  (await user('mhazini@irca.local', 'Joyce Mhazini', 'manager-password-123')).id,
+  ['finance.manager'],
+);
 await member(test.id, (await user('admin@test.local', 'Test Admin', 'admin-password-123')).id, [
   'admin.administrator',
 ]);
 
 console.log(
-  'seeded: IRCA and TEST, with dev@irca.local, admin@irca.local, clerk@irca.local, admin@test.local',
+  'seeded: IRCA (with Finance) and TEST, with dev@, admin@, pastor@, clerk@ and mhazini@irca.local, admin@test.local',
 );
 await db.$disconnect();
