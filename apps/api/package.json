@@ -18,7 +18,8 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:reset": "prisma migrate reset --force",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "cli": "npm run -s build && node dist/cli/main.js"
   },
   "dependencies": {
     "@irca/shared": "*",
