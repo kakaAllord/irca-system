@@ -21,6 +21,13 @@
 //       Makes a key a church's own app uses to call the API. The key is
 //       printed once and never stored, only its hash.
 //
+//   registrations:import --from <old database url> --church <CODE> [--dry-run]
+//       Copies the live registrations into this database, keeping tokens and
+//       timestamps exactly. Re-runnable: it brings across only what changed.
+//
+//   registrations:export-back --to <old database url> --church <CODE> --since <iso time>
+//       The other direction, for rolling a cutover back.
+//
 //   api-client:list [--church <CODE>]
 //   api-client:revoke --id <uuid>
 //       A revoked key stops working at once; the row stays, so the log of
@@ -33,6 +40,7 @@ import { PrismaCore } from '../core/database/prisma-clients.js';
 import { PasswordService } from '../core/auth/password.service.js';
 import { RegistrySync } from '../core/rbac/registry-sync.service.js';
 import { ApiClientService } from '../core/clients/api-client.service.js';
+import { exportRegistrationsBack, importRegistrations } from './commands/registrations-import.js';
 import { promptHidden } from './prompt.js';
 
 /* eslint-disable no-console -- a command-line tool reports to its terminal */
@@ -169,12 +177,56 @@ async function revokeApiClient(args: string[]) {
   });
 }
 
+async function importRegistrationsCommand(args: string[]) {
+  const { values } = parseArgs({
+    args,
+    options: {
+      from: { type: 'string' },
+      church: { type: 'string' },
+      'dry-run': { type: 'boolean', default: false },
+    },
+  });
+  if (!values.from || !values.church) {
+    throw new Error('Usage: registrations:import --from <url> --church <CODE> [--dry-run]');
+  }
+  await withApp((app) =>
+    importRegistrations({
+      from: values.from!,
+      churchCode: values.church!,
+      dryRun: values['dry-run'] ?? false,
+      db: app.get(PrismaCore),
+    }),
+  );
+}
+
+async function exportRegistrationsCommand(args: string[]) {
+  const { values } = parseArgs({
+    args,
+    options: { to: { type: 'string' }, church: { type: 'string' }, since: { type: 'string' } },
+  });
+  if (!values.to || !values.church || !values.since) {
+    throw new Error(
+      'Usage: registrations:export-back --to <url> --church <CODE> --since <iso time>',
+    );
+  }
+  await withApp((app) =>
+    exportRegistrationsBack({
+      to: values.to!,
+      churchCode: values.church!,
+      since: values.since!,
+      db: app.get(PrismaCore),
+    }),
+  );
+}
+
 const COMMANDS: Record<string, (args: string[]) => Promise<void>> = {
   'user:create-dev': createDev,
   'registry:sync': syncRegistry,
   'api-client:create': createApiClient,
   'api-client:list': listApiClients,
   'api-client:revoke': revokeApiClient,
+  'registrations:import': importRegistrationsCommand,
+  'registrations:export-back': exportRegistrationsCommand,
 };
 
 const [command, ...rest] = process.argv.slice(2);
