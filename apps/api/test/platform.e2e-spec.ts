@@ -156,12 +156,18 @@ describe('the dev console', () => {
 
     await portal(app).get('/v1/admin/users', staffCookie).expect(403);
     await form.post('/v1/public/registrations', { lang: 'en' }).expect(403);
-    // The church hears about it in its own log, as well as the platform's.
+    // The church hears about it in its own log, as well as the platform's, and
+    // in the log its administrators actually read.
     const { rows } = await db.query(
-      `select action from audit_events where church_id = $1 and action = 'church.suspended'`,
+      `select action, source from audit_events where church_id = $1 and action = 'church.suspended'`,
       [church.id],
     );
-    expect(rows).toHaveLength(1);
+    expect(rows).toEqual([{ action: 'church.suspended', source: 'feature' }]);
+    const theirLog = await portal(app).get(`/v1/platform/churches/${church.id}/audit`, cookie);
+    expect(theirLog.body[0]).toMatchObject({
+      action: 'church.suspended',
+      summary: expect.stringContaining('Unpaid'),
+    });
 
     await portal(app)
       .post(`/v1/platform/churches/${church.id}/reactivate`, { reason: 'Paid' }, cookie)

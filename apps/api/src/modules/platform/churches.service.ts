@@ -269,13 +269,18 @@ export class ChurchesService {
       summary,
       churchId: null,
     });
-    await this.audit.recordNow({
-      action: status === 'SUSPENDED' ? 'church.suspended' : 'church.reactivated',
-      entityType: 'church',
-      entityId: id,
-      summary,
-      churchId: id,
-    });
+    // As 'feature', so it stands in the church's own activity log: being
+    // paused is the one platform act its administrators must be able to read.
+    await this.audit.recordNow(
+      {
+        action: status === 'SUSPENDED' ? 'church.suspended' : 'church.reactivated',
+        entityType: 'church',
+        entityId: id,
+        summary,
+        churchId: id,
+      },
+      'feature',
+    );
   }
 
   async apiClients(id: string) {

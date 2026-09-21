@@ -79,9 +79,16 @@ export class AuditService {
     };
   }
 
-  /** Infrastructure events: sign-in, impersonation, jobs. Written straight away. */
-  async recordNow(event: AuditEventInput): Promise<void> {
-    await this.db.auditEvent.create({ data: { ...this.common(event), source: 'core' } });
+  /**
+   * Infrastructure events: sign-in, impersonation, jobs. Written straight away.
+   *
+   * `source` decides who the line is for. 'core' is the platform's own record,
+   * which a church never reads; 'feature' puts it in the church's activity log
+   * beside its own changes, for the few platform acts a church must be told
+   * about, such as being paused.
+   */
+  async recordNow(event: AuditEventInput, source: 'core' | 'feature' = 'core'): Promise<void> {
+    await this.db.auditEvent.create({ data: { ...this.common(event), source } });
     this.usage.inc('audit.events', 1, event.churchId !== undefined ? event.churchId : undefined);
   }
 
