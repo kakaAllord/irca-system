@@ -28,9 +28,11 @@ test.describe('signing in', () => {
     await page.getByLabel('Password').fill(ADMIN.password);
     await page.getByRole('button', { name: 'Sign in' }).click();
 
-    await expect(page.getByText('IRCA Admin', { exact: true })).toBeVisible();
-    await expect(page.getByText('Working in International Revival Church Arusha')).toBeVisible();
+    // Home is whatever the person's first portal opens on.
+    await expect(page.getByRole('navigation', { name: 'Portals' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /IRCA Admin/ })).toBeVisible();
 
+    await page.getByRole('button', { name: /IRCA Admin/ }).click();
     await page.getByRole('button', { name: 'Sign out' }).click();
     await expect(page).toHaveURL(/\/login/);
     await page.goto('/');
@@ -38,11 +40,11 @@ test.describe('signing in', () => {
   });
 
   test('a deep link survives signing in', async ({ page }) => {
-    await page.goto('/?from=deep-link');
+    await page.goto('/admin/roles?from=deep-link');
     await page.getByLabel('Email').fill(ADMIN.email);
     await page.getByLabel('Password').fill(ADMIN.password);
     await page.getByRole('button', { name: 'Sign in' }).click();
-    await expect(page).toHaveURL(/\/\?from=deep-link$/);
+    await expect(page).toHaveURL(/\/admin\/roles\?from=deep-link$/);
   });
 
   test('a next link to another site is ignored', async ({ page }) => {
@@ -50,7 +52,7 @@ test.describe('signing in', () => {
     await page.getByLabel('Email').fill(ADMIN.email);
     await page.getByLabel('Password').fill(ADMIN.password);
     await page.getByRole('button', { name: 'Sign in' }).click();
-    await expect(page.getByText('IRCA Admin', { exact: true })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Portals' })).toBeVisible();
     expect(new URL(page.url()).host).toBe('localhost:3100');
   });
 });

@@ -39,14 +39,18 @@ export default defineConfig({
       timeout: 120_000,
     },
     {
-      command: `npm run -s dev -w @irca/portal -- -p ${PORTAL_PORT}`,
+      // Built and served the way it is deployed, not `next dev`: in development
+      // the portal recompiles routes on demand and Fast Refresh reloads the
+      // page, which cancels a navigation a journey has just started. Rewrites
+      // are baked in at build time, so the API's address is set for both.
+      command: `npm run -s build -w @irca/portal && npm run -s start -w @irca/portal -- -p ${PORTAL_PORT}`,
       url: `http://localhost:${PORTAL_PORT}/login`,
       env: {
         API_INTERNAL_URL: `http://localhost:${API_PORT}`,
         SESSION_COOKIE_NAME: 'irca_session',
       },
       reuseExistingServer: false,
-      timeout: 120_000,
+      timeout: 240_000,
     },
   ],
 });
