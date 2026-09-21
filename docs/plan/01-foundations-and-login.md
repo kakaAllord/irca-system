@@ -1183,22 +1183,26 @@ first dev account from the command line".
 1. From the root:
 
    ```bash
-   npx create-next-app@16.3.5 apps/portal --ts --tailwind --eslint --app \
-     --src-dir --import-alias "@/*" --use-npm --skip-install --disable-git
+   npx -y create-next-app@16.3.5 apps/portal --ts --tailwind --app --src-dir \
+     --import-alias "@/*" --use-npm --skip-install --disable-git \
+     --no-agents-md --no-eslint --no-biome --no-react-compiler --yes
+   npm install    # at the root, once, so npm knows the new workspace before adding to it
    ```
 
-   Then delete `apps/portal/package-lock.json` **and the `AGENTS.md` and
-   `CLAUDE.md` that create-next-app writes** (agent notes live outside the
-   repository), add `agentRules: false` to `apps/portal/next.config.ts` (as in
-   Phase 0, step 0.6a), set `"name": "@irca/portal"`,
-   `"dev": "next dev -p 3000"`, `"typecheck": "tsc --noEmit"`, add
-   `"@irca/shared": "*"`, and pin `next`, `react` and `react-dom` to the **same
-   versions as `apps/registration`** (`16.3.5`, `19.3.0`). Run `npm install` at
-   the root.
+   `--no-agents-md` stops it writing `AGENTS.md`/`CLAUDE.md` (agent notes live
+   outside the repository). Delete the scaffold's `.gitignore` (its `.env*`
+   rule would hide `.env.example`; the root one covers the rest), its `README.md`
+   and `public/*.svg`. Set `"name": "@irca/portal"`, `"dev": "next dev -p 3000"`,
+   `"typecheck": "tsc --noEmit"`, `"test": "vitest run --passWithNoTests"`, and add
+   `"@irca/shared": "*"`. Pin `next`, `react`, `react-dom` and their types to the
+   **same versions as `apps/registration`** (`16.3.5`, `19.3.0`), and drop the
+   scaffold's own `typescript` (the root's applies). `tsconfig.json` extends
+   `../../tsconfig.base.json`.
 2. Read `node_modules/next/dist/docs/` for: App Router layouts, `proxy.ts`
    (formerly middleware), `rewrites`, `cookies()`. Heed any deprecation notices.
-3. Add `transpilePackages: ['@irca/shared']` to `next.config.ts` (harmless
-   now, and required in Phase 5 when shared contains the flow).
+3. In `next.config.ts`: `agentRules: false` (as in Phase 0, step 0.6a), and
+   `transpilePackages: ['@irca/shared']` (harmless now, and required in Phase 5
+   when shared contains the flow).
 4. **Design tokens.** Open `../design/admin/IRCA Admin Portal v2.dc.html`
    (outside the repository, from the owner) in a
    browser to see it. The colour values are in its `vars()` function. Put them
@@ -1245,8 +1249,9 @@ first dev account from the command line".
    The `--danger` and `--warn-*` tokens are not in the design. They are added
    for errors and the impersonation banner. Check them for contrast (WCAG AA,
    4.5:1 for text).
-5. Load **Geist** with `next/font/google` in `src/app/layout.tsx` as the
-   variable `--font-geist`.
+5. Load **Geist** from the `geist` npm package (`import { GeistSans } from
+   'geist/font/sans'`, variable `--font-geist-sans`), not `next/font/google`, so
+   a build never depends on reaching Google.
 6. **Theme.** The design has a Light/Dark toggle. Store the choice in a cookie
    `irca_theme` (`light`/`dark`, default `dark` as in the design), read it in
    the root layout with `cookies()`, and render `<html data-theme=…>` on the
@@ -1445,16 +1450,26 @@ they are and can sign out.
 
 **Do**
 
-1. `npm i -D @playwright/test && npx playwright install chromium` (at the root).
-2. Create a root `e2e/` folder with `playwright.config.ts`. Its `webServer`
-   starts the API (against `irca_test`, seeded) and the portal. Base URL is
-   `http://localhost:3000`.
-3. `e2e/login.spec.ts`: wrong password shows the message; right password
-   lands home and shows the name; sign out returns to login; a deep link
-   `/anything` while signed out returns there after sign-in.
-4. Root script: `"e2e": "playwright test"`.
+1. `npm i -D @playwright/test` at the root. **Browser:** locally, Playwright
+   uses the Chrome already installed (`channel: 'chrome'`). In CI it installs
+   its own Chromium (`npx playwright install --with-deps chromium`). This
+   avoids a 190 MB download on developer machines, where it may be slow or
+   blocked.
+2. `playwright.config.ts` at the root, with `workers: 1` and two `webServer`
+   entries that start their **own** API (port 4100, run from `apps/api` so it
+   finds `.env.test`, with `PORTAL_ORIGIN=http://localhost:3100`) and portal
+   (`next dev` on port 3100, `API_INTERNAL_URL=http://localhost:4100`). Separate
+   ports never collide with servers running for development.
+3. `e2e/global-setup.ts` runs `prisma migrate deploy` and `prisma db seed` with
+   `NODE_ENV=test`. The seed only upserts, so nothing is dropped.
+4. `e2e/login.spec.ts`: a wrong password shows the message, keeps the email,
+   and focuses a cleared password; the right one lands home (dark theme by
+   default); sign-out returns to sign-in and stays there; a deep link survives
+   sign-in; `next=//evil.example` is ignored. **Find alerts by their text:**
+   Next adds its own empty `role="alert"` route announcer to every page.
+5. Root script: `"e2e": "playwright test"`.
 
-**Check:** `npm run e2e` is green locally.
+**Check:** `npm run e2e` → 4 passed.
 
 **Commit:** "Test the sign-in journey in a real browser".
 
@@ -1464,48 +1479,15 @@ they are and can sign out.
 
 **Goal:** every PR is checked the same way, automatically.
 
-**Do** — `.github/workflows/ci.yml`:
+**Do:** `.github/workflows/ci.yml` runs on pushes to `main` and on pull requests:
+a `postgres:18` service; `npm ci`; the five roles, `irca_test`, and their
+timeouts and UTC time zone, exactly as in 1.5; then `npm run build -w
+@irca/shared`, `npm run typecheck`, `npm run lint`, `npx prettier --check .`,
+`npm test`, `npm run test:e2e -w @irca/api`, `npm run build`, and the Playwright
+journeys on Playwright's Chromium, uploading traces when they fail.
 
-```yaml
-name: ci
-on: [pull_request, push]
-jobs:
-  check:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:18
-        env: { POSTGRES_PASSWORD: postgres }
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 24, cache: npm }
-      - run: npm ci
-      - name: Create roles and test database
-        run: |
-          psql postgresql://postgres:postgres@localhost:5432/postgres <<'SQL'
-          create role irca_owner login password 'owner_local_pw' createdb;
-          create role irca_core login password 'core_local_pw';
-          create role irca_app login password 'app_local_pw';
-          create role irca_readonly login password 'ro_local_pw';
-          create role irca_backup login password 'backup_local_pw';
-          create database irca_test owner irca_owner;
-          SQL
-      - run: npm run build -w @irca/shared
-      - run: npx prisma generate --schema apps/api/prisma/schema.prisma
-      - run: npm run typecheck
-      - run: npm run lint
-      - run: npm test
-      - run: npm run test:e2e -w @irca/api
-      - run: npm run build
-      - run: npx playwright install --with-deps chromium && npm run e2e
-```
-
-**Check:** push the branch. The workflow is green. Break a test on purpose,
-push, see it go red, then revert.
+**Check:** run the same commands locally, in that order, before pushing. They
+must all pass. Then push, and the workflow is green.
 
 **Commit:** "Check every change in CI against a real Postgres".
 
