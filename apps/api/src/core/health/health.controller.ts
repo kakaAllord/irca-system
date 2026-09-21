@@ -1,6 +1,7 @@
 import { Controller, Get, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { PrismaCore } from '../database/prisma-clients.js';
+import { Public } from '../auth/decorators.js';
 
 @Controller('health')
 export class HealthController {
@@ -11,6 +12,7 @@ export class HealthController {
    * its database, 503 when it cannot, so a deploy with a broken connection
    * string is never marked healthy.
    */
+  @Public()
   @Get()
   async health(@Res({ passthrough: true }) res: Response) {
     let db: 'ok' | 'down' = 'ok';
