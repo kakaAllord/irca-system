@@ -167,7 +167,8 @@ and the root scripts that start everything together.
    `typescript-eslint` recommended rules. Add `no-console: warn` (use the logger
    instead), and add `@typescript-eslint/no-floating-promises: error` for
    `apps/api` (a forgotten `await` on a write is a silent bug).
-5. `npm i -D -w . eslint typescript-eslint @eslint/js globals`.
+5. `npm i -D eslint typescript-eslint @eslint/js globals` at the root (plain `npm i` at the
+   root installs there; npm rejects `-w .`).
 
 **Check:** `npm run format -- --check` and `npx eslint apps/registration`
 finish. Fix or explicitly ignore anything they report in *new* files only. Do
@@ -1386,7 +1387,7 @@ they are and can sign out.
 
 **Do**
 
-1. `npm i -D -w . @playwright/test && npx playwright install chromium`.
+1. `npm i -D @playwright/test && npx playwright install chromium` (at the root).
 2. Create a root `e2e/` folder with `playwright.config.ts`. Its `webServer`
    starts the API (against `irca_test`, seeded) and the portal. Base URL is
    `http://localhost:3000`.
