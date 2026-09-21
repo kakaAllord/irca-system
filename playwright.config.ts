@@ -38,6 +38,8 @@ export default defineConfig({
         PORT: String(API_PORT),
         PORTAL_ORIGIN: `http://localhost:${PORTAL_PORT}`,
         REGISTRATION_ORIGIN: `http://localhost:${FORM_PORT}`,
+        // Every journey signs in from this one machine, more than ten a minute.
+        SIGN_IN_PER_MINUTE: '100',
       },
       reuseExistingServer: false,
       timeout: 120_000,

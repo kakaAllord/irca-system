@@ -1,5 +1,8 @@
 import { Body, Controller, Get, HttpCode, Post, Res } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+
+// Read once at start-up: a decorator is evaluated when the class is defined.
+const SIGN_IN_PER_MINUTE = Number(process.env.SIGN_IN_PER_MINUTE) || 10;
 import type { Response } from 'express';
 import { z } from 'zod';
 import { LoginSchema, type LoginInput, type MeResponse } from '@irca/shared';
@@ -67,9 +70,13 @@ export class AuthController {
     return this.meService.build();
   }
 
-  /** Ten tries a minute from one address, on top of the per-account lock. */
+  /**
+   * Ten tries a minute from one address, on top of the per-account lock. The
+   * browser tests raise it (SIGN_IN_PER_MINUTE): every journey signs in from
+   * the same machine, and more than ten of them run inside a minute.
+   */
   @Public()
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Throttle({ default: { limit: SIGN_IN_PER_MINUTE, ttl: 60_000 } })
   @Post('login')
   @HttpCode(200)
   async login(
