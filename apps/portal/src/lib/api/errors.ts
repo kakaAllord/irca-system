@@ -6,12 +6,15 @@ export class ApiRequestError extends Error {
   readonly code: ErrorCode | 'NETWORK';
   readonly requestId: string | null;
   readonly fieldErrors: Record<string, string[]>;
+  /** Whatever the code carries with it: an existing item, near-miss names. */
+  readonly details: unknown;
 
   constructor(status: number, body: ApiError | null) {
     super(body?.error.message ?? 'Something went wrong. Try again in a moment.');
     this.status = status;
     this.code = body?.error.code ?? 'NETWORK';
     this.requestId = body?.requestId ?? null;
+    this.details = body?.error.details ?? null;
     const details = body?.error.code === 'VALIDATION_FAILED' ? body.error.details : null;
     this.fieldErrors = (details && typeof details === 'object' ? details : {}) as Record<
       string,

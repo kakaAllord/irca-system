@@ -115,3 +115,27 @@ body {
   font-family: var(--font-geist-sans), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+/*
+ * Printing is for the statement, which is handed to people on paper: black on
+ * white, no sidebar, no top bar, no buttons, and the page's own margins.
+ */
+@media print {
+  html,
+  body {
+    background: #ffffff;
+    color: #000000;
+  }
+  aside,
+  header,
+  nav,
+  button {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+  @page {
+    margin: 16mm;
+  }
+}

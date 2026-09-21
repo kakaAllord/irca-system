@@ -64,6 +64,7 @@ export function Sidebar({
             )}
             {module.nav.map((item) => {
               const on = item.href === active;
+              const badge = me.badges[item.href];
               return (
                 <Link
                   key={item.href}
@@ -86,6 +87,15 @@ export function Sidebar({
                     {item.mark}
                   </span>
                   {!collapsed && <span className="truncate">{item.label}</span>}
+                  {/* Something waiting should be visible without opening the page. */}
+                  {badge ? (
+                    <span
+                      className="ml-auto flex min-w-[18px] items-center justify-center rounded-full bg-accent px-1.5 text-[10.5px] font-semibold text-accent-ink"
+                      aria-label={`${badge} waiting`}
+                    >
+                      {badge}
+                    </span>
+                  ) : null}
                 </Link>
               );
             })}

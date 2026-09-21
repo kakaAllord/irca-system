@@ -9,11 +9,14 @@ import { readApiError } from './errors';
  */
 export async function clientApi<T>(
   path: string,
-  init: { method?: string; body?: unknown } = {},
+  init: { method?: string; body?: unknown; signal?: AbortSignal } = {},
 ): Promise<T> {
   const res = await fetch(`/api${path}`, {
     method: init.method ?? 'GET',
     credentials: 'same-origin',
+    // Suggestions cancel the request they replace, so a slow early answer
+    // cannot overwrite a later one.
+    signal: init.signal,
     headers: {
       'x-irca-client': 'portal',
       ...(init.body !== undefined ? { 'content-type': 'application/json' } : {}),
