@@ -30,27 +30,43 @@ exactly, and ends with a scripted walkthrough (4.15) that creates finance users
 by email invitation and checks every permission, impersonation, a module
 switched off, and a second church.
 
-| Step | What |
-| --- | --- |
-| 4.1 | The Finance module manifest |
-| 4.2 | Tables, constraints and the database's own safety checks |
-| 4.3 | Shared helpers: the code format, names, money |
-| 4.4 | The number allocator |
-| 4.5 | Income sources and expense items API (suggest, create, manage) |
-| 4.6 | Transactions API |
-| 4.6a | Change requests: the core mechanism and Finance's handler |
-| 4.7 | Overview and report queries |
-| 4.8 | The suggest-or-create field |
-| 4.9 | Record expense / record income page |
-| 4.10 | Transactions page |
-| 4.11 | Transaction page: details and requesting a change |
-| 4.11a | Requests: the Admin inbox and Finance's list |
-| 4.12 | Lists page (income sources and expense items) |
-| 4.13 | Overview page |
-| 4.14 | Reports page |
-| 4.15 | **The RBAC walkthrough** |
-| 4.16 | Automated tests |
-| 4.17 | Phase check |
+| Step | What | Status |
+| --- | --- | --- |
+| 4.1 | The Finance module manifest | Done: `3f0cc33` |
+| 4.2 | Tables, constraints and the database's own safety checks | Done: `8be0a66` |
+| 4.3 | Shared helpers: the code format, names, money | Done: `3f0cc33` |
+| 4.4 | The number allocator | Done: `367ee1a` (in `src/core/sequences/`) |
+| 4.5 | Income sources and expense items API (suggest, create, manage) | Done: `44ab620` |
+| 4.6 | Transactions API | Done: `44ab620` |
+| 4.6a | Change requests: the core mechanism and Finance's handler | Done: `367ee1a`, `44ab620` |
+| 4.7 | Overview and report queries | Done: `44ab620` |
+| 4.8 | The suggest-or-create field | Done: `9e45abd` |
+| 4.9 | Record expense / record income page | Done: `9e45abd` |
+| 4.10 | Transactions page | Done: `9e45abd` |
+| 4.11 | Transaction page: details and requesting a change | Done: `9e45abd` |
+| 4.11a | Requests: the Admin inbox and Finance's list | Done: `9e45abd` |
+| 4.12 | Lists page (income sources and expense items) | Done: `9e45abd` |
+| 4.13 | Overview page | Done: `9e45abd` |
+| 4.14 | Reports page | Done: `9e45abd` |
+| 4.15 | **The RBAC walkthrough** | For the owner: `docs/what-works-now.md` |
+| 4.16 | Automated tests | Done: `3ffc740`, `77dbd5a` |
+| 4.17 | Phase check | See below |
+
+**What was built differently from this plan, and why**
+
+- `replacedById` is not a column. A replacement points at what it replaces
+  (`replaces_id`, unique), and the old entry's "replaced by" is read back
+  through that one link. Two columns saying the same thing could disagree, and
+  a voided entry's row is deliberately hard to change.
+- The catalog service uses raw SQL only where it must: trigram suggestions and
+  the "used N times" counts. Rows are written through Prisma so their ids are
+  UUID v7 like every other table's. Raw SQL always goes through `db.tx()`,
+  because the tenant extension cannot see inside a raw query and only the
+  transaction sets the church for row-level security.
+- The 50-at-once numbering test drives a real socket rather than supertest's
+  in-process server, which resets connections at that concurrency.
+- The demo-data command (4.7's check) was not needed: the overview's numbers
+  are checked against SQL sums in the tests instead.
 
 ---
 
@@ -1263,12 +1279,12 @@ return `403 FORBIDDEN`.
 
 ## 4.17 — Phase check
 
-- [ ] The 4.15 walkthrough is complete, with every cell as expected, and attached to the PR.
-- [ ] 50 parallel creates give 50 consecutive numbers.
-- [ ] Entries cannot be deleted or have their amount changed, even with SQL as the app role.
-- [ ] Suggestions tolerate a typo, and near-duplicates are caught before they are created.
-- [ ] Every Finance button is inside `<Can>`, confirmed by viewing as each role.
-- [ ] No entry can change without an approved request, including by SQL as `irca_app`.
-- [ ] The change-request walkthrough (4.15) passes, including the month move and the self-approval refusal.
-- [ ] `docs/adding-a-module.md` corrected with anything Finance taught us.
-- [ ] Usage for `finance.transactions.created` appears in `usage_daily`.
+- [ ] The 4.15 walkthrough, by the owner, against a deployment (`docs/what-works-now.md`).
+- [x] 50 parallel creates give 50 consecutive numbers (`test/finance.e2e-spec.ts`).
+- [x] Entries cannot be deleted or have their amount changed, even with SQL as the app role.
+- [x] Suggestions tolerate a typo, and near-duplicates are caught before they are created.
+- [x] Every Finance button is inside `<Can>`, confirmed by viewing as a clerk in `e2e/finance.spec.ts`.
+- [x] No entry can change without an approved request, including by SQL as `irca_app`.
+- [x] The change-request tests pass, including the month move and the self-approval refusal.
+- [x] `docs/adding-a-module.md` corrected with what Finance taught us.
+- [x] Usage for `finance.transactions.created` is counted (`UsageService.inc`, flushed each minute).

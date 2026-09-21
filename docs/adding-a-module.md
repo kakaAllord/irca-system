@@ -71,12 +71,25 @@ line puts it in the Portals page, the role editor and the sidebar.
   The API refuses to start otherwise, and a `POST` guarded only by read
   permissions is refused too.
 - Services take `Db` and never a Prisma client. Single queries use
-  `db.client`; anything with several statements, and all raw SQL, uses
+  `db.client`; anything with several statements, and **all raw SQL**, uses
   `db.tx`. Never pass a church id: the church comes from the request.
+  Raw SQL through `db.client` returns nothing and inserts nothing: the tenant
+  extension cannot see inside a raw query, and only the transaction tells
+  Postgres which church this is. Filter `church_id` in the SQL as well, with a
+  `-- tenant:` comment saying so.
+- Let Prisma create rows unless there is a reason not to: ids are UUID v7,
+  which sort by creation time. A raw `insert` with `gen_random_uuid()` quietly
+  breaks that.
+- Numbers people will read (receipt numbers, member numbers) come from
+  `SequenceService.next(tx, key)`, inside the same transaction as the row
+  that uses them. Called anywhere else, the numbering grows gaps.
 - Log every change with `audit.recordIn(tx, …)` in the same transaction, and
   count what matters with `usage.inc('<key>.<thing>')`.
 - Records that must not be changed directly go through the change-request
-  mechanism instead (Phase 4, step 4.6a).
+  mechanism instead (Phase 4, step 4.6a): implement `ChangeRequestHandler` and
+  register it from the module's own provider in `onModuleInit`, so core never
+  imports the module. The handler decides what may be proposed, what it means
+  in words, and how an approved change is applied.
 
 ## 4. Build the pages (`apps/portal/src/app/(app)/<key>/…`)
 
@@ -84,6 +97,10 @@ line puts it in the Portals page, the role editor and the sidebar.
 - Every action is wrapped in `<Can permission="…">`. Nothing else is needed to
   make the page behave correctly while someone is viewing as another person.
 - Filters live in the URL and update as you type (see the People page).
+- A form that waits on the network while the person keeps typing must merge
+  into current state, not into the state its handler was rendered with: pass
+  an updater (`onChange((previous) => …)`), as the finance entry fields do.
+  The bug it prevents is a created item wiping an amount typed meanwhile.
 
 ## 5. Prove it
 
@@ -92,10 +109,14 @@ line puts it in the Portals page, the role editor and the sidebar.
 - A cross-church test: another church cannot read, search, export or change
   any of it.
 - An impersonation test: every write route answers `IMPERSONATION_READ_ONLY`.
-- One Playwright journey through the main task.
+- One Playwright journey through the main task. Journeys run against a built
+  portal, not `next dev`: in development the portal compiles routes on demand
+  and Fast Refresh reloads the page, which cancels a navigation a journey has
+  just started. Runs also share a database, so generate names per run and
+  expect the near-duplicate guard to ask about the last run's.
 
 ## 6. Write it down
 
 Update `docs/plan/appendix-database.md`, the metric labels in
 `docs/plan/06-dev-console-hardening-launch.md` (step 6.1), and
-`docs/what-is-built.md`.
+`docs/what-works-now.md`.
