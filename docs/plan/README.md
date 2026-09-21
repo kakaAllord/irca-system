@@ -18,6 +18,7 @@ Phase 0 (`00-restructure.md`) comes before everything else.
 | `04-finance-portal.md` | Phase 4 — the Finance portal: income sources, expense items with suggestions, transactions with `IRCA-EXP-2026-09-000001` codes, corrections and voids only through change requests that an admin approves, reports. This is the RBAC test case. |
 | `05-registration-and-membership.md` | Phase 5 — the registration form moved onto the API, live data migrated, and the Membership portal (Dashboard, Members, Applications, Discipleship, Insights) from the design. |
 | `06-dev-console-hardening-launch.md` | Phase 6 — the dev console with per-church usage, security hardening, deployment, cutover, and the runbook for adding the next department. |
+| `multi-tenancy.md` | How churches are kept apart everywhere: sign-in, permissions, database (extension + row-level security), endpoints, files, caching, jobs, logs, backups, monitoring, rate limits, testing. Also the path from one shared database to dedicated databases for large churches. |
 | `appendix-database.md` | Every table in one place, with what owns it and why it exists. |
 
 ---
@@ -159,8 +160,12 @@ registration app were only visible that way. Types passing is not a Check.
   explicitly `@Public()` or `@AuthenticatedOnly()`. The API refuses to boot if a
   route declares none of them (`02` step 2.7).
 - **Every business table has `church_id`, and every query filters by it.** The
-  tenant extension does this for you in Prisma calls. Raw SQL does it by hand
-  and gets a reviewer's second look (`02` step 2.4).
+  tenant extension does this for you in Prisma calls (`02` step 2.4), and
+  **PostgreSQL row-level security** enforces it again in the database (`02`
+  step 2.4a). Multi-statement work and all raw SQL go through `db.tx()`, which
+  sets the church for the transaction. Never use session-level `SET`. The full
+  picture across auth, APIs, files, caches, jobs, logs, backups, monitoring and
+  rate limits is in `multi-tenancy.md`.
 - **GET never writes business data.** Impersonation relies on it.
 - **Money is never a JS `number`.** Amounts travel as decimal strings
   (`"150000.00"`), are stored as `numeric(14,2)`, and are summed in SQL.

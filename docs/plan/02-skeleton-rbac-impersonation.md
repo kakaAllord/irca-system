@@ -19,7 +19,9 @@ revisited, and one gets missed.
 | 2.1 | Module manifests in `packages/shared` |
 | 2.2 | The RBAC, impersonation, audit and usage tables |
 | 2.3 | Syncing code-defined permissions and system roles into the database |
-| 2.4 | Tenant isolation: the Prisma extension |
+| 2.4 | Tenant isolation, layer 1: the Prisma extension |
+| 2.4a | Tenant isolation, layer 2: PostgreSQL row-level security |
+| 2.4b | Control plane, tenant plane, and room for dedicated databases |
 | 2.5 | Resolving a person's effective permissions |
 | 2.6 | `@RequirePermission()` and the permission guard |
 | 2.7 | The API refuses to boot with an unprotected route |
@@ -27,6 +29,7 @@ revisited, and one gets missed.
 | 2.9 | The three read-only layers |
 | 2.10 | The audit log |
 | 2.11 | Usage metering |
+| 2.11a | Per-church rate limits, quotas and cache headers |
 | 2.12 | Background jobs |
 | 2.13 | `/me` grows up, and switching church |
 | 2.14 | The portal shell |
@@ -396,7 +399,7 @@ denied`. `insert` works.
 match the code exactly, and every church has the admin module enabled.
 
 **Do** — `src/core/rbac/registry-sync.service.ts`, run in
-`onApplicationBootstrap` (uses `PrismaRw`, no tenant context: this is core):
+`onApplicationBootstrap` (uses `PrismaCore`, no tenant context: this is core):
 
 1. **Permissions:** upsert every entry of `ALL_PERMISSIONS` (`kind`, `label`,
    `moduleKey`, `retiredAt: null`). For rows in the table that are no longer
@@ -445,7 +448,7 @@ through Prisma, even by forgetting a `where`.
    ```
 
    `AuditEvent`, `UsageDaily`, `UserActivityDaily` and `ImpersonationSession`
-   are **not** here, because only core code writes them, through `PrismaRw`.
+   are **not** here, because only core code writes them, through `PrismaCore`.
 2. `src/core/database/tenant.extension.ts`:
 
    ```ts
@@ -505,14 +508,14 @@ through Prisma, even by forgetting a `where`.
    private readonly rwScoped = this.rw.$extends(tenantExtension(() => this.cls.get('churchId')));
    private readonly roScoped = this.ro.$extends(tenantExtension(() => this.cls.get('churchId')));
    get client() { return this.cls.get('impersonationId') ? this.roScoped : this.rwScoped; }
-   /** Only for src/modules/platform and core. Lint forbids it elsewhere. */
-   get unscoped() { return this.cls.get('impersonationId') ? this.ro : this.rw; }
    ```
 
-   Interactive transactions (`db.client.$transaction(async tx => …)`) keep the
-   extension, so `tx` is scoped too.
-4. ESLint `no-restricted-syntax` rule: `db.unscoped` is an error outside
-   `src/modules/platform/**` and `src/core/**`.
+   Interactive transactions keep the extension, so `tx` is scoped too. (In
+   2.4a, interactive transactions move to `db.tx(fn)`, which also sets the church
+   for row-level security.)
+4. There is **no** "unscoped" escape hatch on `Db`. Code that must see more
+   than one church (core, and the dev console in `src/modules/platform`)
+   injects `PrismaCore` instead, and ESLint already restricts who may (1.9).
 5. Raw SQL rule: any file containing `$queryRaw` or `$executeRaw` under
    `src/modules/**` must contain a `-- tenant:` comment in each query. Add a
    tiny script `scripts/check-raw-sql.mjs` run in `npm run lint` that greps for
@@ -533,12 +536,289 @@ id. With no church in CLS, any tenant query throws.
 
 ---
 
+## 2.4a — Tenant isolation, layer 2: PostgreSQL row-level security
+
+**Goal:** even if the Prisma extension is bypassed (raw SQL, a nested write,
+a bug, a future developer who never heard of it), **Postgres itself** refuses
+to return or accept another church's rows. The two layers are independent:
+each one alone keeps churches apart, and a test proves that (step 7).
+
+**How it works, in one paragraph.** Every church-owned table gets row-level
+security (RLS) turned on, with a policy saying that the roles `irca_app` and
+`irca_readonly` see and write only rows whose `church_id` equals the setting
+`app.church_id`. The API sets that value **at the start of every
+transaction** with `set_config('app.church_id', '<uuid>', true)`. The `true`
+makes it transaction-local, so Postgres forgets it at `COMMIT` or `ROLLBACK`.
+That matters because Neon's pooler (PgBouncer in transaction mode) hands the
+same server connection to different requests. A session-level `SET` would leak
+one church's setting into the next request, and a transaction-local one cannot.
+When nothing is set, the policy compares against `NULL` and matches **no rows**:
+it fails closed. `irca_core` gets its own policy that sees everything, and
+only core code has that connection (1.9).
+
+**Do**
+
+1. **A helper function**, in the Phase 2 migration (append to its SQL):
+
+   ```sql
+   -- The church this transaction acts for, or NULL. current_setting(..., true)
+   -- returns NULL when never set, and '' once a pooled connection has had it set
+   -- and then reset at the end of an earlier transaction; nullif turns both into
+   -- NULL, and NULL matches no row.
+   create function app_church_id() returns uuid
+     language sql stable
+     as $$ select nullif(current_setting('app.church_id', true), '')::uuid $$;
+   grant execute on function app_church_id() to irca_core, irca_app, irca_readonly;
+   ```
+
+2. **The policy template.** For **every** church-owned table (everything in
+   `TENANT_MODELS`, plus `invitations` from Phase 3), the migration that creates
+   the table also runs:
+
+   ```sql
+   alter table <table> enable row level security;
+
+   -- Feature code: one church at a time, for reading and for writing.
+   create policy <table>_tenant on <table> for all to irca_app, irca_readonly
+     using (church_id = app_church_id())
+     with check (church_id = app_church_id());
+
+   -- Core code: every church (sign-in, permission resolution, jobs, dev console).
+   create policy <table>_core on <table> for all to irca_core
+     using (true) with check (true);
+
+   -- Backups: every church, reading only (the role has no write grants anyway).
+   create policy <table>_backup on <table> for select to irca_backup using (true);
+   ```
+
+   Do **not** use `force row level security`. The table owner (`irca_owner`,
+   which runs migrations and backups) must keep seeing everything. No runtime
+   role owns a table, so none of them escapes the policies.
+
+   In this phase apply it to `church_memberships` (from Phase 1),
+   `church_modules`, `roles`, `role_permissions` and `membership_roles`.
+3. **Core-owned tables get RLS too, with no tenant policy at all,** so
+   feature code cannot read them even with raw SQL: `sessions`,
+   `impersonation_sessions`, `usage_daily`, `platform_usage_daily`,
+   `user_activity_daily`, `job_runs`, and later `email_outbox`,
+   `password_reset_tokens` and `api_clients`. For each:
+
+   ```sql
+   alter table <table> enable row level security;
+   create policy <table>_core on <table> for all to irca_core using (true) with check (true);
+   create policy <table>_backup on <table> for select to irca_backup using (true);
+   -- no policy for irca_app / irca_readonly: they see zero rows and cannot insert
+   ```
+
+4. **`audit_events` enforces D16 in the database.** Church-facing reads can
+   never see impersonation rows, whatever the query:
+
+   ```sql
+   alter table audit_events enable row level security;
+   create policy audit_events_tenant_read on audit_events for select to irca_app, irca_readonly
+     using (church_id = app_church_id()
+            and impersonation_id is null
+            and action not like 'impersonation.%');
+   create policy audit_events_tenant_insert on audit_events for insert to irca_app
+     with check (church_id = app_church_id() and impersonation_id is null);
+   create policy audit_events_core on audit_events for all to irca_core using (true) with check (true);
+   create policy audit_events_backup on audit_events for select to irca_backup using (true);
+   ```
+
+   `AuditQueries.forChurch()` keeps its own filter too. Two layers, as everywhere.
+5. **Setting the church on every transaction** (`src/core/database/rls.ts`):
+   - **Single queries** (`db.client.role.findMany(...)`): a second client
+     extension, applied on top of the tenant extension from 2.4, runs each
+     top-level operation as a two-statement batch transaction, first the
+     setting and then the query. This is the pattern in Prisma's own RLS
+     example:
+
+     ```ts
+     // sketch
+     export const rlsExtension = (base: TenantClient, churchId: () => string | null) =>
+       Prisma.defineExtension({
+         name: 'rls',
+         query: {
+           $allModels: {
+             async $allOperations({ args, query }) {
+               const [, result] = await base.$transaction([
+                 base.$executeRaw`select set_config('app.church_id', ${churchId() ?? ''}, true)`,
+                 query(args),
+               ]);
+               return result;
+             },
+           },
+         },
+       });
+     ```
+
+   - **Interactive transactions** (sequences, finance entries, anything with
+     several statements, and **all raw SQL**) go through a new method,
+     `db.tx(fn)`. It opens the transaction on the tenant-scoped client (without
+     the batch wrapper, which cannot nest), sets the church as the first
+     statement, then runs `fn(tx)`:
+
+     ```ts
+     // sketch
+     async tx<T>(fn: (tx: TenantTx) => Promise<T>, opts?: { isolationLevel?: Prisma.TransactionIsolationLevel }) {
+       const base = this.cls.get('impersonationId') ? this.roScoped : this.rwScoped;
+       return base.$transaction(async tx => {
+         await tx.$executeRaw`select set_config('app.church_id', ${this.cls.get('churchId') ?? ''}, true)`;
+         return fn(tx);
+       }, opts);
+     }
+     ```
+
+   - **Rules, enforced by ESLint** (`no-restricted-syntax`): `db.client.$transaction`,
+     `db.client.$queryRaw` and `db.client.$executeRaw` are errors under
+     `src/modules/**`. Use `db.tx(tx => tx.$queryRaw…)`. Any SQL string
+     containing `set app.` or `set session` is an error everywhere: only
+     `set_config(..., true)` inside `db.tx` or the extension is allowed.
+   - Forgetting all of this fails **closed**. A transaction without the
+     setting sees no rows and cannot insert, so the mistake shows up as an
+     empty page in development, never as a leak.
+   - Every later reference in this plan to `db.client.$transaction(...)` means
+     `db.tx(...)`.
+6. **Cost, written in the code comment:** each standalone query becomes
+   `BEGIN; select set_config(…); <query>; COMMIT`, which is a few extra round
+   trips. The API and Neon sit in the same region, so this is about a
+   millisecond each. Phase 6, step 6.6 measures it. Grouping a page's reads into
+   one `db.tx` is the remedy if a page ever needs it.
+7. **Tests** (`test/rls.e2e-spec.ts`, against the real test database):
+   - **RLS alone:** construct `Db` with the tenant extension switched off (a
+     test-only flag). With church A set, `findMany` on each tenant table
+     returns only A's rows, `findUnique` of B's id returns null, and creating a
+     row with `churchId: B` fails with Postgres's `new row violates row-level
+     security policy`.
+   - **The extension alone:** the reverse (policies dropped in a throwaway
+     schema copy), which proves 2.4 still stands on its own.
+   - **Pooled connections do not leak:** with a pool of **one** connection,
+     run a transaction as church A, then a query with **no** church set. The
+     second sees zero rows. Then run as B and see only B.
+   - **Outside a transaction** `select current_setting('app.church_id', true)`
+     is `''` or null, never a church id.
+   - **Raw SQL** in `db.tx` as A cannot select B's rows even with an
+     explicit `where church_id = B`.
+   - **Core sees all:** `PrismaCore` reads every church's rows, and so does a
+     plain `select` as `irca_backup`. As `irca_backup`, `insert` fails.
+   - **D16 in SQL:** as `irca_app` with the church set, `select * from
+     audit_events` returns no `impersonation.*` rows, even though they exist.
+   - **Coverage check (CI):** query `pg_class` and `pg_policies`. Every table
+     with a `church_id` column, and every table in the core-only list, has
+     `relrowsecurity = true` and its expected policies. A new church-owned table
+     without RLS fails CI, just as the `TENANT_MODELS` test fails without the
+     extension entry.
+
+**Check:** `psql` as `irca_app`: `select count(*) from roles` → `0` (no church
+set). Then `begin; select set_config('app.church_id', '<IRCA id>', true);
+select count(*) from roles; commit;` → IRCA's count. Then `select count(*)
+from roles` again → `0`.
+
+**Commits:** "Keep churches apart in Postgres itself with row-level security";
+"Set the church on every transaction, safely behind a pooler"; "Hide
+impersonation from church readers in the database too"; "Fail CI when a
+church-owned table has no row-level security".
+
+---
+
+## 2.4b — Control plane, tenant plane, and room for dedicated databases
+
+**Goal:** everything that would have to change to give a large church its own
+database later is decided and built now, while it is cheap. The full reasoning
+is in `multi-tenancy.md`, section 13. Today there is one database, and nothing
+behaves differently.
+
+**Do**
+
+1. **Label every model with its plane** in `src/core/database/planes.ts`:
+
+   ```ts
+   /** Who and how: always in the shared database. */
+   export const CONTROL_MODELS = new Set([
+     'Church', 'User', 'Session', 'Permission', 'ChurchMembership', 'ChurchModule', 'Role',
+     'RolePermission', 'MembershipRole', 'ImpersonationSession', 'UsageDaily',
+     'PlatformUsageDaily', 'UserActivityDaily', 'JobRun', 'ChurchPlacement',
+     // Phase 3: 'Invitation', 'PasswordResetToken', 'EmailOutbox'. Phase 5: 'ApiClient'.
+   ]);
+   /** A church's own records: these move with the church. */
+   export const TENANT_PLANE_MODELS = new Set<string>([
+     // Phase 4: 'ChurchSequence', 'FinanceIncomeSource', 'FinanceExpenseItem', 'FinanceTransaction', 'ChangeRequest'.
+     // Phase 5: 'Registration', 'Person', …, 'ChurchSetting'.
+   ]);
+   // AuditEvent is split by its `source` column (below).
+   ```
+
+   A test fails when a model is in neither list, or in both. (This is separate
+   from `TENANT_MODELS` in 2.4, which lists every model with a `churchId`,
+   control or tenant plane.)
+2. **Placements.** Add to the Phase 2 migration:
+
+   ```prisma
+   enum PlacementState {
+     ACTIVE
+     MOVING      // maintenance: writes refused while the church's data is copied
+   }
+
+   model ChurchPlacement {
+     churchId String         @id @map("church_id") @db.Uuid
+     cluster  String         @default("shared") @db.VarChar(40)
+     state    PlacementState @default(ACTIVE)
+     movedAt  DateTime?      @map("moved_at") @db.Timestamptz(6)
+     @@map("church_placements")
+   }
+   ```
+
+   Every church gets a row (`shared`, `ACTIVE`) when it is created, and a
+   migration backfills existing ones. RLS: core-only policies (2.4a step 3).
+3. **`DatabaseRegistry`** (`src/core/database/registry.ts`). It reads
+   `TENANT_CLUSTERS` from the environment, a JSON map of cluster name →
+   `{ rw, ro, core, backup }` URLs. When the variable is absent, it builds
+   `{ shared: { rw: DATABASE_URL, ro: DATABASE_URL_READONLY, core: DATABASE_URL_CORE } }`,
+   so **nothing needs configuring today**. It keeps one set of Prisma clients
+   per cluster, and a 60-second cache of placements.
+   - `forChurch(churchId) → { rwScoped, roScoped, core }` for that church's cluster.
+   - `Db` (2.4, 2.4a) now asks the registry instead of holding `PrismaRw` and
+     `PrismaRo` itself. Feature code does not change.
+   - `coreFor(churchId)`: for core code that must touch a church's
+     tenant-plane rows (the usage snapshot, the change-request email lookup).
+     **Core code never queries tenant-plane tables through `PrismaCore`
+     directly.** ESLint flags `prismaCore.<tenantPlaneModel>` using the list above.
+   - `clusters()`: every cluster, for jobs that loop over all of them.
+4. **Maintenance mode.** Generalise `ImpersonationReadOnlyGuard` (2.9) into a
+   `ReadOnlyGuard` with two reasons: impersonation (as before), or the context
+   church's placement is `MOVING` → `503 CHURCH_MAINTENANCE`, "Your church's data
+   is being moved. Changes are paused for a few minutes." Only Phase 6's move
+   tool sets `MOVING`, but the guard exists from now on.
+5. **Audit source.** Add `source String @db.VarChar(10)` (`'core' | 'feature'`)
+   to `AuditEvent`. `recordNow` writes `core`, and `recordIn(tx, …)` writes
+   `feature`. Feature rows are tenant plane, and core rows (sign-ins,
+   impersonation) are control plane.
+6. **No cross-plane foreign keys.** Tenant-plane tables may reference other
+   tenant-plane tables, and `churches.id`. Each cluster will hold a one-row
+   copy of its church. References to users or other control-plane rows are plain
+   uuid columns **without** `@relation`. A CI test reads
+   `information_schema.referential_constraints` and fails on any foreign key
+   from a tenant-plane table to a control-plane table other than `churches`.
+7. **One schema, every cluster.** `npm run db:deploy -w @irca/api` runs
+   `prisma migrate deploy` once per cluster in `TENANT_CLUSTERS` (today: once).
+
+**Check:** `church_placements` has a row for IRCA and TEST (`shared`,
+`ACTIVE`). Set TEST to `MOVING` by SQL: TEST's admin can read but gets `503
+CHURCH_MAINTENANCE` on any write, and IRCA is unaffected. Set it back.
+
+**Commits:** "Label every table as control or tenant plane"; "Place each
+church's data in a named database, starting with one"; "Pause a church's
+writes while its data is moved"; "Keep church records free of foreign keys to
+shared tables".
+
+---
+
 ## 2.5 — Resolving a person's effective permissions
 
 **Goal:** one function answers "what may this request do?", and it runs once
 per request.
 
-**Do** — `src/core/rbac/permission-resolver.service.ts` (uses `PrismaRw`,
+**Do** — `src/core/rbac/permission-resolver.service.ts` (uses `PrismaCore`,
 core):
 
 1. `forMember(userId, churchId): Promise<Set<PermissionKey>>`:
@@ -696,7 +976,7 @@ and unit-test every line):
      and `@WriteWithReadPermission('changes only the actor\'s own session')`.
    - `churchId`: required for devs, and must be the actor's current church for
      admins.
-   - In one transaction (via `PrismaRw`): create the `ImpersonationSession`
+   - In one transaction (via `PrismaCore`): create the `ImpersonationSession`
      (`expiresAt = now + 30 min`, `previousChurchId = session.activeChurchId`),
      set `sessions.impersonation_id` and `sessions.active_church_id = churchId`,
      and write audit `impersonation.started` (actor, subject, church).
@@ -765,7 +1045,7 @@ makes a mistake later.
    whenever `impersonationId` is set. Nothing else to do, but prove it (2.18).
 4. **Infrastructure writes that must still happen during impersonation**
    (audit rows, `sessions.last_seen_at`, usage counters, ending the
-   impersonation) all go through `PrismaRw` in `src/core/**`. None of those
+   impersonation) all go through `PrismaCore` in `src/core/**`. None of those
    classes are exported to feature modules.
 
 **Check:** 2.18 has one test per layer. The database-layer test uses a fixture
@@ -788,7 +1068,7 @@ recorded with who really did it.
    change commit or roll back together. `tx` is the scoped client's transaction.
 2. `recordNow(event)`: for **infrastructure events** (sign-in, sign-out,
    failed sign-in, impersonation start/end, impersonated views), written
-   immediately through `PrismaRw`.
+   immediately through `PrismaCore`.
 3. Both fill `churchId`, `actorUserId`, `subjectUserId`, `impersonationId`,
    `ip`, `userAgent` and `requestId` from CLS automatically. Callers pass only
    `action`, `entityType`, `entityId`, `summary`, `before`, `after`.
@@ -885,6 +1165,48 @@ will show, cheaply.
 
 ---
 
+## 2.11a — Per-church rate limits, quotas and cache headers
+
+**Goal:** no church can use up capacity the others need, and nothing
+church-specific is ever cached where another church could get it
+(`multi-tenancy.md`, sections 8 and 12).
+
+**Do**
+
+1. **Three throttler buckets** (`@nestjs/throttler`, with named throttlers and
+   custom `getTracker`s), all applied globally:
+   - `ip`: 300/min, with the per-route overrides already set (login 10/min,
+     public registration per 05 step 5.5);
+   - `user`: 300/min, tracked by `actorUserId` (skipped when signed out);
+   - `church`: 1,200/min, tracked by `churchId` (skipped with no church). The
+     limit is read from `church_settings.limits.api_per_minute` when present
+     (cached 60 s).
+   A limit hit → `429 RATE_LIMITED`, plus `usage.inc('api.throttled')`. Use an
+   in-memory store while there is one API instance, and move the store to Redis
+   or Postgres before running two (note this in `docs/deployment.md`).
+2. **Quotas.** `QuotaService.consume(key, n = 1)` checks a per-church daily
+   counter against `church_settings.limits.<key>` or the default in code
+   (`emails_per_day: 500`, `exports_per_day: 50`, `api_clients: 3`) and throws
+   `429 QUOTA_EXCEEDED`, "Today's limit of 500 emails for IRCA is reached. It
+   resets at midnight." Counters are rows in `usage_daily`, so the dev console
+   shows them. Wire it into email enqueue (3.1) and CSV exports (4.6, 5.9) as
+   those are built.
+3. **Cache headers.** A global interceptor sets `Cache-Control: private,
+   no-store` and `Vary: Cookie` on every `/v1` response. The portal already
+   fetches with `no-store` (1.17). Write the rule for any future cache into the
+   code comment: keys start with `c:{churchId}:`, and go through one helper.
+4. Only devs can change `church_settings.limits.*` (the dev console, Phase 6). A
+   church admin cannot raise their own limits.
+
+**Check:** a loop of 1,300 requests in a minute as a TEST user gets 429s for
+TEST, while an IRCA user in parallel gets none. The response headers show
+`no-store`.
+
+**Commits:** "Give every church its own share of the API"; "Cap daily emails
+and exports per church"; "Never let church data be cached".
+
+---
+
 ## 2.12 — Background jobs
 
 **Goal:** one safe way to run scheduled work.
@@ -892,17 +1214,25 @@ will show, cheaply.
 **Do**
 
 1. `npm i -w @irca/api @nestjs/schedule`.
-2. `JobRunner.run(name, fn)`:
+2. `JobRunner.run(name, fn)` (on `PrismaCore`):
    `select pg_try_advisory_lock(hashtext(name))`. If it is not acquired, return
    (another instance is on it). Otherwise insert a `job_runs` row, run `fn`
    with a CLS context that has **no user and no church** (so a job cannot
    accidentally use request identity), record `ok/error/stats/finishedAt`, and
    release the lock.
-3. First job: **`impersonation-expiry`** every minute. It ends
+3. **`JobRunner.forEachChurch(name, fn, { budgetMs = 60_000 })`** for
+   per-church work: for each `ACTIVE` church, run `fn` in a fresh CLS context
+   with only `churchId` set (so `Db`, the tenant extension and RLS all apply),
+   inside its own `try/catch`, and give up on that church if it runs past the
+   budget. Record one `job_runs` row per church (add `churchId String?
+   @db.Uuid` to `JobRun`). One church failing or running long never stops the
+   others. Platform-wide jobs keep using `run()`, with a comment explaining why
+   they must see every church (`multi-tenancy.md`, section 9).
+4. First job: **`impersonation-expiry`** every minute. It ends
    impersonations past `expiresAt` that nobody has touched (the guard ends
    them lazily on the next request, but an abandoned tab would otherwise stay
    "open" in reports).
-4. Second job: **`session-cleanup`** nightly at 03:00 Africa/Dar_es_Salaam.
+5. Second job: **`session-cleanup`** nightly at 03:00 Africa/Dar_es_Salaam.
    It **marks** sessions past expiry as revoked (`reason: 'expired'`). It
    does not delete them yet. Deletion after 90 days is Phase 6.
 
@@ -1108,7 +1438,8 @@ it for Finance and corrects it where it is wrong):
 2. Add it to `CHURCH_MODULES` in `packages/shared/src/modules/index.ts`.
 3. Prisma models: every one has `churchId`, is added to `TENANT_MODELS`, and
    uses `@map` snake_case. Migration via `--create-only`, reviewed, then applied.
-   Append-only tables get their `revoke` line.
+   **Each new table gets the row-level security template from 2.4a in the same
+   migration.** Append-only tables get their `revoke` line.
 4. `apps/api/src/modules/<key>/`: a Nest module, controllers with
    `@RequirePermission` on every route, services using `Db.client` and
    `audit.recordIn(tx, …)` for every change, and usage counters for the module's key actions.
@@ -1156,6 +1487,19 @@ it for Finance and corrects it where it is wrong):
   nobody reintroduces it by accident.
 - Usage: after `flush()`, `usage_daily` has `api.requests` for the church.
 - Disabled module: a role in a disabled module grants nothing (use a fixture module in tests).
+
+**Multi-tenancy** (`test/tenancy/*.e2e-spec.ts`, see `multi-tenancy.md` section 15):
+
+- The **route fuzzer:** every church-scoped `GET` route with an id-like
+  parameter, called as church A with church B's ids → `404`. Routes are found
+  from Nest metadata, so new ones are covered automatically.
+- A body carrying another church's `churchId` is ignored.
+- `cls.set('churchId'` appears nowhere except the two guards (a source scan).
+- Planes: every model labelled exactly once, and no cross-plane foreign keys.
+- Maintenance mode: writes refused for the `MOVING` church only.
+- Rate-limit fairness: church A throttled, and church B unaffected.
+- `forEachChurch`: A throws, B completes, and both are recorded.
+- Responses carry `Cache-Control: private, no-store`.
 
 **Portal unit** (vitest): `<Can>` hides and shows; `safeNext`; the banner
 countdown formatting; sidebar active-item matching.

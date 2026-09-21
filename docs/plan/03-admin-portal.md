@@ -96,16 +96,31 @@ request would either lose the email or fail the invitation.
 5. `EmailService.enqueue(tx, { churchId, to, template, payload })` inserts a
    row **using the caller's transaction**.
 6. Worker job `email-outbox` every 15 s via `JobRunner`:
-   - Claim up to 20:
+   - Claim up to 20, **at most 5 per church**, so one church's bulk sending
+     never delays another church's password reset (`multi-tenancy.md`, section 9):
      ```sql
-     -- tenant: core job, all churches
+     -- tenant: core job, all churches, fair share per church
      update email_outbox set status = 'SENDING', attempts = attempts + 1
-     where id in (select id from email_outbox
-                  where status = 'PENDING' and next_attempt_at <= now()
-                  order by created_at limit 20
-                  for update skip locked)
+     where id in (
+       select id from (
+         select id, row_number() over (partition by church_id order by created_at) as n
+         from email_outbox
+         where status = 'PENDING' and next_attempt_at <= now()
+       ) ranked
+       where n <= 5
+       order by n, id
+       limit 20
+       for update skip locked)
      returning *;
      ```
+
+     `for update` cannot sit on a query with a window function, so if Postgres
+     rejects this shape, select the ids first (the inner query), then run
+     `update … where id = any($ids) and status = 'PENDING' returning *` and
+     treat rows another worker took as already claimed.
+   - Before enqueueing, `QuotaService.consume('emails_per_day')` (2.11a).
+     Invitations and password resets are exempt from the quota (people must
+     always be able to get in), and reminders and notifications are not.
    - Render, send. On success: `SENT`, `sentAt`, `providerMessageId`,
      `subject`, and **scrub** `payload.link` → `"[sent]"`, so one-time tokens
      do not sit in the database.
@@ -233,7 +248,7 @@ see the link in the console. Inviting the same email again → 409
 **Do**
 
 1. **`GET /v1/invitations/:token`**, `@Public()`, throttled to 20/min/IP.
-   Hash the token and find the invitation (core lookup, via `PrismaRw`: there is
+   Hash the token and find the invitation (core lookup, via `PrismaCore`: there is
    no church in context yet). Valid = not accepted, not revoked, not expired,
    and the membership is still `INVITED`. Return
    `{ churchName, email, fullName, inviterName, roleSummary, needsPassword }`.

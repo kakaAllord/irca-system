@@ -72,7 +72,7 @@ Forgetting it once leaks one church's tithes to another.
 | Option | Impact |
 | --- | --- |
 | A. Discipline + code review | Free, and it fails silently the first time someone forgets. |
-| **B. A Prisma client extension that injects `churchId` from the request context into every query on tenant models, plus a cross-church e2e test suite** | Forgetting becomes impossible for Prisma calls. Raw SQL is still manual, but it is rare (sequences, reports, usage) and is marked for review. The extension throws if no church is in context, so a misconfigured route fails loudly. |
+| **B. A Prisma client extension that injects `churchId` from the request context into every query on tenant models, plus a cross-church e2e test suite** *(kept as layer 1; RLS added as layer 2, see D19)* | Forgetting becomes impossible for Prisma calls. Raw SQL is still manual, but it is rare (sequences, reports, usage) and is marked for review. The extension throws if no church is in context, so a misconfigured route fails loudly. |
 | C. Postgres Row-Level Security with `SET app.church_id` per request | The strongest option. With Prisma it requires wrapping every request in an interactive transaction to set the variable, which interacts badly with connection poolers (Neon uses PgBouncer) and is hard for juniors to debug. |
 
 **Choice: B**, designed so that C can be added later without touching module
@@ -229,6 +229,56 @@ nothing deployed is lost. The first 28 commits stay readable in
 `kakaAllord/irca-administration` (to be archived, not deleted). A new GitHub
 repository is recommended over force-pushing (see Phase 0, step 0.7). The design
 prototype and agent working files live in the working folder around the repository (`~/dev/irca/`), never committed and never listed in `.gitignore`.
+
+---
+
+## D19. PostgreSQL row-level security as a second isolation layer (owner, 21 Sept 2026)
+
+**Revises D10**, which chose the Prisma extension and deferred RLS because of
+the connection pooler. RLS is now **in**, alongside the extension. Each layer
+alone keeps churches apart, and tests prove each one on its own (02, step 2.4a).
+
+- Policies on every church-owned table let `irca_app` and `irca_readonly` see
+  and write only `church_id = app_church_id()`.
+- The church is set **per transaction** with `set_config('app.church_id', …,
+  true)`. This is safe behind Neon's transaction-mode pooler, because the setting
+  dies with the transaction, and session-level `SET` is banned. Unset means zero
+  rows (fails closed).
+- A new role, **`irca_core`**, has an explicit see-all policy for core code
+  (sign-in, permission resolution, audit and usage writes, jobs, dev console).
+  A read-only **`irca_backup`** role does the same for backups. No runtime role
+  has `BYPASSRLS`.
+- `audit_events`' policy also hides impersonation rows from church readers
+  (D16 enforced by the database).
+- **Cost:** a few extra round trips per standalone query, about 1 ms each in
+  region, measured in 6.6. Interactive transactions and raw SQL must go through
+  `db.tx()`, which ESLint enforces.
+
+| Option considered | Why not |
+| --- | --- |
+| Session-level `SET app.church_id` | Leaks between requests through the pooler. |
+| A Postgres role per church | Hundreds of roles, grants per church, and one connection pool per role. |
+| RLS without the extension | One layer, and every forgotten `where` becomes a silent empty result rather than a caught bug. |
+
+---
+
+## D20. Multi-tenancy is cross-cutting; shared database first, dedicated databases possible (owner, 21 Sept 2026)
+
+Tenant isolation is planned across every layer, not just `church_id` columns:
+tenant resolution, authentication, authorization, the database (extension + RLS),
+API endpoints, files, caching, background jobs, logs, backups, monitoring, rate
+limiting and testing. The single description is **`multi-tenancy.md`**. Each
+of its sections names the phase step that builds it.
+
+| Option | Impact |
+| --- | --- |
+| **A. Shared database and schema now, with the path to dedicated databases built in** | Cheapest to run for one to a few dozen churches. Costs, paid now while cheap: labelling tables as control or tenant plane, a placement table and database registry that today has one entry, no foreign keys from church records to shared tables (except `churches`), and a move tool tested against a second database. |
+| B. Schema per church | Migrations multiply per church, and Prisma handles many schemas poorly. It offers no more isolation than RLS here. |
+| C. Database per church from the start | The strongest isolation, but many databases to migrate, back up and pay for before there is a second church. |
+
+**Choice: A.** A church moves to its own database when its share of the
+database passes about 30%, it dominates latency, or a contract or data-residency
+requirement asks. The owner decides, on the dev console's evidence.
 
 ---
 

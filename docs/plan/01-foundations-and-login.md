@@ -20,7 +20,7 @@ Steps at a glance:
 | 1.2 | *Done in Phase 0* (the monorepo layout) |
 | 1.3 | Root tooling: TypeScript, lint, format, scripts |
 | 1.4 | `packages/shared` skeleton |
-| 1.5 | Local Postgres: three roles, two databases |
+| 1.5 | Local Postgres: five roles, two databases |
 | 1.6 | Scaffold `apps/api` (NestJS) |
 | 1.7 | API foundations: config, logging, errors, health |
 | 1.8 | Prisma and the first four tables |
@@ -275,18 +275,21 @@ with `index.js`, `index.cjs` and `index.d.ts`.
 
 ---
 
-## Step 1.5 — Local Postgres: three roles, two databases
+## Step 1.5 — Local Postgres: five roles, two databases
 
 **Goal:** the same role separation locally as in production, so read-only
-impersonation and append-only audit are tested on every machine.
+impersonation, append-only audit and row-level security are tested on every
+machine.
 
-**Why three roles** (see `00-decisions.md` D11):
+**Why five roles** (see `00-decisions.md` D11 and D19):
 
-| Role | Used by | Can |
-| --- | --- | --- |
-| `irca_owner` | Prisma migrations only | Everything: owns the tables, runs DDL. Never used by the running API. |
-| `irca_app` | The API at runtime | `SELECT/INSERT/UPDATE/DELETE` on business tables. Only `SELECT/INSERT` on `audit_events`. No `DELETE` on finance transactions. |
-| `irca_readonly` | The API, for every impersonated request | `SELECT` only. |
+| Role | Used by | Can | Row-level security (Phase 2, step 2.4a) |
+| --- | --- | --- | --- |
+| `irca_owner` | Prisma migrations only | Everything: owns the tables, runs DDL. Never used by the running API. | Not applied (table owner) |
+| `irca_core` | The API's **core** code only: sign-in, sessions, permission resolution, audit writes, usage, jobs, the dev console | `SELECT/INSERT/UPDATE/DELETE` like `irca_app` (the same revokes apply) | Sees **every church** through an explicit "core" policy |
+| `irca_app` | The API's **feature modules** (Admin, Finance, Membership…) | `SELECT/INSERT/UPDATE/DELETE` on business tables. Only `SELECT/INSERT` on `audit_events`. No `DELETE` on finance transactions. | Sees **only the church set for the current transaction** |
+| `irca_readonly` | Feature modules during every impersonated request | `SELECT` only | Same as `irca_app` |
+| `irca_backup` | The nightly backup job only (Phase 6, step 6.8) | `SELECT` only | Sees every church (read-only "core" policy) |
 
 **Do**
 
@@ -295,8 +298,10 @@ impersonation and append-only audit are tested on every machine.
 
    ```sql
    create role irca_owner    login password 'owner_local_pw'  createdb;
+   create role irca_core     login password 'core_local_pw';
    create role irca_app      login password 'app_local_pw';
    create role irca_readonly login password 'ro_local_pw';
+   create role irca_backup   login password 'backup_local_pw';
 
    create database irca_dev  owner irca_owner;
    create database irca_test owner irca_owner;
@@ -396,8 +401,10 @@ with an id, returns one error shape, and has a health endpoint.
    ```bash
    NODE_ENV=development
    PORT=4000
-   # Runtime connection: the irca_app role.
+   # Runtime connection for feature modules: the irca_app role (row-level security applies).
    DATABASE_URL=postgresql://irca_app:app_local_pw@localhost:5432/irca_dev
+   # Runtime connection for core code only: the irca_core role (sees every church).
+   DATABASE_URL_CORE=postgresql://irca_core:core_local_pw@localhost:5432/irca_dev
    # Migrations only: the irca_owner role. On Neon use the direct (non-pooler) host.
    DIRECT_DATABASE_URL=postgresql://irca_owner:owner_local_pw@localhost:5432/irca_dev
    # Impersonated requests: the irca_readonly role.
@@ -420,6 +427,7 @@ with an id, returns one error shape, and has a health endpoint.
      NODE_ENV: z.enum(['development', 'test', 'production']),
      PORT: z.coerce.number().default(4000),
      DATABASE_URL: z.string().url(),
+     DATABASE_URL_CORE: z.string().url(),
      DIRECT_DATABASE_URL: z.string().url(),
      DATABASE_URL_READONLY: z.string().url(),
      PORTAL_ORIGIN: z.string().url(),
@@ -674,27 +682,37 @@ together with the role grants, all created by migrations.
    -- (locally in Step 1.5, on Neon in Phase 6), because creating roles needs
    -- privileges the migration role should not have. This file only grants.
 
-   grant usage on schema public to irca_app, irca_readonly;
+   grant usage on schema public to irca_core, irca_app, irca_readonly, irca_backup;
 
    -- Everything that exists now...
-   grant select, insert, update, delete on all tables in schema public to irca_app;
-   grant usage, select on all sequences in schema public to irca_app;
-   grant select on all tables in schema public to irca_readonly;
+   grant select, insert, update, delete on all tables in schema public to irca_core, irca_app;
+   grant usage, select on all sequences in schema public to irca_core, irca_app;
+   grant select on all tables in schema public to irca_readonly, irca_backup;
 
    -- ...and everything later migrations create (they run as irca_owner).
    alter default privileges for role irca_owner in schema public
-     grant select, insert, update, delete on tables to irca_app;
+     grant select, insert, update, delete on tables to irca_core, irca_app;
    alter default privileges for role irca_owner in schema public
-     grant usage, select on sequences to irca_app;
+     grant usage, select on sequences to irca_core, irca_app;
    alter default privileges for role irca_owner in schema public
-     grant select on tables to irca_readonly;
+     grant select on tables to irca_readonly, irca_backup;
 
-   -- The readonly role never needs to see the migration log.
-   revoke all on table _prisma_migrations from irca_readonly, irca_app;
+   -- A runaway query from one church must not hold connections every church
+   -- shares. Applies when a pooled connection is opened. The core role gets
+   -- longer, because nightly jobs scan every church.
+   alter role irca_app      set statement_timeout = '10s';
+   alter role irca_readonly set statement_timeout = '10s';
+   alter role irca_core     set statement_timeout = '60s';
+
+   -- No runtime role needs to see the migration log.
+   revoke all on table _prisma_migrations from irca_readonly, irca_app, irca_core;
+   -- (irca_backup keeps it: a restore needs to know which migrations the dump contains.)
    ```
 
    From Phase 2 onward, any table that must be append-only gets its own
-   `revoke update, delete ... from irca_app` in the migration that creates it.
+   `revoke update, delete ... from irca_core, irca_app` in the migration that
+   creates it, and every church-owned table gets its row-level security policies
+   in the same migration (02, step 2.4a).
 6. Apply both: `npx prisma migrate dev`.
 7. Add to `apps/api/package.json`:
    `"prisma": { "seed": "ts-node prisma/seed.ts" }` (the seed comes in Step 1.14).
@@ -713,29 +731,39 @@ psql "$DATABASE_URL" -c "select count(*) from churches"
 
 ---
 
-## Step 1.9 — Prisma services (read-write and read-only)
+## Step 1.9 — Prisma services (core, read-write and read-only)
 
-**Goal:** two Prisma clients, one per role, and a single `Db` accessor that
-feature code uses. The accessor already knows how to choose the read-only
-client, so Phase 2 only has to flip a flag.
+**Goal:** three Prisma clients, one per runtime role, and a single `Db`
+accessor that feature code uses. The accessor already knows how to choose the
+read-only client, so Phase 2 only has to flip a flag. Row-level security
+(Phase 2, step 2.4a) then plugs in underneath without changing how feature
+code calls it.
 
 **Do**
 
-1. `src/core/database/prisma-rw.service.ts`:
+1. `src/core/database/prisma-core.service.ts`:
 
    ```ts
    // sketch
+   /**
+    * Core's own connection, as irca_core. Row-level security lets this role see
+    * every church, because signing in, resolving permissions, writing the audit
+    * log and running jobs all happen before or across any one church. That is
+    * exactly why feature code must never be handed it.
+    */
    @Injectable()
-   export class PrismaRw extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+   export class PrismaCore extends PrismaClient implements OnModuleInit, OnModuleDestroy {
      constructor(config: AppConfig) {
-       super({ datasourceUrl: config.get('DATABASE_URL') });
+       super({ datasourceUrl: config.get('DATABASE_URL_CORE') });
      }
      async onModuleInit() { await this.$connect(); }
      async onModuleDestroy() { await this.$disconnect(); }
    }
    ```
 
-2. `prisma-ro.service.ts`: the same, with `DATABASE_URL_READONLY`.
+2. `prisma-rw.service.ts` (`PrismaRw`, with `DATABASE_URL`, as `irca_app`) and
+   `prisma-ro.service.ts` (`PrismaRo`, with `DATABASE_URL_READONLY`): the same
+   shape. **These two are used only inside `Db`.**
 3. `db.service.ts`:
 
    ```ts
@@ -757,18 +785,23 @@ client, so Phase 2 only has to flip a flag.
    }
    ```
 
-   In Phase 2, `client` returns the *tenant-scoped* versions of these (02 step 2.4).
-4. `DatabaseModule` (global) provides and exports `PrismaRw`, `PrismaRo` and
-   `Db`. **Only core modules** (auth, sessions, audit, usage, jobs) may inject
-   `PrismaRw` directly. Feature modules inject `Db`. Add an ESLint rule to
-   enforce this: `no-restricted-imports` for `prisma-rw.service` under
-   `src/modules/**`.
-5. Wire `/health` to run `select 1` through `PrismaRw`.
+   In Phase 2, `client` returns the *tenant-scoped* versions of these (02 step
+   2.4), and those also set the church for row-level security on every
+   transaction (02 step 2.4a).
+4. `DatabaseModule` (global) provides `PrismaCore`, `PrismaRw`, `PrismaRo`
+   and `Db`. **Only core modules** (`src/core/**`: auth, sessions, rbac, audit,
+   usage, email, jobs) and the dev console (`src/modules/platform`) may inject
+   `PrismaCore`. **Nobody** outside `src/core/database` injects `PrismaRw` or
+   `PrismaRo`. Feature modules inject `Db`. Enforce it with ESLint
+   `no-restricted-imports` for `prisma-core.service`, `prisma-rw.service` and
+   `prisma-ro.service` under `src/modules/**` (with an override that allows
+   `prisma-core.service` in `src/modules/platform/**`).
+5. Wire `/health` to run `select 1` through `PrismaCore`.
 
 **Check:** `curl localhost:4000/health` → `"db":"ok"`. Stop Postgres and try
 again: `"db":"down"`, with status `503`.
 
-**Commit:** "Give the API a read-write and a read-only database client".
+**Commit:** "Give the API core, read-write and read-only database clients".
 
 ---
 
@@ -825,8 +858,9 @@ policy.
 
 **Do**
 
-`src/core/auth/session.service.ts` (injects `PrismaRw`: sessions are
-infrastructure and must be writable even during impersonation):
+`src/core/auth/session.service.ts` (injects `PrismaCore`: sessions are
+infrastructure, must be writable even during impersonation, and are looked up
+before any church is known):
 
 1. **`create(userId, activeChurchId, ip, userAgent)`**
    - `token = randomBytes(32).toString('base64url')` (256 bits).
@@ -1015,6 +1049,12 @@ gets its first dev account without anyone writing SQL.
    - `admin@irca.local`, `ACTIVE`, with an `ACTIVE` membership in IRCA,
      password `admin-password-123` (becomes Church administrator in Phase 2).
    - `clerk@irca.local`, the same, no roles yet (becomes Finance clerk in Phase 4).
+   - A **second church, TEST** (`code: 'TEST'`, `slug: 'test'`), with
+     `admin@test.local` (password `admin-password-123`) and, as later phases
+     add data, **deliberately overlapping** records: the same person names,
+     phone numbers, expense item names and entry dates as IRCA. A leak between
+     churches then shows as a wrong row in a test, not an empty page. Every e2e
+     run has both churches (`multi-tenancy.md`, section 15).
    - Use `upsert` everywhere, so running the seed twice is harmless.
 2. `src/cli/main.ts` builds a Nest *application context* (no HTTP server) and
    dispatches commands. Use `nest-commander` (`npm i -w @irca/api nest-commander`).
@@ -1046,7 +1086,7 @@ database.
 **Do**
 
 1. `apps/api/.env.test` (committed, local-only credentials) pointing at
-   `irca_test` for all three URLs.
+   `irca_test` for all four URLs.
 2. `test/setup-e2e.ts`: loads `.env.test`, runs `prisma migrate reset --force
    --skip-seed` **once** per run, and exposes helpers:
    `createUser({ platformRole?, churchId?, password? })`, `createChurch()`,
@@ -1389,8 +1429,10 @@ jobs:
         run: |
           psql postgresql://postgres:postgres@localhost:5432/postgres <<'SQL'
           create role irca_owner login password 'owner_local_pw' createdb;
+          create role irca_core login password 'core_local_pw';
           create role irca_app login password 'app_local_pw';
           create role irca_readonly login password 'ro_local_pw';
+          create role irca_backup login password 'backup_local_pw';
           create database irca_test owner irca_owner;
           SQL
       - run: npm run build -w @irca/shared

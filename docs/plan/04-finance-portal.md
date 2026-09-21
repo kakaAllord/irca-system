@@ -117,7 +117,7 @@ page lists Finance as *Off*. Turn it on: three Finance roles appear under Roles.
 
 **Do**
 
-1. Models (all tenant models: add each to `TENANT_MODELS`):
+1. Models (all tenant models: add each to `TENANT_MODELS` **and** to `TENANT_PLANE_MODELS` (02 step 2.4b), and give each the row-level security template from 02 step 2.4a in this migration. `ChangeRequest` from 4.6a too):
 
    ```prisma
    enum FinanceKind {
@@ -510,7 +510,7 @@ limit $3;
    allowed, and the UI asks for confirmation.)
 4. The item or source must exist in this church (tenant scoping makes a foreign
    id "not found") and be active → otherwise `422 ITEM_NOT_AVAILABLE`.
-5. In **one** `db.client.$transaction`:
+5. In **one** `db.tx(...)` (2.4a: it also sets the church for row-level security):
    - read the church's `code` and `currency`;
    - `seq = sequences.next(tx, sequenceKey(kind, y, m))` (4.4);
    - `code = formatTransactionCode(...)`;

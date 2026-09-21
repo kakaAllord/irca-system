@@ -18,6 +18,7 @@ recipe for starting the next department.
 | 6.6 | Performance and load |
 | 6.7 | Environments and deployment |
 | 6.8 | Backups and restore drill |
+| 6.8a | Per-church export, restore, move and offboarding |
 | 6.9 | Monitoring and alerts |
 | 6.10 | Runbooks |
 | 6.11 | Launch and training |
@@ -71,7 +72,10 @@ never the real path, so it cannot grow without bound or store codes and tokens.
 
 **Goal:** know how much of the database each church uses, and how that grows.
 
-**Do** — job `usage-snapshot`, daily at 02:00 Africa/Dar_es_Salaam, via `JobRunner`:
+**Do** — job `usage-snapshot`, daily at 02:00 Africa/Dar_es_Salaam, via
+`JobRunner`. It is a platform job, and it loops over `registry.clusters()`
+(02 step 2.4b), running the per-table queries below on each cluster through
+that cluster's core client, never through `PrismaCore` alone:
 
 1. The list of church-owned tables comes from the Prisma DMMF: every model
    with a `churchId` field, plus the core tables with `church_id` (`audit_events`,
@@ -115,7 +119,8 @@ never the real path, so it cannot grow without bound or store codes and tokens.
 ## 6.3 — Platform API
 
 All routes live under `/v1/platform`, in `src/modules/platform`, which is the
-only feature module allowed to use `db.unscoped` (2.4). Each route requires a
+only feature module allowed to inject `PrismaCore` (1.9), the connection that
+row-level security lets see every church (2.4a). Each route requires a
 `platform.*` permission, and so a dev.
 
 | Route | Permission | Returns / does |
@@ -295,6 +300,14 @@ Work through this list. Each item is a checkbox in the PR, with evidence.
 - [ ] Password change, reset, disable and suspension each end the right sessions (tests exist).
 - [ ] Session and invitation tokens never appear in logs (search a day of production logs for `irk_` and for 43-character base64url strings).
 
+**Multi-tenancy** (every section of `multi-tenancy.md`)
+
+- [ ] The route fuzzer, the layer-alone tests and all CI coverage checks pass.
+- [ ] A per-church export and `--replace` import was run on staging without touching the other church.
+- [ ] `church:move` was run end to end against a second database.
+- [ ] Rate-limit fairness and per-church quotas behave as specified.
+- [ ] No cached response contains church data (`no-store` on every `/v1` response).
+
 **Access control**
 
 - [ ] The route audit is on in production (it runs at every boot).
@@ -307,8 +320,11 @@ Work through this list. Each item is a checkbox in the PR, with evidence.
 
 **Data**
 
-- [ ] The database roles in production match 1.5 (`\du` output in the PR), and
-      the runtime uses `irca_app`, never the owner.
+- [ ] The database roles in production match 1.5 (`\du` output in the PR):
+      the runtime uses `irca_app`, `irca_readonly` and `irca_core`, never the
+      owner, and **no runtime role has `BYPASSRLS` or superuser**.
+- [ ] Row-level security is on for every table in the 2.4a coverage check,
+      in production (`select relname from pg_class where relrowsecurity`).
 - [ ] `audit_events` and `finance_transactions` have their revokes in production.
 - [ ] Personal data inventory written in `docs/data-inventory.md`: what is
       stored about visitors (including prayer requests), staff and money, who
@@ -372,12 +388,18 @@ subdomains of one domain the church controls, so email DNS is in one place.
 
 1. In the Neon console, create roles `irca_owner` (the console makes it a
    member of `neon_superuser`, which is needed for `create extension`),
-   `irca_app` and `irca_readonly`. Set strong generated passwords and store
-   them in a password manager.
+   `irca_core`, `irca_app`, `irca_readonly` and `irca_backup`. Set strong
+   generated passwords and store them in a password manager. **Check that
+   none of the runtime roles has `BYPASSRLS`** (`\du`). If Neon's console gives
+   console-made roles `neon_superuser` membership, create the four runtime roles
+   with SQL as `irca_owner` instead (`create role … login password …`), so they
+   stay ordinary roles that row-level security applies to.
 2. Create the database `irca` owned by `irca_owner`, and a branch `staging`.
 3. `DIRECT_DATABASE_URL` = the owner on the direct host;
    `DATABASE_URL` = the app role on the pooled host;
+   `DATABASE_URL_CORE` = the core role on the pooled host;
    `DATABASE_URL_READONLY` = the read-only role on the pooled host.
+   The backup role's URL (direct host) goes only into the backup job's secrets.
    All with `sslmode=verify-full` (see the registration README for why).
 
 **API on Railway or Render** (the same settings on either):
@@ -422,8 +444,11 @@ request bodies.
 
 1. Neon keeps point-in-time history. **Check the restore window on the
    current plan** and write it in `docs/deployment.md`.
-2. In addition, a scheduled GitHub Action runs nightly `pg_dump --format=custom`
-   as `irca_readonly` (it can read everything it needs), encrypts it with
+2. In addition, a scheduled GitHub Action runs nightly
+   `pg_dump --format=custom --enable-row-security` as `irca_backup`. That role
+   reads every church through its backup policy (2.4a) and can write nothing.
+   Without `--enable-row-security`, `pg_dump` refuses any table with row-level
+   security on. It then encrypts the dump with
    `age` using a public key committed to the repository, and uploads it to object
    storage (e.g. Cloudflare R2 or Backblaze B2) with 30-day retention. The
    private key is held offline by the owner and one pastor.
@@ -436,6 +461,61 @@ request bodies.
 
 ---
 
+## 6.8a — Per-church export, restore, move and offboarding
+
+**Goal:** a church's data can be taken out, put back, moved to its own
+database, or removed, **without touching any other church**
+(`multi-tenancy.md`, sections 11, 13 and 14). These are CLI commands run by a
+dev. The same code backs a dev-console button later if wanted.
+
+**Do**
+
+1. **`church:export --church IRCA [--out dir]`**: for every tenant-plane
+   model (02 step 2.4b), in foreign-key order, stream the church's rows to
+   `<table>.jsonl` (through `registry.coreFor(church)`), plus `audit_events`
+   with `source = 'feature'`, and the church's control-plane rows: the
+   `churches` row, placement, modules, roles, role permissions, memberships and
+   membership roles, and for its users **only** id, name, email and status (never
+   password hashes or sessions). Also a `manifest.json` with row counts and a
+   SHA-256 per file, the schema migration name, and the time. Encrypt the whole
+   thing with `age`. Scheduled weekly per church by `forEachChurch`, uploaded next
+   to the nightly dump, and kept 8 weeks.
+2. **`church:import --church IRCA --from archive [--replace] [--target cluster]`**:
+   verifies the manifest and that the schema migration matches (refuse otherwise).
+   Puts the church in maintenance (`MOVING`). With `--replace`, deletes that
+   church's tenant-plane rows in reverse foreign-key order (as the owner role,
+   inside one transaction), then inserts the archive in foreign-key order,
+   verifies counts and checksums, and returns the church to `ACTIVE`.
+   **Never touches rows of any other church**: every statement is
+   `where church_id = $1`, and a test proves it.
+3. **Restoring one church from a point in time:** restore Neon's history into a
+   scratch branch → `church:export` against it → `church:import --replace` into
+   production. Write this in `docs/runbooks/restore-one-church.md`.
+4. **`church:move --church X --to <cluster>`**: the procedure in
+   `multi-tenancy.md` section 13 (maintenance → copy → verify → flip placement →
+   smoke → purge after 7 days with `church:purge --church X --cluster shared`,
+   which refuses unless the placement points elsewhere and an export from the
+   last 24 hours exists). Build and test it now against the e2e second cluster
+   (`irca_test_c2`), even though no church needs it yet. A tool that has never
+   run is not a migration path.
+5. **`church:offboard --church X`**: suspend, run a final export (handed to the
+   church), then schedule `church:delete` for 90 days later. That removes
+   tenant-plane rows, files, memberships and roles, deletes users who belong to
+   no other church, and records a platform audit event with row counts and no
+   personal data. `church:delete` refuses to run early without `--now` and a
+   typed confirmation of the church code.
+
+**Check:** export IRCA, import it into an empty local database, and compare
+counts and checksums. Then `--replace` TEST from its own export: IRCA's
+`updated_at` values are unchanged. Move TEST to `irca_test_c2`, and use the
+portal as TEST's admin (reads and writes work), then as IRCA's (unaffected).
+
+**Commits:** "Export one church's data on its own"; "Restore one church
+without touching the others"; "Move a church to its own database"; "Offboard a
+church and delete its data after the grace period".
+
+---
+
 ## 6.9 — Monitoring and alerts
 
 | Watch | How | Alert to |
@@ -444,10 +524,16 @@ request bodies.
 | Portal and registration home pages | same | same |
 | 5xx rate > 2% over 10 minutes | Sentry alert or a job reading `usage_daily` | owner |
 | An email reaching `FAILED` | a job every 15 minutes, which emails the dev (through the outbox itself, with a second provider or plain SMTP as fallback) | owner |
-| A job failing twice in a row | `job_runs` check in the same job | owner |
+| A job failing twice in a row (for any one church in a per-church job) | `job_runs` check in the same job | owner |
+| **Per church:** 5xx rate over 5% for 15 min, a church throttled more than 50 times in an hour, its email failures, its database share up more than 10 points in a week | a job reading `usage_daily` per church (`multi-tenancy.md`, section 12) | owner, naming the church |
 | Database above 80% of the plan's storage | the nightly snapshot compares `db.size_bytes` to a configured limit | owner |
 
-**Commit:** "Alert when the system is down, failing, or filling up".
+Logs are shipped to one log provider (e.g. Better Stack or Axiom) with
+`churchCode` indexed. The dev console's church page links to the log search
+pre-filtered to that church. Churches never see logs.
+
+**Commit:** "Alert when the system, or any one church, is down, failing,
+throttled, or filling up".
 
 ---
 
@@ -536,7 +622,7 @@ wiring before any writes exist.
 - [ ] The dev console shows every metric in 6.1 for IRCA with at least 7 days of history.
 - [ ] Hardening checklist complete, with evidence.
 - [ ] The load test passed on staging.
-- [ ] A restore drill was done and written down.
+- [ ] A restore drill was done and written down, including restoring one church on its own.
 - [ ] Monitors and alerts were triggered on purpose once, and arrived.
 - [ ] Runbooks exist and a second person has read them.
 - [ ] Production has: a dev account, IRCA with its first admin, Membership on, and the registration cut over.

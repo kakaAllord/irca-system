@@ -159,7 +159,7 @@ the sidebar.
 
 ## 5.3 — Tables
 
-All are tenant models (add each to `TENANT_MODELS`).
+All are tenant models: add each to `TENANT_MODELS` and to `TENANT_PLANE_MODELS` (02 step 2.4b), and give each the row-level security template from 02 step 2.4a in this migration. The exception is `ApiClient`, which is control plane with core-only RLS. References to users (`createdById`, `authorId` and so on) are plain uuid columns with no `@relation`, as 2.4b requires.
 
 ```prisma
 /// The visitor's own answers, one row per registration. Same columns as the
