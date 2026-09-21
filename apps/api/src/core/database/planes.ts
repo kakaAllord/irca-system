@@ -16,6 +16,11 @@ export const TENANT_MODELS = new Set<string>([
   'RolePermission',
   'MembershipRole',
   'Invitation',
+  'ChangeRequest',
+  'ChurchSequence',
+  'FinanceIncomeSource',
+  'FinanceExpenseItem',
+  'FinanceTransaction',
 ]);
 
 export const CONTROL_MODELS = new Set<string>([
@@ -69,8 +74,14 @@ export const CONTROL_PLANE_TABLES = new Set<string>([
   'password_reset_tokens',
 ]);
 
-/** A church's own records: these move with the church. Phase 4 and 5 add to it. */
-export const TENANT_PLANE_TABLES = new Set<string>([]);
+/** A church's own records: these move with the church. Phase 5 adds to it. */
+export const TENANT_PLANE_TABLES = new Set<string>([
+  'change_requests',
+  'church_sequences',
+  'finance_income_sources',
+  'finance_expense_items',
+  'finance_transactions',
+]);
 
 /** Tables the tenant extension scopes, by table name. */
 export const TENANT_TABLES = new Set<string>([
@@ -80,4 +91,9 @@ export const TENANT_TABLES = new Set<string>([
   'role_permissions',
   'membership_roles',
   'invitations',
+  'change_requests',
+  'church_sequences',
+  'finance_income_sources',
+  'finance_expense_items',
+  'finance_transactions',
 ]);

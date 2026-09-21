@@ -54,10 +54,15 @@ model Church {
   createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  memberships ChurchMembership[]
-  modules     ChurchModule[]
-  roles       Role[]
-  placement   ChurchPlacement?
+  memberships    ChurchMembership[]
+  modules        ChurchModule[]
+  roles          Role[]
+  placement      ChurchPlacement?
+  sequences      ChurchSequence[]
+  changeRequests ChangeRequest[]
+  incomeSources  FinanceIncomeSource[]
+  expenseItems   FinanceExpenseItem[]
+  transactions   FinanceTransaction[]
 
   @@map("churches")
 }
@@ -430,4 +435,178 @@ model PasswordResetToken {
 
   @@index([userId])
   @@map("password_reset_tokens")
+}
+
+// ---------------------------------------------------------------------------
+// Change requests (D17) and the Finance portal.
+// ---------------------------------------------------------------------------
+
+enum ChangeRequestStatus {
+  PENDING
+  APPROVED // decided yes, and applied in the same transaction
+  REJECTED
+  CANCELLED
+}
+
+/// A request, from anyone in any module, to change a record that may not be
+/// changed directly. Decided in Admin -> Requests, never by the person who
+/// asked. Nothing about finance is known here: the module registers a handler.
+model ChangeRequest {
+  id            String              @id @default(uuid(7)) @db.Uuid
+  churchId      String              @map("church_id") @db.Uuid
+  moduleKey     String              @map("module_key") @db.VarChar(40)
+  entityType    String              @map("entity_type") @db.VarChar(60)
+  entityId      String              @map("entity_id") @db.VarChar(80)
+  entityLabel   String              @map("entity_label") @db.VarChar(120)
+  action        String              @db.VarChar(20)
+  /// The record as it was when asked, and only the values asked to change.
+  before        Json
+  proposed      Json
+  reason        String              @db.VarChar(500)
+  status        ChangeRequestStatus @default(PENDING)
+  requestedById String              @map("requested_by_id") @db.Uuid
+  requestedAt   DateTime            @default(now()) @map("requested_at") @db.Timestamptz(6)
+  decidedById   String?             @map("decided_by_id") @db.Uuid
+  decidedAt     DateTime?           @map("decided_at") @db.Timestamptz(6)
+  decisionNote  String?             @map("decision_note") @db.VarChar(500)
+  appliedAt     DateTime?           @map("applied_at") @db.Timestamptz(6)
+  /// What applying produced, e.g. { "newCode": "IRCA-EXP-2026-08-000003" }.
+  result        Json?
+
+  church Church @relation(fields: [churchId], references: [id], onDelete: Cascade)
+
+  @@index([churchId, status, requestedAt(sort: Desc)])
+  @@index([churchId, entityType, entityId])
+  @@map("change_requests")
+}
+
+/// Per-church counters, locked and incremented inside the transaction that
+/// uses them. Finance uses 'finance:EXP:2026-09'; Phase 5 will use its own keys.
+model ChurchSequence {
+  churchId  String   @map("church_id") @db.Uuid
+  key       String   @db.VarChar(80)
+  lastValue Int      @default(0) @map("last_value")
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  church Church @relation(fields: [churchId], references: [id], onDelete: Cascade)
+
+  @@id([churchId, key])
+  @@map("church_sequences")
+}
+
+enum FinanceKind {
+  INCOME
+  EXPENSE
+}
+
+enum FinanceStatus {
+  POSTED
+  VOIDED
+}
+
+enum PaymentMethod {
+  CASH
+  MOBILE_MONEY
+  BANK_TRANSFER
+  CHEQUE
+  CARD
+  OTHER
+}
+
+/// What income is recorded against: Tithe, Sunday offering, Harambee.
+model FinanceIncomeSource {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  churchId    String   @map("church_id") @db.Uuid
+  /// As shown, with the capitals the person typed.
+  name        String   @db.VarChar(80)
+  /// Normalised for matching and uniqueness: "sunday offering".
+  nameKey     String   @map("name_key") @db.VarChar(80)
+  description String   @default("") @db.VarChar(300)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdById String   @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  church       Church               @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  transactions FinanceTransaction[]
+
+  @@unique([churchId, nameKey])
+  @@unique([churchId, id])
+  @@map("finance_income_sources")
+}
+
+/// What an expense is recorded against: Electricity bill, Generator fuel.
+model FinanceExpenseItem {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  churchId    String   @map("church_id") @db.Uuid
+  name        String   @db.VarChar(80)
+  nameKey     String   @map("name_key") @db.VarChar(80)
+  description String   @default("") @db.VarChar(300)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdById String   @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  church       Church               @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  transactions FinanceTransaction[]
+
+  @@unique([churchId, nameKey])
+  @@unique([churchId, id])
+  @@map("finance_expense_items")
+}
+
+/// One entry in the books. Never deleted, and never changed except by an
+/// approved change request: a trigger in the database says so as well.
+model FinanceTransaction {
+  id               String        @id @default(uuid(7)) @db.Uuid
+  churchId         String        @map("church_id") @db.Uuid
+  /// IRCA-EXP-2026-09-000001. Unique across every church.
+  code             String        @unique @db.VarChar(40)
+  kind             FinanceKind
+  status           FinanceStatus @default(POSTED)
+  txnDate          DateTime      @map("txn_date") @db.Date
+  periodYear       Int           @map("period_year")
+  periodMonth      Int           @map("period_month")
+  seq              Int
+  amount           Decimal       @db.Decimal(14, 2)
+  currency         String        @db.Char(3)
+  incomeSourceId   String?       @map("income_source_id") @db.Uuid
+  expenseItemId    String?       @map("expense_item_id") @db.Uuid
+  method           PaymentMethod
+  /// Receipt number, M-Pesa code, cheque number.
+  reference        String?       @db.VarChar(80)
+  /// Who paid (income) or who was paid (expense).
+  counterparty     String?       @db.VarChar(120)
+  notes            String?       @db.VarChar(1000)
+  /// Made by the form. A retried submit returns the first entry, not a second.
+  clientRequestId  String        @map("client_request_id") @db.Uuid
+  createdById      String        @map("created_by_id") @db.Uuid
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  voidedAt         DateTime?     @map("voided_at") @db.Timestamptz(6)
+  /// The approver, not the person who asked.
+  voidedById       String?       @map("voided_by_id") @db.Uuid
+  voidReason       String?       @map("void_reason") @db.VarChar(500)
+  /// Starts at 1, and goes up by one each time an approved change is applied.
+  revision         Int           @default(1)
+  /// The approved request that made the latest change. The trigger refuses any
+  /// update that does not point at a newly approved, unapplied request.
+  appliedRequestId String?       @map("applied_request_id") @db.Uuid
+  /// An approved change that moves an entry to another month cannot renumber
+  /// it, so the old entry is voided and this new one points back at it.
+  replacesId       String?       @unique @map("replaces_id") @db.Uuid
+
+  church       Church               @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  incomeSource FinanceIncomeSource? @relation(fields: [churchId, incomeSourceId], references: [churchId, id])
+  expenseItem  FinanceExpenseItem?  @relation(fields: [churchId, expenseItemId], references: [churchId, id])
+  replaces     FinanceTransaction?  @relation("replacement", fields: [replacesId], references: [id])
+  replacedBy   FinanceTransaction?  @relation("replacement")
+
+  @@unique([churchId, kind, periodYear, periodMonth, seq])
+  @@unique([churchId, clientRequestId])
+  @@index([churchId, txnDate(sort: Desc)])
+  @@index([churchId, kind, status, txnDate])
+  @@index([churchId, incomeSourceId])
+  @@index([churchId, expenseItemId])
+  @@map("finance_transactions")
 }
