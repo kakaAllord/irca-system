@@ -46,7 +46,14 @@ export class InvitationService {
   ) {}
 
   async invite(input: InviteInput): Promise<{ userId: string }> {
-    const churchId = this.auth.requireChurch();
+    return this.inviteInto(this.auth.requireChurch(), input);
+  }
+
+  /**
+   * The same, into a church named outright rather than the one the request is
+   * in: how the dev console gives a new church its first administrator.
+   */
+  async inviteInto(churchId: string, input: InviteInput): Promise<{ userId: string }> {
     const email = normalizeEmail(input.email);
     const roles = await this.assignableRoles(churchId, input.roleIds);
 

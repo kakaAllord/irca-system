@@ -59,6 +59,14 @@ export class ApiClientService {
     return client;
   }
 
+  async churchIsActive(churchId: string): Promise<boolean> {
+    const church = await this.db.church.findUnique({
+      where: { id: churchId },
+      select: { status: true },
+    });
+    return church?.status === 'ACTIVE';
+  }
+
   async revoke(id: string): Promise<boolean> {
     const { count } = await this.db.apiClient.updateMany({
       where: { id, revokedAt: null },
