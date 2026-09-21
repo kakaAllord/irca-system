@@ -31,6 +31,13 @@
 //   job:run <usage-snapshot | db-sample>
 //       Runs a scheduled job now, recorded like any other run.
 //
+//   person:erase --church <CODE> --person <uuid> [--dry-run]
+//       For an erasure request under the Personal Data Protection Act. Erases
+//       the person, their registration and answers, notes, journey, class
+//       records; keeps the activity log's lines with the name replaced by
+//       "[erased]". Asks for the id back before it does anything, and cannot
+//       be undone.
+//
 //   api-client:list [--church <CODE>]
 //   api-client:revoke --id <uuid>
 //       A revoked key stops working at once; the row stays, so the log of
@@ -41,13 +48,15 @@ import { normalizeEmail } from '@irca/shared';
 import { CliModule } from './cli.module.js';
 import { PrismaCore } from '../core/database/prisma-clients.js';
 import { PasswordService } from '../core/auth/password.service.js';
+import { AppConfig } from '../config/app-config.js';
 import { RegistrySync } from '../core/rbac/registry-sync.service.js';
 import { ApiClientService } from '../core/clients/api-client.service.js';
 import { JobRunner } from '../core/jobs/job-runner.service.js';
 import { UsageService } from '../core/usage/usage.service.js';
 import { UsageSnapshot } from '../core/usage/usage-snapshot.service.js';
 import { exportRegistrationsBack, importRegistrations } from './commands/registrations-import.js';
-import { promptHidden } from './prompt.js';
+import { erasePerson, reportErasure } from './commands/person-erase.js';
+import { promptHidden, promptLine } from './prompt.js';
 
 /* eslint-disable no-console -- a command-line tool reports to its terminal */
 
@@ -241,6 +250,40 @@ async function runJob(args: string[]) {
   });
 }
 
+async function erasePersonCommand(args: string[]) {
+  const { values } = parseArgs({
+    args,
+    options: {
+      church: { type: 'string' },
+      person: { type: 'string' },
+      'dry-run': { type: 'boolean', default: false },
+    },
+  });
+  if (!values.church || !values.person) {
+    throw new Error('Usage: person:erase --church <CODE> --person <uuid> [--dry-run]');
+  }
+  const dryRun = values['dry-run'] ?? false;
+
+  await withApp(async (app) => {
+    const result = await erasePerson({
+      churchCode: values.church!,
+      personId: values.person!,
+      dryRun,
+      db: app.get(PrismaCore),
+      ownerUrl: app.get(AppConfig).get('DIRECT_DATABASE_URL'),
+      // Typing the id back is the whole safety catch: it cannot be answered
+      // by holding down y, and it proves the right record is in front of them.
+      confirm: async (person) => {
+        console.log('');
+        console.log(`About to erase ${person.fullName || '(no name)'} — ${person.phone}`);
+        console.log('Everything about them goes, and it cannot be undone.');
+        return promptLine('Type their id to confirm: ');
+      },
+    });
+    reportErasure(result, dryRun);
+  });
+}
+
 const COMMANDS: Record<string, (args: string[]) => Promise<void>> = {
   'job:run': runJob,
   'user:create-dev': createDev,
@@ -250,6 +293,7 @@ const COMMANDS: Record<string, (args: string[]) => Promise<void>> = {
   'api-client:revoke': revokeApiClient,
   'registrations:import': importRegistrationsCommand,
   'registrations:export-back': exportRegistrationsCommand,
+  'person:erase': erasePersonCommand,
 };
 
 const [command, ...rest] = process.argv.slice(2);

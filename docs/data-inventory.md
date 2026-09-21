@@ -1,0 +1,177 @@
+# What this system stores about people
+
+Written for the church's leadership as much as for whoever runs the servers.
+Tanzania's **Personal Data Protection Act (2022)** applies to everything on
+this page: the church is the data controller, and the answers a visitor gives
+on a Sunday are personal data in law, not merely a form.
+
+Read this before launch, and have the leadership read it. Two things need
+their decision rather than ours: the consent wording on the registration
+form's first screen, and how long the church wants to keep the answers of
+people who never come back (see **How long things are kept**).
+
+---
+
+## 1. Visitors and members
+
+**Where it comes from:** the registration form a visitor fills in on their own
+phone, and the office afterwards.
+
+| What | Where it lives | Who can read it |
+| --- | --- | --- |
+| Name, gender, age group | `registrations`, `people` | anyone with `membership.people.read` |
+| Phone and email | `registrations`, `people` | `membership.people.read_sensitive` only |
+| Where they live: ward, region, country, how long | `registrations` | `membership.people.read` |
+| How they heard of the church, who invited them | `registrations` | `membership.people.read` |
+| Work, school, course, profession | `registrations` | `membership.people.read` |
+| Salvation, baptism, Holy Spirit, previous church | `registrations`, `people` | `membership.people.read` |
+| Marital status, year married, children's ages | `registrations` | `membership.people.read_sensitive` only |
+| Date of birth | `registrations` | `membership.people.read_sensitive` only |
+| **Prayer requests, what they liked, other comments** | `registrations` | `membership.people.read_sensitive` only |
+| Follow-up notes: visits, calls, what came of them | `person_notes` | `membership.people.read_sensitive` only |
+| Their journey: visitor → new convert → class → member | `people`, `person_stage_events` | `membership.people.read` |
+| Application to become a member, and the decision | `membership_applications` | `membership.applications.read` |
+| Foundation class group, and each session attended | `foundation_enrollments`, `foundation_attendance` | `membership.discipleship.read` |
+| Member number, date confirmed | `people` | `membership.people.read` |
+
+**The sensitive line is enforced, not advisory.** A response for someone
+without `membership.people.read_sensitive` does not contain those fields at
+all — they are dropped before the answer is built, not hidden in the browser.
+Search behaves the same way: someone who may not read email addresses cannot
+search by one either, because a match would tell them whose it is.
+
+**Prayer requests deserve naming separately.** People write things about their
+marriages, their health and their money in that box. It is treated as the most
+sensitive field on the form, it is never in a list, an export or a suggestion,
+and only the follow-up team and the pastors can open it.
+
+### The registration link is itself a secret
+
+A registration is reached at `/r/<token>`, with no sign-in: whoever holds the
+link can read and change those answers. That is what makes an unfinished form
+resumable on the same phone a week later. So:
+
+- the token is 32 random characters, never guessable from another one;
+- pages under `/r/` send no `Referrer` header anywhere, so the link cannot
+  leak through a link click or an embedded image;
+- reminder messages (`registration_reminders`) record that a link was sent
+  again, and to which channel, never the message itself.
+
+---
+
+## 2. Staff
+
+| What | Where it lives | Who can read it |
+| --- | --- | --- |
+| Name, email, phone | `users` | anyone with `admin.users.read`, in their own church |
+| Password | `users.password_hash`, hashed with Argon2id | nobody, including devs |
+| Which churches they work in, and their roles | `church_memberships`, `membership_roles` | `admin.users.read` |
+| Sessions: when, from which address, which browser | `sessions` | nobody through the portal; devs in the database |
+| Invitations sent to them, and whether accepted | `invitations` | `admin.users.read` |
+| Password reset requests | `password_reset_tokens` (hashed) | nobody |
+| Everything they changed, with a summary | `audit_events` | `admin.audit.read`, in their own church |
+| Which days they were active | `user_activity_daily` | devs, as a number per church |
+
+A staff member's email address is also personal data. It is shown inside their
+church and to devs; it is never shown to another church.
+
+---
+
+## 3. Money
+
+`finance_transactions` records what was received and spent, by category, with
+a reference number, a date and who entered it. **It never names a giver.**
+Envelope numbers, pledges and individual giving are deliberately not in this
+system: the finance portal reports totals by source, not by person. If the
+church ever wants per-giver records, that is a new decision with its own
+consent conversation, not a small feature.
+
+---
+
+## 4. What the platform team (devs) can see
+
+Devs run the system for every church. They can see:
+
+- every church's counts, sizes and usage — numbers, not names;
+- the activity log of any church;
+- the database itself, as any administrator of a hosted system can.
+
+**Viewing as someone.** A dev, and a church administrator within their own
+church, can open the portal as another person to see exactly what that person
+sees. It is read-only — every write is refused at the API, and the connection
+used is a read-only database role — and it is silent: the person is not told,
+and their church cannot see it in their log. Every session and every page
+opened in it is written to the view-as log, which only devs can read and which
+nothing in the system can change. Tell staff this exists; it is in
+`docs/help/` for that reason.
+
+---
+
+## 5. How long things are kept
+
+| What | Kept | Why |
+| --- | --- | --- |
+| Registrations and people | until erased by request | the church's record of who it is caring for |
+| Prayer requests | with the registration | — |
+| Follow-up notes | with the person | — |
+| Activity log (`audit_events`) | **forever** | it is what proves who did what; never edited, never deleted, except by an erasure request, which replaces the name |
+| Finance entries | forever | money must reconcile years later |
+| Sessions | 90 days after they stop working | support ("was she signed in on Sunday?") |
+| Password reset links | 7 days | they expire long before that |
+| Emails sent (`email_outbox`) | the queue row stays; the body is not kept after sending | |
+| Usage numbers | forever, as daily totals | they are counts, and name nobody |
+| View-as log | forever | it is the check on a power that is otherwise invisible |
+
+**A decision for the leadership:** someone who filled in the form once, two
+years ago, and never returned is still in the system, prayer request and all.
+The Act asks that data is kept no longer than it is needed. Either the church
+decides a period after which unfinished and never-followed-up registrations
+are erased — two years is a reasonable starting point — or it decides
+deliberately to keep them and can say why. Nothing in the code does this
+today; it needs the decision first.
+
+---
+
+## 6. Erasing someone who asks
+
+The Act gives a person the right to have their data removed. That is a command
+a dev runs on the server, not a button in the portal:
+
+```bash
+node apps/api/dist/cli/main.js person:erase --church IRCA --person <uuid> [--dry-run]
+```
+
+It asks for the person's id back before it does anything, and cannot be undone.
+It erases the person, their registration and every answer on it (prayer request
+included), their notes, their journey, their application and their class
+records. It keeps the activity log's lines — the log is what proves who did
+what — but replaces their name with `[erased]` wherever it was written into a
+summary, and drops the before-and-after details of their own records. That the
+erasure happened is itself recorded, naming nobody.
+
+Run it with `--dry-run` first: it prints exactly what would go and changes
+nothing.
+
+---
+
+## 7. Where the data physically is
+
+- One PostgreSQL database, hosted (Neon). Every church's rows are in the same
+  tables, separated by `church_id` and by row-level security — see
+  `docs/plan/multi-tenancy.md`.
+- Backups are taken by the host and kept as the host's plan says; a copy that
+  leaves the host is the church's own export.
+- Email goes out through Resend. Recipient addresses and message bodies pass
+  through that service. Nothing else leaves.
+- No analytics, no advertising pixels, no third-party scripts: the content
+  policy on both web apps refuses them outright.
+
+---
+
+## 8. Before launch
+
+- [ ] Leadership has read this page.
+- [ ] Consent wording on the form's first screen agreed, and legal advice
+      taken on it.
+- [ ] A retention decision made for old registrations (section 5).
+- [ ] Someone named as the person who answers erasure and access requests.

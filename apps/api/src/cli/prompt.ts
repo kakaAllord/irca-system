@@ -58,3 +58,19 @@ export async function promptHidden(question: string): Promise<string> {
     stdin.on('data', onData);
   });
 }
+
+/** Reads a line, echoed: for answers that are not secret, such as a confirmation. */
+export async function promptLine(question: string): Promise<string> {
+  if (!process.stdin.isTTY) {
+    const lines = await pipedLines();
+    const line = lines.shift();
+    if (line === undefined) throw new Error(`No input for: ${question.trim()}`);
+    return line;
+  }
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return await new Promise<string>((resolve) => rl.question(question, resolve));
+  } finally {
+    rl.close();
+  }
+}
