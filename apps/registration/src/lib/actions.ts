@@ -7,8 +7,9 @@ import {
   type Lang, type Values,
 } from '@irca/shared/registration';
 import {
-  createRegistration, getByToken, PhoneTakenError, saveValues, setLanguage, submit,
+  createRegistration, getByToken, PhoneTakenError, saveValues, setLanguage, submit, usingApi,
 } from './registration';
+import { saveStepRemote } from './registration-api';
 
 const COOKIE = 'irca_token';
 
@@ -83,6 +84,13 @@ export async function saveStep(
   stepId: string,
   draft: Partial<Values>,
 ): Promise<SaveResult> {
+  // With the API back end the rules run there, once, and this only turns the
+  // step it names into the URL this app uses.
+  if (usingApi) {
+    const result = await saveStepRemote(token, stepId, draft);
+    return result.ok ? { ok: true, next: `/r/${token}/${result.next}` } : result;
+  }
+
   const reg = await getByToken(token);
   if (!reg) return { ok: false, error: 'Registration not found' };
   if (reg.status === 'submitted') return { ok: true, next: `/r/${token}/done` };
@@ -140,6 +148,13 @@ export async function saveStep(
 
 /** The review screen's "Send it in". Re-checks every required step first. */
 export async function submitRegistration(token: string): Promise<SaveResult> {
+  if (usingApi) {
+    const sent = await submit(token);
+    return sent
+      ? { ok: true, next: `/r/${token}/done` }
+      : { ok: false, error: 'Registration not found' };
+  }
+
   const reg = await getByToken(token);
   if (!reg) return { ok: false, error: 'Registration not found' };
   if (reg.status === 'submitted') return { ok: true, next: `/r/${token}/done` };

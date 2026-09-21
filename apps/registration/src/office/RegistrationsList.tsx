@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { applicableSteps } from '@irca/shared/registration';
-import { listRegistrations } from '@/lib/registration';
+import { listRegistrations } from '@/lib/registration-db';
 import { isAnswered } from '@irca/shared/registration';
 import { ArrowRight } from '@/components/icons';
 

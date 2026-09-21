@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { stepById, type Values } from '@irca/shared/registration';
 import { keysForStep } from '@irca/shared/registration';
-import { getByToken, saveValues } from '@/lib/registration';
+import { getByToken, saveValues, usingApi } from '@/lib/registration';
+import { saveDraftRemote } from '@/lib/registration-api';
 
 /**
  * Autosave for a question in progress.
@@ -37,6 +38,13 @@ export async function POST(req: Request) {
   if (!step) return new NextResponse('unknown step', { status: 400 });
   if (!values || typeof values !== 'object') {
     return new NextResponse('no values', { status: 400 });
+  }
+
+  // With the API back end the same rules run there: only this step's keys,
+  // no validation, and the once-per-number clash swallowed.
+  if (usingApi) {
+    await saveDraftRemote(token, stepId!, values);
+    return new NextResponse(null, { status: 204 });
   }
 
   const reg = await getByToken(token);

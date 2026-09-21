@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { listRegistrations } from '@/lib/registration';
+import { listRegistrations } from '@/lib/registration-db';
 import { computeInsights } from '@irca/shared/registration';
 import { ArrowLeft } from '@/components/icons';
 
