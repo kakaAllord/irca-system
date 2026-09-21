@@ -54,15 +54,20 @@ model Church {
   createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  memberships    ChurchMembership[]
-  modules        ChurchModule[]
-  roles          Role[]
-  placement      ChurchPlacement?
-  sequences      ChurchSequence[]
-  changeRequests ChangeRequest[]
-  incomeSources  FinanceIncomeSource[]
-  expenseItems   FinanceExpenseItem[]
-  transactions   FinanceTransaction[]
+  memberships      ChurchMembership[]
+  modules          ChurchModule[]
+  roles            Role[]
+  placement        ChurchPlacement?
+  sequences        ChurchSequence[]
+  changeRequests   ChangeRequest[]
+  registrations    Registration[]
+  people           Person[]
+  foundationGroups FoundationGroup[]
+  settings         ChurchSetting[]
+  apiClients       ApiClient[]
+  incomeSources    FinanceIncomeSource[]
+  expenseItems     FinanceExpenseItem[]
+  transactions     FinanceTransaction[]
 
   @@map("churches")
 }
@@ -609,4 +614,340 @@ model FinanceTransaction {
   @@index([churchId, incomeSourceId])
   @@index([churchId, expenseItemId])
   @@map("finance_transactions")
+}
+
+// ---------------------------------------------------------------------------
+// Registrations and the Membership portal (Phase 5).
+// ---------------------------------------------------------------------------
+
+/// The visitor's own answers, one row per registration.
+///
+/// One wide table, as the first database had it: the flow is fixed and ships
+/// with the church, and the office asks plain questions of it ("how many
+/// first-time visitors last Sunday", "who asked for baptism") without
+/// pivoting. Column names are unchanged from that schema so the copy across
+/// is one for one; only church_id, a uuid id and the old id are new.
+model Registration {
+  id           String  @id @default(uuid(7)) @db.Uuid
+  churchId     String  @map("church_id") @db.Uuid
+  /// The bigserial id from the first database, kept so a row can be traced.
+  legacyId     BigInt? @map("legacy_id")
+  token        String  @unique @db.VarChar(32)
+  lang         String  @default("en") @db.VarChar(2)
+  status       String  @default("in_progress") @db.VarChar(20)
+  currentStep  String? @map("current_step")
+  furthestStep String? @map("furthest_step")
+
+  // how you heard
+  heard          String[] @default([])
+  heardOtherText String   @default("") @map("heard_other_text")
+  friendName     String   @default("") @map("friend_name")
+
+  // about you
+  fullname String @default("")
+  gender   String @default("")
+  age      String @default("")
+
+  // what brings you here
+  visit          String[] @default([])
+  visitOtherText String   @default("") @map("visit_other_text")
+
+  // where you live, or where you are visiting from
+  whereAt   String @default("") @map("where_at")
+  ward      String @default("")
+  wardOther String @default("") @map("ward_other")
+  region    String @default("")
+  country   String @default("")
+  stay      String @default("")
+  often     String @default("")
+
+  // contact. dialCc is the ISO country, which is what the length rules key off.
+  dialCc String @default("TZ") @map("dial_cc")
+  dial   String @default("+255")
+  phone  String @default("")
+  email  String @default("")
+
+  // studying or working
+  occ        String @default("")
+  school     String @default("")
+  course     String @default("")
+  year       String @default("")
+  profession String @default("")
+
+  // what you would like from us
+  interest String[] @default([])
+
+  // walk with God (membership path only)
+  dob            String   @default("")
+  saved          Boolean?
+  savedYear      String   @default("") @map("saved_year")
+  bapt           Boolean?
+  baptYear       String   @default("") @map("bapt_year")
+  holy           Boolean?
+  prevChurch     Boolean? @map("prev_church")
+  prevChurchName String   @default("") @map("prev_church_name")
+
+  // family (membership path only)
+  marital     String   @default("")
+  marriedYear String   @default("") @map("married_year")
+  kids        Boolean?
+  children    String[] @default([])
+
+  // where you would love to serve (membership path only)
+  ministries    String[] @default([])
+  otherMinistry String   @default("") @map("other_ministry")
+
+  // the open-ended tail
+  liked    String   @default("")
+  /// Null until the question is put to them; false ends the form there.
+  wantMore Boolean? @map("want_more")
+  prayer   String   @default("")
+  /// Retired: the flow no longer asks "anything else on your mind". Kept so
+  /// the answers already given to it are not thrown away.
+  comments String   @default("")
+
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  submittedAt DateTime? @map("submitted_at") @db.Timestamptz(6)
+
+  church    Church                 @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  person    Person?
+  reminders RegistrationReminder[]
+
+  @@unique([churchId, id])
+  @@index([churchId, status, updatedAt(sort: Desc)])
+  @@map("registrations")
+}
+
+enum PersonStage {
+  VISITOR
+  NEW_CONVERT
+  FOUNDATION_CLASS
+  AWAITING_BAPTISM
+  MEMBERSHIP_REVIEW
+  CONFIRMED_MEMBER
+}
+
+/// Someone the church is caring for. Usually created with a registration; the
+/// office can also add someone who never filled in the form.
+model Person {
+  id             String  @id @default(uuid(7)) @db.Uuid
+  churchId       String  @map("church_id") @db.Uuid
+  registrationId String? @unique @map("registration_id") @db.Uuid
+  /// Copied from the registration while it is linked; typed in otherwise.
+  fullName       String  @default("") @map("full_name") @db.VarChar(120)
+  gender         String  @default("") @db.VarChar(20)
+  ageGroup       String  @default("") @map("age_group") @db.VarChar(20)
+  dial           String  @default("+255") @db.VarChar(6)
+  phone          String  @default("") @db.VarChar(20)
+  email          String  @default("") @db.VarChar(254)
+
+  stage           PersonStage @default(VISITOR)
+  /// Null = go by what they said on the form. Set = the office has confirmed it.
+  saved           Boolean?
+  savedSetById    String?     @map("saved_set_by_id") @db.Uuid
+  savedSetAt      DateTime?   @map("saved_set_at") @db.Timestamptz(6)
+  baptised        Boolean?
+  baptisedSetById String?     @map("baptised_set_by_id") @db.Uuid
+  baptisedSetAt   DateTime?   @map("baptised_set_at") @db.Timestamptz(6)
+
+  memberNumber Int?      @map("member_number")
+  confirmedAt  DateTime? @map("confirmed_at") @db.Timestamptz(6)
+  createdById  String?   @map("created_by_id") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  church       Church        @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  registration Registration? @relation(fields: [churchId, registrationId], references: [churchId, id])
+
+  stageEvents  PersonStageEvent[]
+  notes        PersonNote[]
+  applications MembershipApplication[]
+  enrollments  FoundationEnrollment[]
+
+  @@unique([churchId, memberNumber])
+  @@unique([churchId, id])
+  @@unique([churchId, registrationId])
+  @@index([churchId, stage])
+  @@index([churchId, fullName])
+  @@map("people")
+}
+
+/// Every move along the journey, so "when did she join the class" has an answer.
+model PersonStageEvent {
+  id        String       @id @default(uuid(7)) @db.Uuid
+  churchId  String       @map("church_id") @db.Uuid
+  personId  String       @map("person_id") @db.Uuid
+  fromStage PersonStage? @map("from_stage")
+  toStage   PersonStage  @map("to_stage")
+  /// Null when the system moved them rather than a person.
+  byId      String?      @map("by_id") @db.Uuid
+  note      String?      @db.VarChar(300)
+  at        DateTime     @default(now()) @db.Timestamptz(6)
+
+  person Person @relation(fields: [churchId, personId], references: [churchId, id], onDelete: Cascade)
+
+  @@index([churchId, personId, at])
+  @@map("person_stage_events")
+}
+
+enum PersonNoteKind {
+  NOTE
+  VISIT
+  CALL
+}
+
+/// What the follow-up team did and what came of it. Sensitive: reading these
+/// needs membership.people.read_sensitive.
+model PersonNote {
+  id        String         @id @default(uuid(7)) @db.Uuid
+  churchId  String         @map("church_id") @db.Uuid
+  personId  String         @map("person_id") @db.Uuid
+  kind      PersonNoteKind @default(NOTE)
+  body      String         @db.VarChar(2000)
+  authorId  String         @map("author_id") @db.Uuid
+  createdAt DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  person Person @relation(fields: [churchId, personId], references: [churchId, id], onDelete: Cascade)
+
+  @@index([churchId, personId, createdAt(sort: Desc)])
+  @@map("person_notes")
+}
+
+enum ApplicationStatus {
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  CONFIRMED
+  WITHDRAWN
+}
+
+/// Asking to become a member, and what the pastors decided.
+model MembershipApplication {
+  id            String            @id @default(uuid(7)) @db.Uuid
+  churchId      String            @map("church_id") @db.Uuid
+  personId      String            @map("person_id") @db.Uuid
+  status        ApplicationStatus @default(UNDER_REVIEW)
+  /// 'FORM' when the registration asked to join, 'OFFICE' when entered here.
+  source        String            @db.VarChar(10)
+  submittedAt   DateTime          @default(now()) @map("submitted_at") @db.Timestamptz(6)
+  submittedById String?           @map("submitted_by_id") @db.Uuid
+  reviewNote    String?           @map("review_note") @db.VarChar(1000)
+  decidedById   String?           @map("decided_by_id") @db.Uuid
+  decidedAt     DateTime?         @map("decided_at") @db.Timestamptz(6)
+  rejectReason  String?           @map("reject_reason") @db.VarChar(500)
+  confirmedById String?           @map("confirmed_by_id") @db.Uuid
+  confirmedAt   DateTime?         @map("confirmed_at") @db.Timestamptz(6)
+
+  person Person @relation(fields: [churchId, personId], references: [churchId, id], onDelete: Cascade)
+
+  @@index([churchId, status, submittedAt(sort: Desc)])
+  @@map("membership_applications")
+}
+
+/// A foundation class group: 'Thursday group', 'Saturday group'.
+model FoundationGroup {
+  id       String  @id @default(uuid(7)) @db.Uuid
+  churchId String  @map("church_id") @db.Uuid
+  name     String  @db.VarChar(60)
+  isActive Boolean @default(true) @map("is_active")
+
+  church      Church                 @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  enrollments FoundationEnrollment[]
+
+  @@unique([churchId, name])
+  @@unique([churchId, id])
+  @@map("foundation_groups")
+}
+
+/// One person in one group, once. Finishing or dropping out closes it.
+model FoundationEnrollment {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  churchId    String    @map("church_id") @db.Uuid
+  personId    String    @map("person_id") @db.Uuid
+  groupId     String    @map("group_id") @db.Uuid
+  enrolledAt  DateTime  @default(now()) @map("enrolled_at") @db.Timestamptz(6)
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
+  droppedAt   DateTime? @map("dropped_at") @db.Timestamptz(6)
+
+  person     Person                 @relation(fields: [churchId, personId], references: [churchId, id], onDelete: Cascade)
+  group      FoundationGroup        @relation(fields: [churchId, groupId], references: [churchId, id], onDelete: Cascade)
+  attendance FoundationAttendance[]
+
+  @@unique([churchId, id])
+  @@index([churchId, groupId])
+  @@map("foundation_enrollments")
+}
+
+enum AttendanceMark {
+  ATTENDED
+  MISSED
+}
+
+/// One tick, for one session of one sign-up.
+model FoundationAttendance {
+  churchId     String         @map("church_id") @db.Uuid
+  enrollmentId String         @map("enrollment_id") @db.Uuid
+  sessionNo    Int            @map("session_no")
+  mark         AttendanceMark
+  markedById   String         @map("marked_by_id") @db.Uuid
+  markedAt     DateTime       @default(now()) @map("marked_at") @db.Timestamptz(6)
+
+  enrollment FoundationEnrollment @relation(fields: [churchId, enrollmentId], references: [churchId, id], onDelete: Cascade)
+
+  @@id([enrollmentId, sessionNo])
+  @@index([churchId, enrollmentId])
+  @@map("foundation_attendance")
+}
+
+/// When someone was sent their registration link again, and how.
+model RegistrationReminder {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  churchId       String   @map("church_id") @db.Uuid
+  registrationId String   @map("registration_id") @db.Uuid
+  /// 'COPY_LINK' | 'WHATSAPP' | later 'SMS'.
+  channel        String   @db.VarChar(20)
+  sentById       String   @map("sent_by_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  registration Registration @relation(fields: [churchId, registrationId], references: [churchId, id], onDelete: Cascade)
+
+  @@index([churchId, registrationId])
+  @@map("registration_reminders")
+}
+
+/// Per-church settings, with the defaults in code (probation days, how many
+/// foundation sessions there are).
+model ChurchSetting {
+  churchId  String   @map("church_id") @db.Uuid
+  key       String   @db.VarChar(80)
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  church Church @relation(fields: [churchId], references: [id], onDelete: Cascade)
+
+  @@id([churchId, key])
+  @@map("church_settings")
+}
+
+/// A key that lets a church's own app — the registration form — call the
+/// public API as that church. Core-owned: the guard reads it before there is
+/// a church in the request at all.
+model ApiClient {
+  id         String    @id @default(uuid(7)) @db.Uuid
+  churchId   String    @map("church_id") @db.Uuid
+  name       String    @db.VarChar(80)
+  /// 'REGISTRATION' today. A key is only good for the kind it was made for.
+  kind       String    @db.VarChar(20)
+  /// The first characters, so a key can be recognised in a list.
+  keyPrefix  String    @map("key_prefix") @db.VarChar(12)
+  keyHash    String    @unique @map("key_hash") @db.Char(64)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz(6)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(6)
+
+  church Church @relation(fields: [churchId], references: [id], onDelete: Cascade)
+
+  @@index([churchId])
+  @@map("api_clients")
 }

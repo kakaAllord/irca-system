@@ -239,7 +239,11 @@ describe('running a church: people, roles and portals', () => {
     await portal(app).put('/v1/admin/modules/media', { enabled: true }, cookie).expect(404);
 
     const listed = await portal(app).get('/v1/admin/modules', cookie).expect(200);
-    expect(listed.body.map((m: { key: string }) => m.key)).toEqual(['finance', 'admin']);
+    expect(listed.body.map((m: { key: string }) => m.key)).toEqual([
+      'membership',
+      'finance',
+      'admin',
+    ]);
   });
 
   it('shows what changed in the church, and never a view-as', async () => {

@@ -21,6 +21,16 @@ export const TENANT_MODELS = new Set<string>([
   'FinanceIncomeSource',
   'FinanceExpenseItem',
   'FinanceTransaction',
+  'Registration',
+  'Person',
+  'PersonStageEvent',
+  'PersonNote',
+  'MembershipApplication',
+  'FoundationGroup',
+  'FoundationEnrollment',
+  'FoundationAttendance',
+  'RegistrationReminder',
+  'ChurchSetting',
 ]);
 
 export const CONTROL_MODELS = new Set<string>([
@@ -43,6 +53,7 @@ export const CONTROL_MODELS = new Set<string>([
   'Invitation',
   'EmailOutbox',
   'PasswordResetToken',
+  'ApiClient',
 ]);
 
 /** Phase 4 adds finance, Phase 5 membership and registrations. */
@@ -72,15 +83,26 @@ export const CONTROL_PLANE_TABLES = new Set<string>([
   'invitations',
   'email_outbox',
   'password_reset_tokens',
+  'api_clients',
 ]);
 
-/** A church's own records: these move with the church. Phase 5 adds to it. */
+/** A church's own records: these move with the church. */
 export const TENANT_PLANE_TABLES = new Set<string>([
   'change_requests',
   'church_sequences',
   'finance_income_sources',
   'finance_expense_items',
   'finance_transactions',
+  'registrations',
+  'people',
+  'person_stage_events',
+  'person_notes',
+  'membership_applications',
+  'foundation_groups',
+  'foundation_enrollments',
+  'foundation_attendance',
+  'registration_reminders',
+  'church_settings',
 ]);
 
 /** Tables the tenant extension scopes, by table name. */
@@ -96,4 +118,14 @@ export const TENANT_TABLES = new Set<string>([
   'finance_income_sources',
   'finance_expense_items',
   'finance_transactions',
+  'registrations',
+  'people',
+  'person_stage_events',
+  'person_notes',
+  'membership_applications',
+  'foundation_groups',
+  'foundation_enrollments',
+  'foundation_attendance',
+  'registration_reminders',
+  'church_settings',
 ]);
