@@ -100,6 +100,33 @@ export class ImpersonationService {
     await this.actAsSubject(started.id, subjectUserId, target, subject.platformRole);
   }
 
+  /**
+   * Whether the person asking could view as this person right now. The People
+   * page uses it to decide whether to offer the button at all.
+   */
+  async canImpersonate(churchId: string, subjectUserId: string): Promise<boolean> {
+    if (!this.auth.hasAny('admin.users.impersonate', 'platform.users.impersonate')) return false;
+    const subject = await this.db.user.findUnique({ where: { id: subjectUserId } });
+    if (!subject) return false;
+    const membership = await this.db.churchMembership.findUnique({
+      where: { churchId_userId: { churchId, userId: subjectUserId } },
+    });
+    const church = await this.db.church.findUnique({ where: { id: churchId } });
+    return (
+      impersonationRefusal(
+        {
+          id: this.auth.actorUserId!,
+          isDev: this.auth.isDev,
+          canImpersonateHere: this.auth.has('admin.users.impersonate'),
+          alreadyImpersonating: this.auth.isImpersonating,
+          churchId: this.auth.churchId,
+        },
+        churchId,
+        { subject, membership, church },
+      ) === null
+    );
+  }
+
   /** Ends the impersonation this session is in, if any. */
   async stop(reason: 'STOPPED' | 'LOGOUT' = 'STOPPED'): Promise<void> {
     const sessionId = this.cls.get('sessionId');

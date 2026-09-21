@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ClsService } from 'nestjs-cls';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaCore } from '../database/prisma-clients.js';
+import type { TenantTx } from '../database/db.service.js';
 import type { RequestContext } from '../context/request-context.js';
 
 export type AuditEventInput = {
@@ -85,10 +86,7 @@ export class AuditService {
    * A church's own changes, written inside the transaction that makes them.
    * `tx` is the caller's transaction, so nothing is logged that did not happen.
    */
-  async recordIn(
-    tx: { auditEvent: { create: (args: { data: object }) => Promise<unknown> } },
-    event: AuditEventInput,
-  ): Promise<void> {
+  async recordIn(tx: TenantTx, event: AuditEventInput): Promise<void> {
     await tx.auditEvent.create({ data: { ...this.common(event), source: 'feature' } });
   }
 }

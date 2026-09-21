@@ -103,6 +103,19 @@ export class SessionService {
     });
   }
 
+  /** When each of these people was last seen working in this church. */
+  async lastSeenInChurch(churchId: string, userIds: string[]): Promise<Map<string, Date>> {
+    if (!userIds.length) return new Map();
+    const rows = await this.db.session.groupBy({
+      by: ['userId'],
+      where: { userId: { in: userIds }, activeChurchId: churchId },
+      _max: { lastSeenAt: true },
+    });
+    return new Map(
+      rows.filter((r) => r._max.lastSeenAt).map((r) => [r.userId, r._max.lastSeenAt!]),
+    );
+  }
+
   /** Signs someone out of one church, leaving their other churches alone. */
   async revokeForChurch(userId: string, churchId: string, reason: string): Promise<void> {
     await this.db.session.updateMany({

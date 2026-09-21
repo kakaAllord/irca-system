@@ -75,6 +75,11 @@ export class RegistrySync implements OnApplicationBootstrap {
    * permissions the code gives them. Called at boot, and again whenever a
    * church turns a module on.
    */
+  /** The same, for one church and one portal, in its own transaction. */
+  async syncModuleRoles(churchId: string, moduleKey: string): Promise<void> {
+    await this.db.$transaction((tx) => this.ensureModuleRoles(tx, churchId, moduleKey));
+  }
+
   async ensureModuleRoles(tx: TxLike, churchId: string, moduleKey: string): Promise<void> {
     const module = moduleByKey(moduleKey);
     if (!module) return;

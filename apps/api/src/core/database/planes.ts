@@ -15,6 +15,7 @@ export const TENANT_MODELS = new Set<string>([
   'Role',
   'RolePermission',
   'MembershipRole',
+  'Invitation',
 ]);
 
 export const CONTROL_MODELS = new Set<string>([
@@ -34,6 +35,9 @@ export const CONTROL_MODELS = new Set<string>([
   'JobRun',
   'ChurchPlacement',
   'AuditEvent',
+  'Invitation',
+  'EmailOutbox',
+  'PasswordResetToken',
 ]);
 
 /** Phase 4 adds finance, Phase 5 membership and registrations. */
@@ -60,6 +64,9 @@ export const CONTROL_PLANE_TABLES = new Set<string>([
   'job_runs',
   'church_placements',
   'audit_events',
+  'invitations',
+  'email_outbox',
+  'password_reset_tokens',
 ]);
 
 /** A church's own records: these move with the church. Phase 4 and 5 add to it. */
@@ -72,4 +79,5 @@ export const TENANT_TABLES = new Set<string>([
   'roles',
   'role_permissions',
   'membership_roles',
+  'invitations',
 ]);
