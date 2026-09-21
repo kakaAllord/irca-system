@@ -24,3 +24,48 @@ export const LoginSchema = z.object({
 });
 
 export type LoginInput = z.infer<typeof LoginSchema>;
+
+/** "Neema Mollel" → "NM"; one name → its first two letters. Shown in avatars. */
+export function initialsOf(fullName: string): string {
+  const words = fullName.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '?';
+  if (words.length === 1) return words[0]!.slice(0, 2).toUpperCase();
+  return (words[0]![0]! + words[words.length - 1]![0]!).toUpperCase();
+}
+
+export type MeUser = {
+  id: string;
+  email: string;
+  fullName: string;
+  initials: string;
+  platformRole: 'NONE' | 'DEV';
+};
+
+export type MeChurch = {
+  id: string;
+  code: string;
+  slug: string;
+  name: string;
+  timezone: string;
+  currency: string;
+};
+
+/**
+ * Everything the portal needs to draw itself for the signed-in person. Phase 2
+ * fills permissions, modules and role labels, and the impersonation block.
+ */
+export type MeResponse = {
+  user: MeUser;
+  church: MeChurch | null;
+  /** Every church this person can switch to. */
+  churches: { id: string; name: string }[];
+  permissions: string[];
+  modules: { key: string; name: string; home: string; nav: unknown[] }[];
+  roleLabels: string[];
+  impersonation: null | {
+    id: string;
+    actor: { id: string; fullName: string };
+    startedAt: string;
+    expiresAt: string;
+  };
+};
