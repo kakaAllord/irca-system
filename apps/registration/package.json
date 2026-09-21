@@ -1,0 +1,29 @@
+{
+  "name": "irca-administration",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "db:migrate": "node --env-file-if-exists=.env.local scripts/apply-schema.mjs",
+    "db:setup": "node --env-file-if-exists=.env.local scripts/setup-db.mjs",
+    "gen:dials": "node scripts/gen-dial-codes.mjs",
+    "gen:logo": "node scripts/optimise-logo.mjs"
+  },
+  "dependencies": {
+    "country-flag-icons": "^1.6.20",
+    "libphonenumber-js": "^1.13.13",
+    "next": "16.3.5",
+    "pg": "8.23.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "@types/pg": "8.15.6",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "typescript": "5.9.3"
+  }
+}

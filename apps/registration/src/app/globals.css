@@ -1,0 +1,980 @@
+/* Tokens read off the artboards in the design file. */
+:root {
+  --ink: #1c1c1c;
+  --accent: #e8924a;
+  --accent-deep: #c4712a;
+
+  --paper: #fbfaf7;
+  --white: #fff;
+  --tint: #fff9f3;
+
+  --body: #3d3a34;
+  --muted: #5a564e;
+  --faint: #6b675f;
+  --label: #6a665e;
+  --placeholder: #8c877d;
+
+  --border: #dcd7ce;
+  --border-soft: #e9e5dd;
+  --rule: #ede9e1;
+  --track: #e4e0d8;
+  --dot: #c8c2b6;
+
+  --error: #b3261e;
+  --error-bg: #fff6f5;
+
+  --panel-rule: #2e2e2e;
+  --panel-label: #a8a296;
+  --panel-text: #f2f0ec;
+
+  --font: Arial, 'Segoe UI', Helvetica, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+input, select, textarea, button { font-family: var(--font); }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+::placeholder { color: var(--placeholder); }
+
+button { border: none; background: none; padding: 0; cursor: pointer; color: inherit; }
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------------------------------------------------------------------------
+   Shell. Full bleed on a phone; on a larger screen the column stops growing at
+   a comfortable reading measure and centres, with no device frame around it.
+--------------------------------------------------------------------------- */
+
+.app {
+  min-height: 100dvh;
+  display: flex;
+  justify-content: center;
+  background: var(--paper);
+}
+
+.sheetcol {
+  width: 100%;
+  max-width: 560px;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background: var(--paper);
+}
+
+@media (min-width: 600px) {
+  .app { background: #f3f1ec; }
+  .sheetcol {
+    min-height: 100dvh;
+    border-left: 1px solid var(--rule);
+    border-right: 1px solid var(--rule);
+  }
+}
+
+/* --- progress header --------------------------------------------------- */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 20px 10px;
+  padding-top: max(18px, env(safe-area-inset-top));
+  flex: none;
+}
+
+.back {
+  width: 42px;
+  height: 42px;
+  flex: none;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--white);
+  color: var(--body);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  text-decoration: none;
+}
+.back.ghost { opacity: .3; }
+
+.track {
+  flex: 1;
+  height: 4px;
+  background: var(--track);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.track > div {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 99px;
+  transition: width 260ms ease;
+}
+
+/* --- body -------------------------------------------------------------- */
+
+.screen {
+  flex: 1;
+  min-height: 0;
+  padding: 10px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  overflow-y: auto;
+  animation: rise 240ms ease both;
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .screen, .reveal { animation: none; }
+  .track > div { transition: none; }
+  * { scroll-behavior: auto !important; }
+}
+
+/* A question that appears once the one before it is answered. */
+.reveal { animation: rise 260ms ease both; }
+
+.ack { display: flex; }
+.ack .text {
+  font: bold 12.5px/1.45 var(--font);
+  color: var(--accent-deep);
+}
+
+h1.q {
+  margin: 0;
+  font: bold 24px/1.24 var(--font);
+  color: var(--ink);
+  letter-spacing: -0.3px;
+  text-wrap: pretty;
+}
+h1.q.big { font-size: 27px; line-height: 1.15; letter-spacing: -0.4px; }
+
+p.sub {
+  margin: 0;
+  font: 16px/1.5 var(--font);
+  color: var(--muted);
+}
+
+.field { display: flex; flex-direction: column; gap: 9px; }
+.field > label { font: bold 16px var(--font); color: var(--body); }
+
+.input {
+  width: 100%;
+  padding: 16px;
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  background: var(--white);
+  font: 16px var(--font);
+  color: var(--ink);
+}
+.input.bad { border-color: var(--error); background: var(--error-bg); }
+
+textarea.input { min-height: 128px; resize: none; line-height: 1.45; }
+
+select.input {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--body) 50%),
+                    linear-gradient(135deg, var(--body) 50%, transparent 50%);
+  background-position: calc(100% - 19px) 22px, calc(100% - 14px) 22px;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 38px;
+}
+select.input:invalid { color: var(--placeholder); }
+
+/* --- choice chips ------------------------------------------------------ */
+
+/* Every option list in the flow is this now: pills that take their own width
+   and wrap. The fixed grid this replaces stretched "Months" to the width of
+   "I am moving here" and left the rows looking ragged and unequal. */
+.chipwrap { display: flex; flex-wrap: wrap; gap: 9px; }
+
+.chip {
+  padding: 12px 16px;
+  border-radius: 99px;
+  border: 1.5px solid var(--border);
+  background: var(--white);
+  color: var(--ink);
+  font: bold 15px var(--font);
+  text-align: left;
+}
+.chip.on { background: var(--ink); color: var(--accent); border-color: var(--ink); }
+
+/* --- footer ------------------------------------------------------------ */
+
+.footer {
+  flex: none;
+  padding: 12px 20px 20px;
+  padding-bottom: max(20px, env(safe-area-inset-bottom));
+  background: var(--paper);
+  border-top: 1px solid var(--rule);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cta {
+  width: 100%;
+  padding: 18px;
+  border-radius: 14px;
+  background: var(--ink);
+  color: var(--accent);
+  font: bold 16px var(--font);
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
+}
+.cta[disabled], .cta.off { background: var(--track); color: var(--faint); cursor: default; }
+
+.cta.ghost {
+  padding: 16px;
+  border: 1.5px solid var(--border);
+  background: var(--white);
+  color: var(--body);
+}
+
+.footnote {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.footnote span { font: 11.5px var(--font); color: var(--faint); }
+
+.err {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font: bold 12.5px var(--font);
+  color: var(--error);
+}
+.err .bang {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--error);
+  color: #fff;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* --- one-off pieces ---------------------------------------------------- */
+
+.brandmark {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--ink);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+}
+
+.tickmark {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  font-weight: bold;
+}
+
+.langrow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 19px 20px;
+  border-radius: 14px;
+  border: 1.5px solid var(--border);
+  background: var(--white);
+  width: 100%;
+  text-align: left;
+}
+.langrow strong { font: bold 17px var(--font); color: var(--ink); display: block; }
+.langrow small {
+  display: block;
+  font: 11.5px var(--font);
+  color: var(--muted);
+  margin-top: 3px;
+}
+.langrow .arrow { display: flex; flex: none; color: var(--accent-deep); }
+
+/* The language already in use, when this screen is reached to change it. */
+.langrow.on {
+  border-color: var(--accent);
+  background: var(--tint);
+}
+
+/* --- phone ------------------------------------------------------------- */
+
+.phonerow { display: flex; gap: 9px; }
+.phonerow .input { flex: 1; min-width: 0; font-size: 18px; }
+
+.dialbtn {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 16px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  background: var(--white);
+}
+.dialcode { font: 16px var(--font); color: var(--ink); }
+.dialcaret { flex: none; color: var(--faint); }
+
+.flag {
+  width: 24px;
+  height: 16px;
+  flex: none;
+  border-radius: 2px;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .08);
+}
+
+.hint { font: 11.5px/1.45 var(--font); color: var(--faint); }
+
+/* --- the country sheet ------------------------------------------------- */
+
+.sheetwrap {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.sheetscrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(28, 28, 28, .42);
+  border: none;
+  animation: fade 180ms ease both;
+}
+@keyframes fade { from { opacity: 0 } to { opacity: 1 } }
+
+.sheet {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  max-height: 82dvh;
+  background: var(--paper);
+  border-radius: 20px 20px 0 0;
+  display: flex;
+  flex-direction: column;
+  animation: slideup 220ms cubic-bezier(.22, .9, .3, 1) both;
+}
+@keyframes slideup { from { transform: translateY(14%) } to { transform: none } }
+@media (prefers-reduced-motion: reduce) {
+  .sheet, .sheetscrim { animation: none; }
+}
+
+.sheethead {
+  flex: none;
+  padding: 10px 16px 12px;
+  border-bottom: 1px solid var(--rule);
+}
+.sheetgrip {
+  width: 38px;
+  height: 4px;
+  border-radius: 99px;
+  background: var(--track);
+  margin: 0 auto 12px;
+}
+
+.sheetlist {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 8px calc(10px + env(safe-area-inset-bottom));
+  overscroll-behavior: contain;
+}
+
+.countryrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 13px 12px;
+  border-radius: 11px;
+  text-align: left;
+}
+.countryrow.on { background: var(--tint); }
+.countryrow .cname { flex: 1; min-width: 0; font: 16px var(--font); color: var(--ink); }
+.countryrow .cdial { font: 15px var(--font); color: var(--faint); }
+
+.nomatch { padding: 26px 12px; text-align: center; font: 15px var(--font); color: var(--muted); }
+
+/* --- date of birth ----------------------------------------------------- */
+
+.dobset {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 18px 16px;
+  border: 1.5px dashed var(--border);
+  border-radius: 13px;
+  background: var(--white);
+  text-align: left;
+}
+.dobprompt { font: 15px var(--font); color: var(--muted); }
+.dobcake { flex: none; color: var(--faint); }
+.dobvalue { font: bold 17px var(--font); color: var(--ink); }
+.dobchange { font: bold 12px var(--font); color: var(--accent-deep); text-decoration: underline; }
+
+.wheels {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 0 4px;
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  background: var(--white);
+}
+
+.rail { display: flex; flex-direction: column; gap: 5px; }
+.raillabel {
+  font: bold 10px var(--font);
+  letter-spacing: 1.1px;
+  color: var(--label);
+  padding: 0 16px;
+}
+
+.railbox { position: relative; }
+
+/* The well the centred value sits in. */
+.railwell {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 76px;
+  transform: translateX(-50%);
+  border-radius: 11px;
+  background: var(--tint);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+  pointer-events: none;
+}
+.railtrack.wide ~ .railwell, .railbox:has(.railtrack.wide) .railwell { width: 130px; }
+
+.railtrack {
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  /* Half the rail either side, so the first and last item can reach the well. */
+  padding: 0 calc(50% - 38px);
+  scroll-behavior: smooth;
+}
+.railtrack.wide { padding: 0 calc(50% - 65px); }
+.railtrack::-webkit-scrollbar { display: none; }
+
+.railitem {
+  flex: none;
+  width: 76px;
+  height: 52px;
+  scroll-snap-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 16px var(--font);
+  color: var(--placeholder);
+  transition: color 140ms ease, font-weight 140ms ease, transform 140ms ease;
+}
+.railtrack.wide .railitem { width: 130px; font-size: 15px; }
+
+.railitem.on {
+  color: var(--ink);
+  font-weight: bold;
+  font-size: 18px;
+  transform: scale(1.02);
+}
+
+/* One rail at a time: the open one, then the button that settles it. */
+.dobstage { display: flex; flex-direction: column; gap: 10px; }
+
+.doblock {
+  margin: 0 14px 12px;
+  padding: 13px;
+  border-radius: 11px;
+  background: var(--tint);
+  border: 1.5px solid var(--accent);
+  color: var(--accent-deep);
+  font: bold 14px var(--font);
+}
+
+/* A part already settled. Reads as a fact, with the way back still on it. */
+.dobpicked {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 14px;
+  padding: 11px 13px;
+  border-radius: 11px;
+  background: var(--tint);
+}
+.dobpicked + .dobstage { margin-top: 4px; }
+.dobpicked .dpl {
+  font: bold 10px var(--font);
+  letter-spacing: 1.1px;
+  color: var(--label);
+}
+.dobpicked .dpv { flex: 1; min-width: 0; font: bold 16px var(--font); color: var(--ink); }
+.dobpicked .dpc {
+  font: bold 12px var(--font);
+  color: var(--accent-deep);
+  text-decoration: underline;
+}
+
+.dobdone {
+  margin: 2px 14px 12px;
+  padding: 13px;
+  border-radius: 11px;
+  background: var(--tint);
+  border: 1.5px solid var(--accent);
+  color: var(--accent-deep);
+  font: bold 14px var(--font);
+}
+
+/* --- children ---------------------------------------------------------- */
+
+.childrow { display: flex; gap: 8px; align-items: center; }
+.childrow .minus {
+  flex: none;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  border: 1.5px solid var(--border);
+  background: var(--white);
+  color: var(--body);
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.addchild {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  height: 46px;
+  border-radius: 12px;
+  border: 1.5px solid var(--border);
+  background: var(--white);
+  color: var(--body);
+  font: bold 14px var(--font);
+  align-self: flex-start;
+}
+
+.note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 11px;
+  background: var(--tint);
+  border: 1px solid var(--border-soft);
+  font: 12.5px/1.45 var(--font);
+  color: var(--muted);
+}
+
+/* --- a question folded down to its answer ------------------------------- */
+
+.fold {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 13px;
+  border: 1.5px solid var(--border-soft);
+  background: var(--white);
+  text-align: left;
+}
+.fold .t { flex: 1; font: 15px/1.3 var(--font); color: var(--label); }
+.fold .badge {
+  flex: none;
+  padding: 5px 11px;
+  border-radius: 99px;
+  background: var(--tint);
+  border: 1px solid var(--accent);
+  font: bold 13.5px var(--font);
+  color: var(--accent-deep);
+}
+.fold .tick {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 50%;
+  border: 1.5px solid var(--accent);
+  background: var(--tint);
+  color: var(--accent-deep);
+  font: bold 13px/1 var(--font);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.fold .chev { flex: none; color: var(--body); }
+
+.foldbody { display: flex; flex-direction: column; gap: 9px; }
+
+/* --- a question folded down to its answer ------------------------------- */
+
+.fold {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 13px;
+  border: 1.5px solid var(--border-soft);
+  background: var(--white);
+  text-align: left;
+}
+.fold .t { flex: 1; font: 15px/1.3 var(--font); color: var(--label); }
+.fold .badge {
+  flex: none;
+  padding: 5px 11px;
+  border-radius: 99px;
+  background: var(--tint);
+  border: 1px solid var(--accent);
+  font: bold 13.5px var(--font);
+  color: var(--accent-deep);
+}
+.fold .tick {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 50%;
+  border: 1.5px solid var(--accent);
+  background: var(--tint);
+  color: var(--accent-deep);
+  font: bold 13px/1 var(--font);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.fold .chev { flex: none; color: var(--body); }
+
+.foldbody { display: flex; flex-direction: column; gap: 9px; }
+
+/* A question that takes several answers cannot know when you have finished
+   choosing, so it says so itself rather than folding on the first tap. */
+.foldnext {
+  align-self: flex-start;
+  padding: 9px 15px;
+  border-radius: 99px;
+  border: 1.5px solid var(--border);
+  background: var(--white);
+  color: var(--body);
+  font: bold 14px var(--font);
+}
+
+.chev { transition: transform 180ms ease; }
+@media (prefers-reduced-motion: reduce) { .chev { transition: none; } }
+
+/* --- done -------------------------------------------------------------- */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  padding: 17px;
+  border-radius: 14px;
+  background: var(--ink);
+}
+.panel .cap {
+  font: bold 10px var(--font);
+  letter-spacing: 1.3px;
+  color: var(--panel-label);
+  margin-bottom: 4px;
+}
+.panel .person {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 0;
+  border-top: 1px solid var(--panel-rule);
+}
+.panel .person .name { font: bold 16px var(--font); color: var(--panel-text); }
+.panel .person .role { font: 11.5px var(--font); color: var(--panel-label); margin-top: 2px; }
+.panel .person a {
+  padding: 11px 17px;
+  border-radius: 99px;
+  background: var(--accent);
+  color: var(--ink);
+  font: bold 12px var(--font);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+/* --- resume ------------------------------------------------------------ */
+
+.resumecard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 17px;
+  border-radius: 14px;
+  background: var(--white);
+  border: 1px solid var(--border-soft);
+}
+.resumecard .head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.resumecard .head strong { font: bold 16px var(--font); color: var(--ink); }
+.resumecard .head span { font: bold 11px var(--font); color: var(--accent-deep); }
+.resumecard .bar { height: 6px; background: var(--track); border-radius: 99px; overflow: hidden; }
+.resumecard .bar > div { height: 100%; background: var(--accent); border-radius: 99px; }
+.resumecard .where { font: 11.5px/1.5 var(--font); color: var(--muted); }
+
+.checklist { display: flex; flex-direction: column; }
+.checklist .item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+.checklist .pip {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--ink);
+  font: bold 11px var(--font);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.checklist .item.todo .pip {
+  background: transparent;
+  border: 1.5px solid var(--accent);
+  color: var(--accent-deep);
+}
+.checklist .item span.t { font: 16px var(--font); color: var(--muted); }
+.checklist .item.todo span.t { font-weight: bold; color: var(--ink); }
+
+/* --- language switch --------------------------------------------------- */
+
+/* A header carrying only the language switch, on screens with no progress bar. */
+.topbar.bare { justify-content: flex-end; padding-bottom: 0; }
+
+.langbtn {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 42px;
+  padding: 0 14px;
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  background: var(--white);
+  color: var(--body);
+  font: bold 12px var(--font);
+  letter-spacing: .4px;
+}
+.langbtn:disabled { opacity: .55; }
+.langbtn svg { display: block; color: var(--accent-deep); }
+
+.sheettitle {
+  font: bold 18px var(--font);
+  color: var(--ink);
+  text-align: center;
+}
+.sheetnote {
+  margin-top: 5px;
+  font: 13px/1.45 var(--font);
+  color: var(--muted);
+  text-align: center;
+}
+
+/* The language rows sit inside the sheet here, so they need their own gap. */
+.sheetlist .langrow { margin-bottom: 9px; }
+.sheetlist .langrow:last-child { margin-bottom: 0; }
+
+/* The pastor's number, shown under their role on the done screen. */
+.panel .person .tel {
+  font: 12.5px var(--font);
+  color: var(--panel-text);
+  opacity: .72;
+  margin-top: 3px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------------------
+   Office screens. Not part of the visitor flow: a wider measure, denser type.
+   Used by src/office, which is no longer routed; kept with it until Phase 5
+   of docs/plan replaces both with the Membership portal.
+--------------------------------------------------------------------------- */
+
+.admin {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 40px 20px 64px;
+}
+
+.adminhead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 26px;
+}
+.admin h1 { font: bold 24px var(--font); margin: 0 0 6px; }
+.admin h2 { font: bold 15px var(--font); margin: 34px 0 4px; }
+.admin p { font: 14px/1.55 var(--font); color: var(--muted); margin: 0; max-width: 62ch; }
+.admin p.note { font-size: 13px; margin-bottom: 12px; }
+.admin p.empty { padding: 32px 0; }
+
+.adminlink {
+  font: bold 13px var(--font);
+  color: var(--accent-deep);
+  text-decoration: none;
+  white-space: nowrap;
+  padding-top: 4px;
+}
+
+.stats { display: flex; flex-wrap: wrap; gap: 12px; }
+.stat {
+  flex: 1 1 150px;
+  padding: 15px 17px;
+  border: 1px solid var(--border-soft);
+  border-radius: 13px;
+  background: var(--white);
+}
+.statlabel {
+  font: bold 10px var(--font);
+  letter-spacing: 1px;
+  color: var(--label);
+  text-transform: uppercase;
+}
+.statvalue {
+  font: bold 26px var(--font);
+  color: var(--ink);
+  margin-top: 4px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.statvalue em {
+  font: bold 13px var(--font);
+  font-style: normal;
+  color: var(--accent-deep);
+}
+
+.scroll { overflow-x: auto; }
+
+.admin table { width: 100%; border-collapse: collapse; font: 14px var(--font); }
+.admin thead th {
+  text-align: left;
+  padding: 9px 12px;
+  font: bold 10px var(--font);
+  letter-spacing: 1px;
+  color: var(--label);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.admin tbody tr { border-top: 1px solid var(--border-soft); }
+.admin td { padding: 11px 12px; vertical-align: middle; }
+.admin td.n, .admin th.n { text-align: right; white-space: nowrap; }
+
+/* Count first, percentage under it: the count is the fact, the percentage is
+   the interpretation, and at this sample size the count is the honest one. */
+.admin td.n em {
+  display: block;
+  font: 11px var(--font);
+  font-style: normal;
+  color: var(--faint);
+  margin-top: 1px;
+}
+.admin td.n .zero { color: var(--dot); }
+.admin .drop { color: var(--error); }
+
+.admin .tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 99px;
+  background: var(--track);
+  color: var(--faint);
+  font: bold 10px var(--font);
+}
+
+.admin td.bar, .admin th.bar { width: 130px; padding-right: 0; }
+.admin .barfill {
+  display: block;
+  height: 7px;
+  border-radius: 99px;
+  background: var(--accent);
+  min-width: 2px;
+}
+
+.optiongrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  gap: 14px;
+}
+.optioncard {
+  border: 1px solid var(--border-soft);
+  border-radius: 13px;
+  background: var(--white);
+  padding: 14px 16px 12px;
+}
+.optionhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font: bold 14px var(--font);
+  color: var(--ink);
+  margin-bottom: 10px;
+}
+.optionhead span { font: 11px var(--font); font-weight: normal; color: var(--faint); }
+
+.optionrow {
+  display: grid;
+  grid-template-columns: 1fr 76px 58px;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+}
+.olabel { font: 13px var(--font); color: var(--body); }
+.obar { height: 6px; background: var(--track); border-radius: 99px; overflow: hidden; }
+.obarfill { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+.ocount { text-align: right; font: bold 13px var(--font); color: var(--ink); }
+.ocount em {
+  font: 11px var(--font);
+  font-style: normal;
+  color: var(--faint);
+  margin-left: 5px;
+}

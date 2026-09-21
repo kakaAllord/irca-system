@@ -1,0 +1,17 @@
+import type { NextConfig } from 'next';
+
+const nextConfig: NextConfig = {
+  typedRoutes: false,
+  images: {
+    // AVIF first: the logo's globe is full of fine network lines, which is
+    // exactly the kind of detail AVIF carries at a much lower bitrate than
+    // WebP. Browsers that do not accept it fall back to WebP automatically.
+    formats: ['image/avif', 'image/webp'],
+    // The mark is never drawn larger than ~112px, so there is no reason to
+    // generate or cache the default ladder up to 3840px.
+    imageSizes: [64, 96, 112, 128, 192, 224, 256, 384],
+    deviceSizes: [640, 828, 1080],
+  },
+};
+
+export default nextConfig;
