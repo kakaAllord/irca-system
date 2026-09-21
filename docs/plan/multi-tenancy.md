@@ -126,7 +126,7 @@ user ids, request ids and module toggles, and gets 404/422 every time.
   read-only), `irca_backup` (dumps, sees all, read-only). No runtime role has
   `BYPASSRLS` (01 step 1.5, 06 step 6.5).
 - **Per-role statement timeouts**: 10 s for feature roles, 60 s for core (01
-  step 1.8). One church's runaway query cannot hold a shared connection for long.
+  step 1.5). One church's runaway query cannot hold a shared connection for long.
 - **IDs are UUID v7**. Nobody can guess their way into another church's rows,
   and ids never collide when a church's data is moved between clusters
   (section 13).

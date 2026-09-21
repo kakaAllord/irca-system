@@ -395,6 +395,9 @@ subdomains of one domain the church controls, so email DNS is in one place.
    with SQL as `irca_owner` instead (`create role … login password …`), so they
    stay ordinary roles that row-level security applies to.
 2. Create the database `irca` owned by `irca_owner`, and a branch `staging`.
+   Set the statement timeouts from 1.5 (`alter role irca_app set
+   statement_timeout = '10s'`, the same for `irca_readonly`, and `'60s'` for
+   `irca_core`) as the role that created them.
 3. `DIRECT_DATABASE_URL` = the owner on the direct host;
    `DATABASE_URL` = the app role on the pooled host;
    `DATABASE_URL_CORE` = the core role on the pooled host;

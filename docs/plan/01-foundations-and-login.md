@@ -306,6 +306,14 @@ machine.
 
    create database irca_dev  owner irca_owner;
    create database irca_test owner irca_owner;
+
+   -- A runaway query from one church must not hold connections every church
+   -- shares. Set here, as the superuser, because changing another role's
+   -- settings needs rights the migration role must not have. The core role gets
+   -- longer, because nightly jobs scan every church.
+   alter role irca_app      set statement_timeout = '10s';
+   alter role irca_readonly set statement_timeout = '10s';
+   alter role irca_core     set statement_timeout = '60s';
    ```
 
    `createdb` on the owner is needed because `prisma migrate dev` creates a
@@ -535,20 +543,49 @@ together with the role grants, all created by migrations.
 
 **Do**
 
-1. `npm i -w @irca/api @prisma/client@6` and `npm i -D -w @irca/api prisma@6 ts-node tsconfig-paths`.
-2. `cd apps/api && npx prisma init --datasource-provider postgresql`. Delete
-   the `.env` it may create. We already have one.
-3. `prisma/schema.prisma`:
+1. Install **Prisma 7** (the stable line; npm's `latest` tag may point at a
+   release candidate, so pin it):
+
+   ```bash
+   npm i -w @irca/api @prisma/client@7 @prisma/adapter-pg@7 pg
+   npm i -D -w @irca/api prisma@7 @types/pg dotenv tsx
+   npm install-scripts approve prisma @prisma/engines esbuild   # npm 11 blocks install scripts until allowed
+   ```
+
+2. **Do not run `prisma init` inside the repository.** Besides the schema it
+   writes agent skill folders (`.claude/`, `.agents/`, `.windsurf/`) and a
+   `.env`. Create the two files below by hand.
+3. `apps/api/prisma.config.ts`. In Prisma 7, connection strings live here,
+   not in the schema, and `.env` is no longer loaded automatically:
+
+   ```ts
+   import { config } from 'dotenv';
+   import { defineConfig, env } from 'prisma/config';
+
+   config({ path: process.env.NODE_ENV === 'test' ? '.env.test' : '.env', quiet: true });
+
+   export default defineConfig({
+     schema: 'prisma/schema.prisma',
+     migrations: { path: 'prisma/migrations', seed: 'tsx prisma/seed.ts' },
+     // The CLI (migrate, seed, studio) connects as irca_owner. The running API
+     // never uses this URL: each of its clients gets its own driver adapter (1.9).
+     datasource: { url: env('DIRECT_DATABASE_URL') },
+   });
+   ```
+
+   `prisma/schema.prisma`:
 
    ```prisma
    generator client {
-     provider = "prisma-client-js"
+     provider            = "prisma-client"          // Prisma 7's generator
+     output              = "../src/generated/prisma" // gitignored build output
+     runtime             = "nodejs"
+     moduleFormat        = "esm"
+     importFileExtension = "js"                     // the API is nodenext ESM (1.6)
    }
 
    datasource db {
-     provider  = "postgresql"
-     url       = env("DATABASE_URL")          // irca_app, used at runtime
-     directUrl = env("DIRECT_DATABASE_URL")   // irca_owner, used by migrate
+     provider = "postgresql"                        // no url here in Prisma 7
    }
 
    enum ChurchStatus {
@@ -694,25 +731,30 @@ together with the role grants, all created by migrations.
    alter default privileges for role irca_owner in schema public
      grant select on tables to irca_readonly, irca_backup;
 
-   -- A runaway query from one church must not hold connections every church
-   -- shares. Applies when a pooled connection is opened. The core role gets
-   -- longer, because nightly jobs scan every church.
-   alter role irca_app      set statement_timeout = '10s';
-   alter role irca_readonly set statement_timeout = '10s';
-   alter role irca_core     set statement_timeout = '60s';
-
    -- No runtime role needs to see the migration log.
-   revoke all on table _prisma_migrations from irca_readonly, irca_app, irca_core;
    -- (irca_backup keeps it: a restore needs to know which migrations the dump contains.)
+   -- Guarded because Prisma replays migrations into a throwaway "shadow"
+   -- database that has no migration log of its own.
+   do $$
+   begin
+     if to_regclass('public._prisma_migrations') is not null then
+       revoke all on table _prisma_migrations from irca_readonly, irca_app, irca_core;
+     end if;
+   end $$;
    ```
 
    From Phase 2 onward, any table that must be append-only gets its own
    `revoke update, delete ... from irca_core, irca_app` in the migration that
    creates it, and every church-owned table gets its row-level security policies
    in the same migration (02, step 2.4a).
-6. Apply both: `npx prisma migrate dev`.
-7. Add to `apps/api/package.json`:
-   `"prisma": { "seed": "ts-node prisma/seed.ts" }` (the seed comes in Step 1.14).
+6. Apply both: `npx prisma migrate dev`. Prisma 7 does **not** generate the
+   client as part of migrating, so run `npx prisma generate` too. The API's
+   `build` and `typecheck` scripts run it first
+   (`"build": "prisma generate && nest build"`), and add `db:generate`,
+   `db:migrate`, `db:deploy`, `db:reset` and `db:seed` scripts.
+7. Ignore the generated client everywhere it would otherwise be checked:
+   `apps/api/src/generated/` in `.gitignore`, `.prettierignore`, the ESLint
+   ignores and `apps/api/.oxlintrc.json` (`"ignorePatterns"`).
 
 **Check**
 
