@@ -63,6 +63,8 @@ export type MeResponse = {
   permissions: string[];
   /** Portals this person can open, with only the pages they may see. */
   modules: { key: string; name: string; home: string; nav: NavItem[] }[];
+  /** Numbers the sidebar shows beside a page, e.g. { '/admin/requests': 3 }. */
+  badges: Record<string, number>;
   roleLabels: string[];
   impersonation: null | {
     id: string;

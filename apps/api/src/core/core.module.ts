@@ -24,6 +24,9 @@ import { QuotaService } from './limits/quota.service.js';
 import { InvitationService } from './invitations/invitation.service.js';
 import { PasswordResetService } from './auth/password-reset.service.js';
 import { JobRunner } from './jobs/job-runner.service.js';
+import { SequenceService } from './sequences/sequence.service.js';
+import { ChangeRequestRegistry } from './change-requests/registry.service.js';
+import { ChangeRequestService } from './change-requests/change-request.service.js';
 import { ScheduledJobs } from './jobs/scheduled-jobs.service.js';
 
 /**
@@ -52,6 +55,9 @@ import { ScheduledJobs } from './jobs/scheduled-jobs.service.js';
     ScheduledJobs,
     RegistrySync,
     RouteAudit,
+    SequenceService,
+    ChangeRequestRegistry,
+    ChangeRequestService,
     SessionGuard,
     CsrfGuard,
     ReadOnlyGuard,
@@ -76,6 +82,9 @@ import { ScheduledJobs } from './jobs/scheduled-jobs.service.js';
     QuotaService,
     JobRunner,
     RegistrySync,
+    SequenceService,
+    ChangeRequestRegistry,
+    ChangeRequestService,
     SessionGuard,
     CsrfGuard,
     ReadOnlyGuard,

@@ -8,6 +8,7 @@ import {
   type MeResponse,
 } from '@irca/shared';
 import { PrismaCore } from '../database/prisma-clients.js';
+import { ChangeRequestService } from '../change-requests/change-request.service.js';
 import type { RequestContext } from '../context/request-context.js';
 import { AppError } from '../http/app-error.js';
 
@@ -23,6 +24,7 @@ export class MeService {
   constructor(
     private readonly db: PrismaCore,
     private readonly cls: ClsService<RequestContext>,
+    private readonly changeRequests: ChangeRequestService,
   ) {}
 
   async build(): Promise<MeResponse> {
@@ -60,6 +62,7 @@ export class MeService {
       churches: memberships.map((m) => ({ id: m.church.id, name: m.church.name })),
       permissions,
       modules: await this.modulesFor(churchId, permitted, user.platformRole === 'DEV'),
+      badges: await this.badges(churchId, permitted),
       roleLabels: await this.roleLabels(userId, churchId),
       impersonation: await this.impersonation(),
     };
@@ -105,6 +108,19 @@ export class MeService {
       }
     }
     return out;
+  }
+
+  /**
+   * What the sidebar shows beside a page. Only requests so far: an
+   * administrator should see that something is waiting without opening it.
+   */
+  private async badges(
+    churchId: string | null,
+    permitted: Set<string>,
+  ): Promise<Record<string, number>> {
+    if (!churchId || !permitted.has('admin.requests.read')) return {};
+    const pending = await this.changeRequests.pendingCount(churchId);
+    return pending ? { '/admin/requests': pending } : {};
   }
 
   /** "Church administrator · Finance clerk", for the sidebar's user row. */

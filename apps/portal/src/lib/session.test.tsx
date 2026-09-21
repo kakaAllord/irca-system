@@ -16,6 +16,7 @@ const me = (permissions: string[]): MeResponse => ({
   permissions,
   modules: [],
   roleLabels: [],
+  badges: {},
   impersonation: null,
 });
 
