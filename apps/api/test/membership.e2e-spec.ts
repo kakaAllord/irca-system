@@ -385,7 +385,7 @@ describe('the Membership portal', () => {
 
   describe('the built-in roles', () => {
     /** What each role must be able to do, and what it must be refused. */
-    const ROLES = Object.fromEntries(
+    const ROLES: Record<string, readonly string[]> = Object.fromEntries(
       membershipModule.systemRoles.map((role) => [role.key, role.permissions]),
     );
     const ROUTES: { need: string; call: (cookie: string, personId: string) => Promise<number> }[] =
@@ -439,7 +439,7 @@ describe('the Membership portal', () => {
     it.each(Object.keys(ROLES))('%s can do exactly what it says', async (roleKey) => {
       const { c, form } = await church();
       const { personId } = await registered(form);
-      const cookie = await also(c.id, ROLES[roleKey]!);
+      const cookie = await also(c.id, [...ROLES[roleKey]!]);
 
       for (const route of ROUTES) {
         const status = await route.call(cookie, personId);
