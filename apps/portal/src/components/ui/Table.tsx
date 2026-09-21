@@ -39,8 +39,24 @@ export function Row({ children, onClick }: { children: ReactNode; onClick?: () =
   );
 }
 
-export function Cell({ children, nowrap }: { children: ReactNode; nowrap?: boolean }) {
+export function Cell({
+  children,
+  nowrap,
+  colSpan,
+  className,
+}: {
+  children: ReactNode;
+  nowrap?: boolean;
+  /** For a row that opens underneath another and spans the whole width. */
+  colSpan?: number;
+  className?: string;
+}) {
   return (
-    <td className={`px-3 py-2.5 align-middle ${nowrap ? 'whitespace-nowrap' : ''}`}>{children}</td>
+    <td
+      colSpan={colSpan}
+      className={`px-3 py-2.5 align-middle ${nowrap ? 'whitespace-nowrap' : ''} ${className ?? ''}`}
+    >
+      {children}
+    </td>
   );
 }

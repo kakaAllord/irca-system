@@ -1010,9 +1010,17 @@ Changes people have asked for. Nothing changes until an administrator approves.
    Finance using requests, it shows one option.
 
 **Finance → Requests** (`/finance/requests`, `finance.transactions.read`):
-the same cards, read-only, for Finance's requests only, with a **Mine** toggle,
-so clerks can follow what they asked for. There are no approve buttons here,
-ever. Deciding happens in Admin.
+Finance's own requests, read-only, with a **Only mine** toggle so clerks can
+follow what they asked for. There are no approve buttons here, ever: deciding
+happens in Admin.
+
+Built as a **table with expandable rows**, not cards: a row says what is asked,
+about which entry, by whom, when and where it stands, and the reason, the
+before → after and the decision open underneath the one you are looking at.
+Cards made a reader wade through everything about every request to find the
+one they wanted (owner's words: "one needs to look around all those thrown in
+data before understanding what they are even talking about"). The Admin inbox
+keeps its cards, because deciding needs the whole request in view at once.
 
 **Commits:** "Add the administrators' Requests inbox"; "Let finance staff
 follow the changes they asked for".
