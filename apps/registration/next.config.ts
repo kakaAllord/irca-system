@@ -2,6 +2,10 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   typedRoutes: false,
+  // next dev would otherwise write AGENTS.md and CLAUDE.md into this folder
+  // whenever it detects a coding agent. Agent notes live outside the
+  // repository, in the working folder around it.
+  agentRules: false,
   images: {
     // AVIF first: the logo's globe is full of fine network lines, which is
     // exactly the kind of detail AVIF carries at a much lower bitrate than
