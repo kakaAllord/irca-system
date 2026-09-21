@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { NavItem } from './rbac/define';
 
 /** Emails are stored and compared trimmed and lowercased: `Neema@X.com ` is neema@x.com. */
 export const normalizeEmail = (email: string) => email.trim().toLowerCase();
@@ -60,7 +61,8 @@ export type MeResponse = {
   /** Every church this person can switch to. */
   churches: { id: string; name: string }[];
   permissions: string[];
-  modules: { key: string; name: string; home: string; nav: unknown[] }[];
+  /** Portals this person can open, with only the pages they may see. */
+  modules: { key: string; name: string; home: string; nav: NavItem[] }[];
   roleLabels: string[];
   impersonation: null | {
     id: string;

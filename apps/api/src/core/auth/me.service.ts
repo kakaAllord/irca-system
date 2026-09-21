@@ -117,6 +117,23 @@ export class MeService {
     return roles.map((r) => r.role.name).sort();
   }
 
+  /** The church administrators of the church this person is in. Names only. */
+  async administrators(): Promise<{ name: string }[]> {
+    const churchId = this.cls.get('churchId');
+    if (!churchId) return [];
+    const roles = await this.db.membershipRole.findMany({
+      where: {
+        churchId,
+        role: { systemKey: 'admin.administrator', deletedAt: null },
+        membership: { status: 'ACTIVE' },
+      },
+      include: { membership: { include: { user: true } } },
+    });
+    return roles
+      .filter((r) => r.membership.user.status === 'ACTIVE')
+      .map((r) => ({ name: r.membership.user.fullName }));
+  }
+
   private async impersonation(): Promise<MeResponse['impersonation']> {
     const id = this.cls.get('impersonationId');
     if (!id) return null;

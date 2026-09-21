@@ -58,6 +58,16 @@ export class AuthController {
     return this.meService.build();
   }
 
+  /**
+   * Who to ask for access. Shown to someone who is signed in but has been
+   * given nothing yet, so they know whose door to knock on.
+   */
+  @AuthenticatedOnly()
+  @Get('admins')
+  admins(): Promise<{ name: string }[]> {
+    return this.meService.administrators();
+  }
+
   /** For someone who serves more than one church. Not allowed while viewing as someone. */
   @AuthenticatedOnly()
   @Post('church')
