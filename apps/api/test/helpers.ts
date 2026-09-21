@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { Test } from '@nestjs/testing';
 import type { Type } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
@@ -153,6 +153,33 @@ export async function createUser(
     );
   }
   return { id, email, password };
+}
+
+/** A key a church's own app can call the public API with. */
+export async function createApiClient(db: pg.Client, churchId: string, kind = 'REGISTRATION') {
+  const key = `irk_${randomUUID().replaceAll('-', '')}`;
+  const keyHash = createHash('sha256').update(key).digest('hex');
+  await db.query(
+    `insert into api_clients (id, church_id, name, kind, key_prefix, key_hash)
+     values ($1, $2, 'Test form', $3, $4, $5)`,
+    [randomUUID(), churchId, kind, key.slice(0, 12), keyHash],
+  );
+  return key;
+}
+
+/** A request as a church's registration form sends it: a key, and no session. */
+export function asForm(app: NestExpressApplication, key: string, ip = `41.0.${rand()}.${rand()}`) {
+  const agent = request(app.getHttpServer());
+  const withHeaders = (t: request.Test) =>
+    t
+      .set('X-IRCA-Client', 'registration')
+      .set('Authorization', `Bearer ${key}`)
+      .set('X-Forwarded-For', ip);
+  return {
+    get: (path: string) => withHeaders(agent.get(path)),
+    post: (path: string, body?: object) => withHeaders(agent.post(path)).send(body ?? {}),
+    put: (path: string, body?: object) => withHeaders(agent.put(path)).send(body ?? {}),
+  };
 }
 
 /**
