@@ -5,6 +5,7 @@ import { ErrorCode, type LoginInput } from '@irca/shared';
 import { PrismaCore } from '../database/prisma-clients.js';
 import { AppError } from '../http/app-error.js';
 import type { RequestContext } from '../context/request-context.js';
+import { PermissionResolver } from '../rbac/permission-resolver.service.js';
 import { PasswordService } from './password.service.js';
 import { SessionService } from './session.service.js';
 
@@ -25,6 +26,7 @@ export class AuthService {
     private readonly passwords: PasswordService,
     private readonly sessions: SessionService,
     private readonly cls: ClsService<RequestContext>,
+    private readonly permissions: PermissionResolver,
   ) {}
 
   /** Checks the credentials and opens a session. Returns the raw token for the cookie. */
@@ -80,9 +82,37 @@ export class AuthService {
     this.cls.set('actorUserId', user.id);
     this.cls.set('churchId', session.activeChurchId);
     this.cls.set('platformRole', user.platformRole);
+    this.cls.set(
+      'permissions',
+      await this.permissions.forSignedIn(user.id, user.platformRole, session.activeChurchId),
+    );
 
     this.logger.log({ msg: 'signed in', userId: user.id });
     return { token };
+  }
+
+  /**
+   * Moves this session to another of the person's churches. Their permissions
+   * are worked out again straight away, so the answer to this very request
+   * already describes the new church.
+   */
+  async switchChurch(churchId: string): Promise<void> {
+    const userId = this.cls.get('userId');
+    const sessionId = this.cls.get('sessionId');
+    if (!userId || !sessionId)
+      throw new AppError(401, ErrorCode.UNAUTHENTICATED, 'Please sign in.');
+
+    const membership = await this.db.churchMembership.findUnique({
+      where: { churchId_userId: { churchId, userId } },
+      include: { church: true },
+    });
+    if (!membership || membership.status !== 'ACTIVE' || membership.church.status !== 'ACTIVE') {
+      throw new AppError(403, ErrorCode.FORBIDDEN, 'You do not have access to that church.');
+    }
+
+    await this.db.session.update({ where: { id: sessionId }, data: { activeChurchId: churchId } });
+    this.cls.set('churchId', churchId);
+    this.cls.set('permissions', await this.permissions.forMember(userId, churchId));
   }
 
   async logout(): Promise<void> {

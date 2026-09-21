@@ -90,6 +90,11 @@ export class SessionService {
     return this.db.session.update({ where: { id: session.id }, data: { activeChurchId: null } });
   }
 
+  /** For the session guard, which needs the impersonated person's own record. */
+  userById(userId: string) {
+    return this.db.user.findUnique({ where: { id: userId } });
+  }
+
   /** Revoked, never deleted: the dev console counts them, and they explain sign-outs. */
   async revoke(sessionId: string, reason: string): Promise<void> {
     await this.db.session.updateMany({
