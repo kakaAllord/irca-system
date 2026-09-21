@@ -3,6 +3,8 @@ import { PublicRegistrationService } from './public-registration/registration.se
 import { PublicRegistrationController } from './public-registration/public-registration.controller.js';
 import { PeopleService } from './people/people.service.js';
 import { PeopleController } from './people/people.controller.js';
+import { ApplicationsService } from './applications/applications.service.js';
+import { ApplicationsController } from './applications/applications.controller.js';
 
 /**
  * The people the church cares for: what the visitor typed, and what the
@@ -16,10 +18,12 @@ import { PeopleController } from './people/people.controller.js';
   controllers: [
     PublicRegistrationController,
     PeopleController,
+    ApplicationsController,
   ],
   providers: [
     PublicRegistrationService,
     PeopleService,
+    ApplicationsService,
   ],
 })
 export class MembershipModule {}
