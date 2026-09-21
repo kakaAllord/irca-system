@@ -6,8 +6,10 @@ here does not behave as described, that is a bug worth reporting.
 
 Built so far: **Phase 1** (sign-in), **Phase 2** (the portal frame, roles and
 viewing as someone), **Phase 3** (the Admin portal), **Phase 4** (the Finance
-portal). Still to come: the registration form moving onto this system and the
-Membership portal (Phase 5), and the developer console (Phase 6).
+portal), **Phase 5** (the registration form on this system, and the
+Membership portal). Still to come: the developer console and going live
+(Phase 6). Switching the live form over is a job for a Sunday evening, with
+the runbook in `docs/plan/05-registration-and-membership.md`, step 5.18.
 
 ---
 
@@ -19,7 +21,7 @@ There are three apps and one shared library:
 | --- | --- |
 | `apps/api` | The server. Everything goes through it: signing in, permissions, the books, the activity log. |
 | `apps/portal` | What staff use in a browser: `/login`, `/admin/…`, `/finance/…`. |
-| `apps/registration` | The visitor's registration form, still on its own database until Phase 5. |
+| `apps/registration` | The visitor's registration form. One setting chooses its back end: its old database (what the live site uses until the cutover) or this system. |
 | `packages/shared` | The rules both sides need to agree on: what a portal is, what a permission is, what an entry number looks like. |
 
 Every church is separate. Nobody sees another church's people, money or
@@ -227,7 +229,68 @@ The rules around it:
 
 ---
 
-## 7. Rules the database keeps by itself
+## 7. The registration form, now on this system
+
+The form looks and behaves exactly as before — same questions, same three
+languages, same branching — but with `REGISTRATION_BACKEND=api` it no longer
+has a database of its own. Its server calls the API with a key that belongs to
+the church and never reaches a phone.
+
+- A visitor is somebody from the first tap: they appear in the Members list
+  even if they never finish, as "Unknown — +255 7…".
+- Half-typed answers are still saved when someone puts the phone down, and a
+  finished Continue is still checked in the visitor's own language.
+- The same phone number cannot register twice.
+- Ticking "join the church" and finishing opens a membership application for
+  the pastors by itself.
+- One command copies the live registrations across, keeping every token (so
+  every link already sent by SMS keeps working) and every time to the
+  microsecond. It can be run again and again: each run brings only what
+  changed, and it refuses to say "match" unless both sides really do.
+
+## 8. The Membership portal
+
+**Dashboard** — total registrations, joining church, salvation, baptism and
+this month, each with how it moved against the 30 days before; applications
+waiting; new converts in follow-up with their class progress; how people heard
+about the church; and the unfinished registrations with what each is missing.
+
+**Members** — everyone, searched and filtered as you type (salvation,
+baptism, gender, age, where they live, how they heard) with a count on every
+tab. A row opens in place: what they registered, their prayer request, and
+whether they are saved and baptised. The office's word wins over the form's,
+and the page says which it is.
+
+**What is private stays private.** Prayer requests, faith and family answers,
+date of birth, email and the church's notes are only in the record for someone
+with that permission (pastors and the office). For anyone else — the follow-up
+team, say — those parts are not hidden on the page: they never arrive at it.
+
+**Each person's record** — who they are, what they told the form, where they
+are on the journey with every move and who made it, and every visit, call and
+note. People move one step at a time, or one step back with a reason.
+Someone who did not finish can be sent their own link, by copying it or by
+opening WhatsApp with the message already written in their language.
+
+**Applications** — under review, approved, confirmed. Approving is the
+pastors' decision alone. Confirming waits for the probation month (30 days
+unless the church changes it) and the button says the date it becomes
+possible. Confirmation gives the person their member number, never skipped
+and never given twice.
+
+**Discipleship** — the board from new convert to confirmed member, and the
+class register: tap a box to mark a session attended or missed, or mark the
+whole session at once. Six sessions finishes the class. Two missed in a row is
+flagged as worth a visit; it never moves anyone back on its own.
+
+**Insights** — where people stop on the form, counted only against the people
+who were shown each question; how they heard, with the typed "Other" answers
+grouped by what they said; ages, where they live, what they came for. Every
+figure is a count before it is a percentage.
+
+---
+
+## 9. Rules the database keeps by itself
 
 These hold even if the application code is wrong, which is the point:
 
@@ -246,7 +309,7 @@ These hold even if the application code is wrong, which is the point:
 
 ---
 
-## 8. Running it on your machine
+## 10. Running it on your machine
 
 You need PostgreSQL 16+ and Node 22+.
 
@@ -273,20 +336,25 @@ The portal is on <http://localhost:3000>, the API on <http://localhost:4000>.
 | Email | Password | Who they are |
 | --- | --- | --- |
 | `admin@irca.local` | `admin-password-123` | Church administrator, IRCA |
-| `pastor@irca.local` | `pastor-password-123` | A second administrator (so requests can be approved) |
+| `pastor@irca.local` | `pastor-password-123` | A second administrator (so requests can be approved), and the Membership pastor |
+| `office@irca.local` | `office-password-123` | Office secretary: everything in Membership except deciding applications |
+| `followup@irca.local` | `followup-password-123` | Follow-up team: visits and calls, cannot read prayer requests |
 | `clerk@irca.local` | `clerk-password-123` | Finance clerk (Neema Mollel) |
 | `mhazini@irca.local` | `manager-password-123` | Finance manager (Joyce Mhazini) |
 | `admin@test.local` | `admin-password-123` | Administrator of a second church, TEST |
 | `dev@irca.local` | `dev-password-123` | The platform developer |
 
-IRCA has Finance turned on; TEST does not — which is itself worth trying.
+IRCA has Membership and Finance turned on; TEST has neither — which is itself
+worth trying. The registration form runs at <http://localhost:3001>; with
+`REGISTRATION_BACKEND=api` in `apps/registration/.env.local` (and the seed's
+local key in `REGISTRATION_API_KEY`) it writes into this system.
 
 In development, emails are not sent: each one is printed in the API's terminal,
 link and all.
 
 ---
 
-## 9. Walking through it by hand
+## 11. Walking through it by hand
 
 This is the walk that proves the access rules. Half an hour, in a browser.
 
@@ -320,17 +388,32 @@ This is the walk that proves the access rules. Half an hour, in a browser.
     you cannot; another administrator must. Have `pastor@irca.local` approve
     it. The entry is struck through in the list and the totals drop.
 
+**The registration form and Membership**
+
+16. Open <http://localhost:3001> on a phone-sized window and register as a new
+    visitor, with a prayer request. Leave one other visitor half way.
+17. As `pastor@irca.local`: Membership → Members. Type part of the name: they
+    appear as you type. Open the row: their prayer request is there. The
+    half-finished one shows as incomplete, with "Send their link".
+18. Mark them saved (they become a new convert), then Discipleship → New group
+    → add them to it from their record, and tick six sessions in the register:
+    they move on to awaiting baptism.
+19. Enter an application for them, approve it, and see Confirm say the date it
+    becomes possible.
+20. As `followup@irca.local`: the same person opens with **no** prayer request
+    section, and there is no Applications page in the sidebar.
+
 **As `admin@test.local` (the other church)**
 
-13. Finance is not in the sidebar. Turn it on in Portals: the three finance
+21. Finance is not in the sidebar. Turn it on in Portals: the three finance
     roles appear.
-14. Record an expense: it is numbered `TEST-EXP-…-000001`, counting from one.
-15. Paste an IRCA entry's number into the address bar: "No entry with that
+22. Record an expense: it is numbered `TEST-EXP-…-000001`, counting from one.
+23. Paste an IRCA entry's number into the address bar: "No entry with that
     number." The item suggestions contain none of IRCA's items.
 
 ---
 
-## 10. Running the automated tests
+## 12. Running the automated tests
 
 From the repository root:
 
@@ -338,8 +421,8 @@ From the repository root:
 npm run typecheck          # types, everywhere
 npm run lint               # the code rules, including who may touch what
 npm test                   # the small unit tests
-npm run test:e2e -w @irca/api  # 73 tests against a real database
-npm run e2e                # 9 journeys through a real browser
+npm run test:e2e -w @irca/api  # 106 tests against a real database
+npm run e2e                # 11 journeys through a real browser
 ```
 
 The API tests use `irca_test`, a separate database; they never touch your
@@ -357,10 +440,10 @@ safety, and the whole recording-and-approving journey in a browser.
 
 ---
 
-## 11. What is not built yet
+## 13. What is not built yet
 
-- The registration form still runs on its own database (Phase 5).
-- The Membership portal: members, applications, discipleship (Phase 5).
+- Switching the live registration form over (the owner, with the 5.18 runbook),
+  and a week later removing its old database code (5.19).
 - The developer console: per-church usage, and the view-as log in a page that
   looks like a terminal (Phase 6).
-- Deployment and cutover (Phase 6).
+- Deployment and going live (Phase 6).

@@ -16,29 +16,47 @@ Insights.
 > `Person`, `MembershipApplication` and so on. Never call a `Person` a
 > "member" in code. Use `Person.stage === 'CONFIRMED_MEMBER'`.
 
-| Step | What |
-| --- | --- |
-| 5.1 | Move the registration flow into `packages/shared` |
-| 5.2 | The Membership module manifest |
-| 5.3 | Tables |
-| 5.4 | API client keys for the registration app |
-| 5.5 | The public registration API |
-| 5.6 | The registration app talks to the API (behind a switch) |
-| 5.7 | Copying the live registrations |
-| 5.8 | People records |
-| 5.9 | Members API |
-| 5.10 | Applications API |
-| 5.11 | Discipleship API |
-| 5.12 | Dashboard and Insights API |
-| 5.13 | Portal: Dashboard |
-| 5.14 | Portal: Members and the person panel |
-| 5.15 | Portal: Applications |
-| 5.16 | Portal: Discipleship (board, list, class register) |
-| 5.17 | Portal: Insights |
-| 5.18 | Cutover runbook |
-| 5.19 | Removing the old paths |
-| 5.20 | Tests |
-| 5.21 | Phase check |
+| Step | What | Status |
+| --- | --- | --- |
+| 5.1 | Move the registration flow into `packages/shared` | Done: `169b0bd` |
+| 5.2 | The Membership module manifest | Done: `8cdbc51` |
+| 5.3 | Tables | Done: `7840583` |
+| 5.4 | API client keys for the registration app | Done: `a0d175c` |
+| 5.5 | The public registration API | Done: `0830719` |
+| 5.6 | The registration app talks to the API (behind a switch) | Done: `f1b09f8` |
+| 5.7 | Copying the live registrations | Done: `b8d7e07` |
+| 5.8 | People records | Done: `0830719`, `924bc8b` |
+| 5.9 | Members API | Done: `924bc8b` |
+| 5.10 | Applications API | Done: `a06c899` |
+| 5.11 | Discipleship API | Done: `9ea1b52` |
+| 5.12 | Dashboard and Insights API | Done: `2620501` |
+| 5.13 | Portal: Dashboard | Done: `b03eb4e` |
+| 5.14 | Portal: Members and the person panel | Done: `c9e5d95` |
+| 5.15 | Portal: Applications | Done: `d5438f9` |
+| 5.16 | Portal: Discipleship (board, list, class register) | Done: `7fc3e15` (board and register) |
+| 5.17 | Portal: Insights | Done: `b03eb4e` |
+| 5.18 | Cutover runbook | For the owner, against production (below) |
+| 5.19 | Removing the old paths | After a clean cutover, not before: it is the rollback |
+| 5.20 | Tests | Done: `8a55963`, `5935266`, `bb73549` |
+| 5.21 | Phase check | See below |
+
+**What was built differently from this plan, and why**
+
+- The Discipleship board has no drag and drop. People move from their record
+  (one step on, or one step back with a reason) and from the class register,
+  which are the only moves the API allows; a drag that the API then refuses
+  would be worse than no drag.
+- The office's saved/baptised answers override the form's in the API
+  (`coalesce(person, registration)`), exactly as planned, but the stage moves
+  automatically only on "saved" (visitor → new convert) and on finishing the
+  class. Nothing ever moves anyone backwards on its own.
+- The WhatsApp message is one string (`UI.remind`) in the three languages,
+  rather than three separate messages.
+- The Playwright journey for confirming after the probation month is covered
+  by an API test that moves the approval date back instead of a test-only
+  clock endpoint, so no clock endpoint exists in the API at all.
+- The browser tests run the registration form too, on the API, with a known
+  key the seed writes for development and tests only.
 
 **Blast radius (checked before writing this phase).** In `apps/registration`:
 `src/lib/db.ts` (the pool), `src/lib/registration.ts` (all SQL),
@@ -972,9 +990,9 @@ Membership portal".
 
 ## 5.21 — Phase check
 
-- [ ] The cutover runbook was followed, times recorded, and the final delta was 0.
-- [ ] An SMS link sent before the cutover still opens the right registration.
-- [ ] The old `/admin` pages are gone from production.
-- [ ] Prayer requests are visible only with `membership.people.read_sensitive`, proven by test and by viewing as a Follow-up team member.
-- [ ] Every screen of the design exists and was compared side by side with `../design/admin` in both themes.
-- [ ] `registrations.started` / `registrations.submitted` appear in usage.
+- [ ] The cutover runbook was followed, times recorded, and the final delta was 0. *(Owner, production.)*
+- [x] An old link still opens the right registration: tokens are copied exactly (`test/import.e2e-spec.ts`).
+- [x] The old `/admin` pages are gone from production (taken off the web in `2290ffa`).
+- [x] Prayer requests are visible only with `membership.people.read_sensitive`, proven by the API tests (key absence) and the browser journey as the follow-up team.
+- [ ] Every screen of the design compared side by side with `../design/admin` in both themes. *(Owner: the screens exist; the side-by-side is a judgement call.)*
+- [x] `registrations.started` / `registrations.submitted` are counted (`UsageService.inc`).
