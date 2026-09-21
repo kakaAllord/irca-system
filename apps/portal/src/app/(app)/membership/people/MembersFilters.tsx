@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useLiveSearch } from '@/lib/useLiveSearch';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
@@ -29,7 +29,7 @@ export function MembersFilters({
 }) {
   const router = useRouter();
   const params = useSearchParams();
-  const [q, setQ] = useState(params.get('q') ?? '');
+  const [q, setQ] = useLiveSearch('/membership/people');
 
   const set = (changes: Record<string, string>) => {
     const next = new URLSearchParams(params.toString());
@@ -40,19 +40,6 @@ export function MembersFilters({
     next.delete('page');
     router.replace(`/membership/people${next.size ? `?${next}` : ''}`, { scroll: false });
   };
-
-  const current = params.toString();
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const next = new URLSearchParams(current);
-      if ((next.get('q') ?? '') === q) return;
-      if (q) next.set('q', q);
-      else next.delete('q');
-      next.delete('page');
-      router.replace(`/membership/people${next.size ? `?${next}` : ''}`, { scroll: false });
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [q, current, router]);
 
   const value = (key: string) => params.get(key) ?? 'any';
   const tab = params.get('tab') ?? 'all';

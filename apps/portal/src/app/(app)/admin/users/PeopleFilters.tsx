@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useLiveSearch } from '@/lib/useLiveSearch';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
@@ -24,7 +24,7 @@ export function PeopleFilters({
 }) {
   const router = useRouter();
   const params = useSearchParams();
-  const [q, setQ] = useState(params.get('q') ?? '');
+  const [q, setQ] = useLiveSearch('/admin/users');
 
   const set = (changes: Record<string, string>) => {
     const next = new URLSearchParams(params.toString());
@@ -35,20 +35,6 @@ export function PeopleFilters({
     next.delete('page');
     router.replace(`/admin/users${next.size ? `?${next}` : ''}`, { scroll: false });
   };
-
-  // Typing filters the list without a button, but not on every keystroke.
-  const current = params.toString();
-  useEffect(() => {
-    const id = setTimeout(() => {
-      const next = new URLSearchParams(current);
-      if ((next.get('q') ?? '') === q) return;
-      if (q) next.set('q', q);
-      else next.delete('q');
-      next.delete('page');
-      router.replace(`/admin/users${next.size ? `?${next}` : ''}`, { scroll: false });
-    }, 250);
-    return () => clearTimeout(id);
-  }, [q, current, router]);
 
   const filtered = Boolean(params.get('q') || params.get('status') || params.get('roleId'));
 
