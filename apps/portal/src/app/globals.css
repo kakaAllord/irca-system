@@ -1,0 +1,117 @@
+@import 'tailwindcss';
+
+/*
+ * The design's colours (../design/admin, its vars() function), as variables.
+ * Light is the default; dark applies under [data-theme="dark"], which the root
+ * layout sets on the server from the irca_theme cookie, so there is no flash.
+ * --danger and --warn-* are not in the design: they are for errors and the
+ * impersonation banner, and are chosen to pass 4.5:1 against their background.
+ */
+:root {
+  --bg: #faf8f4;
+  --surface: #ffffff;
+  --surface2: #fcfaf7;
+  --border: #e6e1d8;
+  --border2: #efeae1;
+  --fg: #1c1c1c;
+  --fg2: #5c574e;
+  --fg3: #8a8578;
+  --accent: #9a5a2b;
+  --accent-br: #e2d3c2;
+  --accent-ink: #ffffff;
+  --pos: #2e7a54;
+  --pos-bg: #eaf3ed;
+  --pos-br: #cfe3d7;
+  --btn-bg: #1c1c1c;
+  --btn-fg: #faf8f4;
+  --chip: #f3efe7;
+  --input: #f7f4ee;
+  --sidebar: #f3efe7;
+  --thead: #fcfaf7;
+  --hover: #f7f4ee;
+  --salv: #2e7a54;
+  --bapt: #2e6f8e;
+  --neutral-bar: #7e8a79;
+  --danger: #b3261e;
+  --danger-bg: #fbeceb;
+  --danger-br: #f0c7c4;
+  --warn-bg: #fff4e0;
+  --warn-fg: #7a4b00;
+  --warn-br: #f0d29b;
+}
+
+[data-theme='dark'] {
+  --bg: #1c1c1c;
+  --surface: #232220;
+  --surface2: #1f1e1c;
+  --border: #33312d;
+  --border2: #2c2b27;
+  --fg: #f2efe9;
+  --fg2: #a29c91;
+  --fg3: #8e8880;
+  --accent: #c98a4b;
+  --accent-br: #4a3e30;
+  --accent-ink: #1c1c1c;
+  --pos: #7fc79c;
+  --pos-bg: rgba(127, 199, 156, 0.1);
+  --pos-br: rgba(127, 199, 156, 0.28);
+  --btn-bg: #e8e3da;
+  --btn-fg: #1c1c1c;
+  --chip: #302e2a;
+  --input: #262522;
+  --sidebar: #171614;
+  --thead: #1f1e1c;
+  --hover: #282725;
+  --salv: #2e7a54;
+  --bapt: #2e6f8e;
+  --neutral-bar: #5e6b5a;
+  --danger: #f2b8b5;
+  --danger-bg: rgba(242, 184, 181, 0.1);
+  --danger-br: rgba(242, 184, 181, 0.3);
+  --warn-bg: #3a2e14;
+  --warn-fg: #f5d08a;
+  --warn-br: #6b5320;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface2: var(--surface2);
+  --color-border: var(--border);
+  --color-border2: var(--border2);
+  --color-fg: var(--fg);
+  --color-fg2: var(--fg2);
+  --color-fg3: var(--fg3);
+  --color-accent: var(--accent);
+  --color-accent-br: var(--accent-br);
+  --color-accent-ink: var(--accent-ink);
+  --color-pos: var(--pos);
+  --color-pos-bg: var(--pos-bg);
+  --color-pos-br: var(--pos-br);
+  --color-btn-bg: var(--btn-bg);
+  --color-btn-fg: var(--btn-fg);
+  --color-chip: var(--chip);
+  --color-input: var(--input);
+  --color-sidebar: var(--sidebar);
+  --color-hover: var(--hover);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-danger-br: var(--danger-br);
+  --color-warn-bg: var(--warn-bg);
+  --color-warn-fg: var(--warn-fg);
+  --color-warn-br: var(--warn-br);
+  --font-sans: var(--font-geist-sans);
+}
+
+html {
+  color-scheme: light;
+}
+[data-theme='dark'] {
+  color-scheme: dark;
+}
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}

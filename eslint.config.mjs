@@ -13,6 +13,7 @@ export default tseslint.config(
       '**/coverage/**',
       'apps/registration/**',
       'apps/api/src/generated/**',
+      '**/next-env.d.ts',
     ],
   },
   js.configs.recommended,
@@ -29,6 +30,11 @@ export default tseslint.config(
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', destructuredArrayIgnorePattern: '^_' },
       ],
     },
+  },
+  {
+    // The portal runs in browsers as well as on the server.
+    files: ['apps/portal/**/*.{ts,tsx}'],
+    languageOptions: { globals: { ...globals.browser, ...globals.node } },
   },
   {
     // Feature modules reach the database only through Db, which picks the
