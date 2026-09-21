@@ -7,6 +7,7 @@ import { LoggingModule } from './core/logging/logging.module.js';
 import { DatabaseModule } from './core/database/database.module.js';
 import { CoreModule } from './core/core.module.js';
 import { EmailModule } from './core/email/email.module.js';
+import { TestEmailController } from './core/email/test-email.controller.js';
 import { InvitationsModule } from './core/invitations/invitations.module.js';
 import { AdminModule } from './modules/admin/admin.module.js';
 import { AllExceptionsFilter } from './core/http/all-exceptions.filter.js';
@@ -42,7 +43,11 @@ import { UsageInterceptor } from './core/usage/usage.interceptor.js';
     InvitationsModule,
     AdminModule,
   ],
-  controllers: [HealthController],
+  controllers: [
+    HealthController,
+    // Only in tests: reading back the emails the memory provider kept.
+    ...(process.env.NODE_ENV === 'test' ? [TestEmailController] : []),
+  ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     // Guards run in this order: the cheapest refusals first (too many requests

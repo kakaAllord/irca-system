@@ -11,12 +11,18 @@
 //       Creates the account, or promotes an existing one, to the platform dev
 //       role, and sets its password (asked for twice, never echoed). The only
 //       way anyone becomes a dev: no endpoint can grant it.
+//
+//   registry:sync
+//       Writes the permissions and built-in roles the code defines into the
+//       database. The API does this at every boot; this is for a fresh
+//       database that must be seeded before the API has ever run.
 import { parseArgs } from 'node:util';
 import { NestFactory } from '@nestjs/core';
 import { normalizeEmail } from '@irca/shared';
 import { CliModule } from './cli.module.js';
 import { PrismaCore } from '../core/database/prisma-clients.js';
 import { PasswordService } from '../core/auth/password.service.js';
+import { RegistrySync } from '../core/rbac/registry-sync.service.js';
 import { promptHidden } from './prompt.js';
 
 /* eslint-disable no-console -- a command-line tool reports to its terminal */
@@ -67,8 +73,19 @@ async function createDev(args: string[]) {
   }
 }
 
+async function syncRegistry() {
+  const app = await NestFactory.createApplicationContext(CliModule, { logger: ['error', 'warn'] });
+  try {
+    await app.get(RegistrySync).sync();
+    console.log('permissions and built-in roles are up to date');
+  } finally {
+    await app.close();
+  }
+}
+
 const COMMANDS: Record<string, (args: string[]) => Promise<void>> = {
   'user:create-dev': createDev,
+  'registry:sync': syncRegistry,
 };
 
 const [command, ...rest] = process.argv.slice(2);

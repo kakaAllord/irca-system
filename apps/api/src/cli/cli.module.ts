@@ -3,10 +3,11 @@ import { ClsModule } from 'nestjs-cls';
 import { AppConfigModule } from '../config/config.module.js';
 import { DatabaseModule } from '../core/database/database.module.js';
 import { PasswordService } from '../core/auth/password.service.js';
+import { RegistrySync } from '../core/rbac/registry-sync.service.js';
 
 /** What command-line tasks need: configuration, the database, and no HTTP server. */
 @Module({
   imports: [AppConfigModule, ClsModule.forRoot({ global: true }), DatabaseModule],
-  providers: [PasswordService],
+  providers: [PasswordService, RegistrySync],
 })
 export class CliModule {}
