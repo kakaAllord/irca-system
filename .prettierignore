@@ -5,3 +5,4 @@ coverage
 package-lock.json
 apps/registration
 docs
+apps/api/src/generated

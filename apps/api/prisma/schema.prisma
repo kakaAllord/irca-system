@@ -1,0 +1,131 @@
+// The IRCA system's database. Tables and columns are snake_case in SQL (via
+// @map / @@map) so plain SQL and the dev console read naturally; models and
+// fields are camelCase in TypeScript. Ids are UUID v7: sortable by creation
+// time, and not guessable.
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  runtime             = "nodejs"
+  moduleFormat        = "esm"
+  // The API compiles with module: nodenext, where relative imports must name
+  // the emitted .js file.
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ChurchStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum PlatformRole {
+  NONE
+  DEV
+}
+
+enum UserStatus {
+  INVITED // exists, has not set a password yet
+  ACTIVE
+  DISABLED
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  DISABLED
+}
+
+/// A tenant. Everything a church owns points here.
+model Church {
+  id        String       @id @default(uuid(7)) @db.Uuid
+  /// Short uppercase code used in transaction numbers (IRCA-EXP-...). Frozen
+  /// once the church has any finance entry (a trigger, Phase 4).
+  code      String       @unique @db.VarChar(10)
+  /// Lowercase, used in URLs and by API clients.
+  slug      String       @unique @db.VarChar(40)
+  name      String       @db.VarChar(120)
+  timezone  String       @default("Africa/Dar_es_Salaam") @db.VarChar(64)
+  currency  String       @default("TZS") @db.Char(3)
+  status    ChurchStatus @default(ACTIVE)
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  memberships ChurchMembership[]
+
+  @@map("churches")
+}
+
+/// A person who can sign in. Global across churches.
+model User {
+  id                String       @id @default(uuid(7)) @db.Uuid
+  /// Always stored trimmed and lowercased (normalizeEmail in @irca/shared).
+  email             String       @unique @db.VarChar(254)
+  fullName          String       @map("full_name") @db.VarChar(120)
+  phone             String?      @db.VarChar(20)
+  locale            String       @default("en") @db.VarChar(5)
+  /// Null until the person accepts their invitation and sets a password.
+  passwordHash      String?      @map("password_hash")
+  passwordChangedAt DateTime?    @map("password_changed_at") @db.Timestamptz(6)
+  platformRole      PlatformRole @default(NONE) @map("platform_role")
+  status            UserStatus   @default(INVITED)
+  failedLoginCount  Int          @default(0) @map("failed_login_count")
+  lockedUntil       DateTime?    @map("locked_until") @db.Timestamptz(6)
+  lastLoginAt       DateTime?    @map("last_login_at") @db.Timestamptz(6)
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  memberships ChurchMembership[]
+  sessions    Session[]
+
+  @@map("users")
+}
+
+/// A user's place in one church. Roles hang off this, not off the user, so one
+/// person can hold different roles in two churches.
+model ChurchMembership {
+  id          String           @id @default(uuid(7)) @db.Uuid
+  churchId    String           @map("church_id") @db.Uuid
+  userId      String           @map("user_id") @db.Uuid
+  status      MembershipStatus @default(INVITED)
+  invitedById String?          @map("invited_by_id") @db.Uuid
+  joinedAt    DateTime?        @map("joined_at") @db.Timestamptz(6)
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  church Church @relation(fields: [churchId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@unique([churchId, userId])
+  @@index([userId])
+  @@map("church_memberships")
+}
+
+/// One signed-in browser. The cookie holds a random token; only its SHA-256 is stored.
+model Session {
+  id              String    @id @default(uuid(7)) @db.Uuid
+  tokenHash       String    @unique @map("token_hash") @db.Char(64)
+  userId          String    @map("user_id") @db.Uuid
+  /// The church this session is working in. Null for a dev who is not
+  /// impersonating, and for a user with no active membership.
+  activeChurchId  String?   @map("active_church_id") @db.Uuid
+  /// Set while this session is impersonating someone. The foreign key to
+  /// impersonation_sessions arrives in Phase 2; the column exists now so no
+  /// session code has to change shape later.
+  impersonationId String?   @unique @map("impersonation_id") @db.Uuid
+  ip              String?   @db.VarChar(64)
+  userAgent       String?   @map("user_agent") @db.VarChar(400)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastSeenAt      DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  expiresAt       DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt       DateTime? @map("revoked_at") @db.Timestamptz(6)
+  revokeReason    String?   @map("revoke_reason") @db.VarChar(40)
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("sessions")
+}

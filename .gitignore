@@ -5,6 +5,8 @@ dist/
 coverage/
 *.tsbuildinfo
 next-env.d.ts
+# Prisma Client, generated from the schema by `prisma generate`
+apps/api/src/generated/
 
 # Local environment. .env.example files are committed; real values never are.
 .env
