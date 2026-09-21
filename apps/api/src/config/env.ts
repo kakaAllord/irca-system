@@ -11,6 +11,8 @@ export const EnvSchema = z
     DATABASE_URL_READONLY: z.url(),
     DIRECT_DATABASE_URL: z.url(),
     PORTAL_ORIGIN: z.url(),
+    /** Where the registration form lives, for the links the office sends. */
+    REGISTRATION_ORIGIN: z.url().default('http://localhost:3001'),
     SESSION_COOKIE_NAME: z.string().min(1),
     SESSION_ABSOLUTE_HOURS: z.coerce.number().int().positive(),
     SESSION_IDLE_HOURS: z.coerce.number().int().positive(),

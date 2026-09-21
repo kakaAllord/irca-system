@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { ErrorCode } from '@irca/shared';
 import {
   FIRST_STEP,
+  JOINING,
   LANGS,
   keysForStep,
   screenIds,
@@ -174,6 +175,9 @@ export class PublicRegistrationService {
         data: { status: 'submitted', submittedAt: new Date(), currentStep: 'done' },
       });
       await this.syncPerson(tx, sent);
+      // Ticking "join the church" and finishing is asking to become a member:
+      // the application appears for the pastors without anyone typing it in.
+      if (sent.interest.includes(JOINING)) await this.applyFromForm(tx, sent);
       // One line per registration, not per tap: a busy Sunday would bury the
       // log otherwise. There is no actor — the visitor is not a user here.
       await this.audit.recordIn(tx, {
@@ -221,6 +225,25 @@ export class PublicRegistrationService {
       if (code === 'P2025') return null;
       throw err;
     }
+  }
+
+  /** An application from the form, unless one is already open for them. */
+  private async applyFromForm(tx: TenantTx, row: Registration): Promise<void> {
+    const person = await tx.person.findFirst({
+      where: { churchId: row.churchId, registrationId: row.id },
+    });
+    if (!person) return;
+    const open = await tx.membershipApplication.findFirst({
+      where: {
+        churchId: row.churchId,
+        personId: person.id,
+        status: { in: ['UNDER_REVIEW', 'APPROVED'] },
+      },
+    });
+    if (open) return;
+    await tx.membershipApplication.create({
+      data: { churchId: row.churchId, personId: person.id, source: 'FORM' },
+    });
   }
 
   /**

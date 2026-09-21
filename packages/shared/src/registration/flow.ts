@@ -125,6 +125,14 @@ export const UI = {
     'Ce numéro est déjà enregistré. Demandez votre lien au bureau.',
   ),
 
+  // What the office sends someone who did not finish. {name} and {link} are
+  // filled in; with no name yet the greeting simply has none.
+  remind: T(
+    'Hello {name}, thank you for visiting IRCA. You can finish your registration here: {link}',
+    'Habari {name}, asante kwa kutembelea IRCA. Unaweza kumaliza usajili wako hapa: {link}',
+    'Bonjour {name}, merci de votre visite à IRCA. Vous pouvez terminer votre inscription ici : {link}',
+  ),
+
   lblFriend: T(
     'Who invited you? We would like to thank them.',
     'Nani alikualika? Tungependa kumshukuru.',
