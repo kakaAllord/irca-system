@@ -104,6 +104,8 @@ model ChurchMembership {
   roles  MembershipRole[]
 
   @@unique([churchId, userId])
+  /// So a role can be linked only to a membership of the same church.
+  @@unique([churchId, id])
   @@index([userId])
   @@map("church_memberships")
 }
@@ -193,6 +195,9 @@ model Role {
 
   @@unique([churchId, moduleKey, name])
   @@unique([churchId, systemKey])
+  /// Referenced by role_permissions and membership_roles together with the
+  /// church, so a role of another church cannot be attached here.
+  @@unique([churchId, id])
   @@map("roles")
 }
 
@@ -201,7 +206,7 @@ model RolePermission {
   roleId        String @map("role_id") @db.Uuid
   permissionKey String @map("permission_key") @db.VarChar(80)
 
-  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  role       Role       @relation(fields: [churchId, roleId], references: [churchId, id], onDelete: Cascade)
   permission Permission @relation(fields: [permissionKey], references: [key])
 
   @@id([roleId, permissionKey])
@@ -216,8 +221,8 @@ model MembershipRole {
   grantedById  String?  @map("granted_by_id") @db.Uuid
   grantedAt    DateTime @default(now()) @map("granted_at") @db.Timestamptz(6)
 
-  membership ChurchMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
-  role       Role             @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  membership ChurchMembership @relation(fields: [churchId, membershipId], references: [churchId, id], onDelete: Cascade)
+  role       Role             @relation(fields: [churchId, roleId], references: [churchId, id], onDelete: Cascade)
 
   @@id([membershipId, roleId])
   @@index([churchId])

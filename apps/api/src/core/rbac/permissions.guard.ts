@@ -32,17 +32,19 @@ export class PermissionsGuard implements CanActivate {
     if (!rule) throw new AppError(403, ErrorCode.FORBIDDEN, 'You do not have access to this.');
 
     const required = rule.all ?? rule.any ?? [];
-    const platformOnly = required.every((key) => key.startsWith('platform.'));
-    if (!platformOnly && !this.auth.churchId) {
+    const held = required.filter((key) => this.auth.has(key));
+    const satisfied = rule.all ? held.length === required.length : held.length > 0;
+    if (!satisfied) {
+      throw new AppError(403, ErrorCode.FORBIDDEN, 'You do not have access to this.', { required });
+    }
+
+    // A church is needed only when the permission being used is a church's.
+    // A dev acting on the platform has no church, and must not be asked for one.
+    const usesChurchPermission = held.some((key) => !key.startsWith('platform.'));
+    if (usesChurchPermission && !this.auth.churchId) {
       throw new AppError(403, ErrorCode.FORBIDDEN, 'Choose a church first.');
     }
 
-    const ok = rule.all
-      ? rule.all.every((k) => this.auth.has(k))
-      : rule.any!.some((k) => this.auth.has(k));
-    if (!ok) {
-      throw new AppError(403, ErrorCode.FORBIDDEN, 'You do not have access to this.', { required });
-    }
     return true;
   }
 }

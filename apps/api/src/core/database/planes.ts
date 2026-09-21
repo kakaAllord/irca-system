@@ -38,3 +38,38 @@ export const CONTROL_MODELS = new Set<string>([
 
 /** Phase 4 adds finance, Phase 5 membership and registrations. */
 export const TENANT_PLANE_MODELS = new Set<string>([]);
+
+/**
+ * The same split, by table name, for checks that read the database's own
+ * catalogue (and for the export and move tools of Phase 6).
+ */
+export const CONTROL_PLANE_TABLES = new Set<string>([
+  'churches',
+  'users',
+  'sessions',
+  'permissions',
+  'church_memberships',
+  'church_modules',
+  'roles',
+  'role_permissions',
+  'membership_roles',
+  'impersonation_sessions',
+  'usage_daily',
+  'platform_usage_daily',
+  'user_activity_daily',
+  'job_runs',
+  'church_placements',
+  'audit_events',
+]);
+
+/** A church's own records: these move with the church. Phase 4 and 5 add to it. */
+export const TENANT_PLANE_TABLES = new Set<string>([]);
+
+/** Tables the tenant extension scopes, by table name. */
+export const TENANT_TABLES = new Set<string>([
+  'church_memberships',
+  'church_modules',
+  'roles',
+  'role_permissions',
+  'membership_roles',
+]);

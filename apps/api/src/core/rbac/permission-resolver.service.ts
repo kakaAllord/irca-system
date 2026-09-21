@@ -22,9 +22,13 @@ export class PermissionResolver {
       -- tenant: filtered by m.church_id below; core connection, so RLS does not scope it
       select distinct rp.permission_key
       from church_memberships m
-      join membership_roles mr on mr.membership_id = m.id
-      join roles r             on r.id = mr.role_id and r.deleted_at is null
-      join role_permissions rp on rp.role_id = r.id
+      -- Every join is pinned to the same church: a role of another church,
+      -- linked here by a bug or on purpose, must grant nothing. The database
+      -- refuses such a link too (composite foreign keys), and this is the
+      -- second lock on the same door.
+      join membership_roles mr on mr.membership_id = m.id and mr.church_id = m.church_id
+      join roles r             on r.id = mr.role_id and r.church_id = m.church_id and r.deleted_at is null
+      join role_permissions rp on rp.role_id = r.id and rp.church_id = r.church_id
       join permissions p       on p.key = rp.permission_key and p.retired_at is null
       join church_modules cm   on cm.church_id = m.church_id
                               and cm.module_key = r.module_key
