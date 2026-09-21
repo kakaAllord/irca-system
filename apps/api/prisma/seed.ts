@@ -97,6 +97,7 @@ const test = await church('TEST', 'test', 'Test Church');
 // IRCA runs Finance; TEST does not, so a test can prove a portal that is off
 // is off, and that the two churches number their entries independently.
 await portal(irca.id, 'finance');
+await portal(irca.id, 'membership');
 
 // The permissions and built-in roles the code defines, written before anyone
 // is given one.
@@ -106,10 +107,21 @@ await user('dev@irca.local', 'Dev Account', 'dev-password-123', 'DEV');
 await member(irca.id, (await user('admin@irca.local', 'IRCA Admin', 'admin-password-123')).id, [
   'admin.administrator',
 ]);
-// A second administrator, because nobody decides their own change request.
+// A second administrator, because nobody decides their own change request,
+// and the pastor who decides membership applications.
 await member(irca.id, (await user('pastor@irca.local', 'Pastor Sarah', 'pastor-password-123')).id, [
   'admin.administrator',
+  'membership.pastor',
 ]);
+// The office, and the follow-up team, who must not read prayer requests.
+await member(irca.id, (await user('office@irca.local', 'Grace Office', 'office-password-123')).id, [
+  'membership.secretary',
+]);
+await member(
+  irca.id,
+  (await user('followup@irca.local', 'Daniel Followup', 'followup-password-123')).id,
+  ['membership.followup'],
+);
 await member(irca.id, (await user('clerk@irca.local', 'Neema Mollel', 'clerk-password-123')).id, [
   'finance.clerk',
 ]);
@@ -123,6 +135,6 @@ await member(test.id, (await user('admin@test.local', 'Test Admin', 'admin-passw
 ]);
 
 console.log(
-  'seeded: IRCA (with Finance) and TEST, with dev@, admin@, pastor@, clerk@ and mhazini@irca.local, admin@test.local',
+  'seeded: IRCA (with Membership and Finance) and TEST, with dev@, admin@, pastor@, office@, followup@, clerk@ and mhazini@irca.local, admin@test.local',
 );
 await db.$disconnect();
