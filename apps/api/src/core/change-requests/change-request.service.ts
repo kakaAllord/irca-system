@@ -145,6 +145,7 @@ export class ChangeRequestService {
         summary: `Cancelled the change asked for on ${request.entityLabel}`,
       });
     });
+    this.usage.inc('change_requests.cancelled');
   }
 
   /**
@@ -249,6 +250,7 @@ export class ChangeRequestService {
       return row;
     });
     await this.notifyRequester(request, 'rejected', note);
+    this.usage.inc('change_requests.rejected');
   }
 
   async list(query: ChangeRequestQuery): Promise<ChangeRequestView[]> {

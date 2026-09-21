@@ -5,6 +5,7 @@ import { Db, type TenantTx } from '../../../core/database/db.service.js';
 import { RequestAuth } from '../../../core/context/request-auth.js';
 import { AppError } from '../../../core/http/app-error.js';
 import { AuditService } from '../../../core/audit/audit.service.js';
+import { UsageService } from '../../../core/usage/usage.service.js';
 import { moveStage } from '../journey.js';
 import { setting } from '../settings.js';
 
@@ -32,6 +33,7 @@ export class DiscipleshipService {
     private readonly db: Db,
     private readonly auth: RequestAuth,
     private readonly audit: AuditService,
+    private readonly usage: UsageService,
   ) {}
 
   groups() {
@@ -155,6 +157,7 @@ export class DiscipleshipService {
       await this.write(tx, churchId, enrollmentId, sessionNo, mark);
       await this.finishIfDone(tx, churchId, enrollment.id, sessions);
     });
+    this.usage.inc('membership.attendance.marked');
   }
 
   /** "Mark today's session": everyone ticked attended, everyone else missed. */
@@ -182,6 +185,7 @@ export class DiscipleshipService {
         summary: `Marked session ${sessionNo}: ${attended.length} of ${enrollments.length} came`,
       });
     });
+    this.usage.inc('membership.attendance.marked');
   }
 
   /** The class register: every open sign-up in a group, and each session's mark. */

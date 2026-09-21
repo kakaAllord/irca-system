@@ -11,6 +11,7 @@ import { ZodPipe } from '../../core/http/zod.pipe.js';
 import { RequirePermission } from '../../core/rbac/decorators.js';
 import { RequestAuth } from '../../core/context/request-auth.js';
 import { AuditService } from '../../core/audit/audit.service.js';
+import { UsageService } from '../../core/usage/usage.service.js';
 import { ChangeRequestService } from '../../core/change-requests/change-request.service.js';
 import { TransactionService, type TransactionQuery } from './transactions.service.js';
 import { csv, csvFilename } from './csv.js';
@@ -28,6 +29,7 @@ export class TransactionsController {
     private readonly changeRequests: ChangeRequestService,
     private readonly auth: RequestAuth,
     private readonly audit: AuditService,
+    private readonly usage: UsageService,
   ) {}
 
   @RequirePermission('finance.transactions.create')
@@ -56,6 +58,7 @@ export class TransactionsController {
     const rows = await this.transactions.all(filters);
     const churchCode = query.churchCode ?? 'finance';
 
+    this.usage.inc('finance.exports');
     await this.audit.recordNow({
       action: 'finance.transactions.exported',
       entityType: 'finance_transaction',

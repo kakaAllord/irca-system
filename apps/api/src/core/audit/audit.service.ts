@@ -4,6 +4,7 @@ import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaCore } from '../database/prisma-clients.js';
 import type { TenantTx } from '../database/db.service.js';
 import type { RequestContext } from '../context/request-context.js';
+import { UsageService } from '../usage/usage.service.js';
 
 export type AuditEventInput = {
   action: string;
@@ -56,6 +57,7 @@ export class AuditService {
   constructor(
     private readonly db: PrismaCore,
     private readonly cls: ClsService<RequestContext>,
+    private readonly usage: UsageService,
   ) {}
 
   private common(event: AuditEventInput) {
@@ -80,6 +82,7 @@ export class AuditService {
   /** Infrastructure events: sign-in, impersonation, jobs. Written straight away. */
   async recordNow(event: AuditEventInput): Promise<void> {
     await this.db.auditEvent.create({ data: { ...this.common(event), source: 'core' } });
+    this.usage.inc('audit.events', 1, event.churchId !== undefined ? event.churchId : undefined);
   }
 
   /**
@@ -88,5 +91,6 @@ export class AuditService {
    */
   async recordIn(tx: TenantTx, event: AuditEventInput): Promise<void> {
     await tx.auditEvent.create({ data: { ...this.common(event), source: 'feature' } });
+    this.usage.inc('audit.events');
   }
 }

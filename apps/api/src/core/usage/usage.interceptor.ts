@@ -31,6 +31,10 @@ export class UsageInterceptor implements NestInterceptor {
       const ms = Date.now() - started;
       this.usage.inc('api.requests');
       this.usage.inc(`api.requests.${moduleOf(req.path)}`);
+      // The route's template, never the real path: a path would grow without
+      // bound and would store entry numbers and tokens in the usage table.
+      const template = (req.route as { path?: string } | undefined)?.path;
+      if (template) this.usage.inc(`api.route.${req.method} ${template.replace(/^\/v1/, '')}`);
       this.usage.inc('api.latency_ms.sum', ms);
       this.usage.max('api.latency_ms.max', ms);
       if (status >= 500) this.usage.inc('api.errors.5xx');

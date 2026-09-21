@@ -5,6 +5,7 @@ import { ErrorCode, type LoginInput } from '@irca/shared';
 import { PrismaCore } from '../database/prisma-clients.js';
 import { AppError } from '../http/app-error.js';
 import type { RequestContext } from '../context/request-context.js';
+import { UsageService } from '../usage/usage.service.js';
 import { PermissionResolver } from '../rbac/permission-resolver.service.js';
 import { PasswordService } from './password.service.js';
 import { SessionService } from './session.service.js';
@@ -27,6 +28,7 @@ export class AuthService {
     private readonly sessions: SessionService,
     private readonly cls: ClsService<RequestContext>,
     private readonly permissions: PermissionResolver,
+    private readonly usage: UsageService,
   ) {}
 
   /** Checks the credentials and opens a session. Returns the raw token for the cookie. */
@@ -44,6 +46,8 @@ export class AuthService {
     const ok = await this.passwords.verify(user?.passwordHash ?? null, input.password);
     if (!user || !ok || user.status !== 'ACTIVE') {
       if (user) await this.recordFailure(user.id, user.failedLoginCount);
+      // No church yet: a failed sign-in is counted for the platform.
+      this.usage.inc('auth.login_failures', 1, null);
       // The address is hashed, never logged: repeated attacks on one address
       // stay visible without keeping the emails of people with no account.
       this.logger.log({
@@ -87,6 +91,8 @@ export class AuthService {
       await this.permissions.forSignedIn(user.id, user.platformRole, session.activeChurchId),
     );
 
+    this.usage.inc('auth.logins', 1, session.activeChurchId);
+    this.usage.inc('auth.sessions_created', 1, session.activeChurchId);
     this.logger.log({ msg: 'signed in', userId: user.id });
     return { token };
   }
@@ -123,6 +129,7 @@ export class AuthService {
 
   private async recordFailure(userId: string, failuresSoFar: number): Promise<void> {
     const failures = failuresSoFar + 1;
+    if (failures >= MAX_FAILURES) this.usage.inc('auth.lockouts', 1, null);
     await this.db.user.update({
       where: { id: userId },
       data:

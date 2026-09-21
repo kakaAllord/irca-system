@@ -2,6 +2,7 @@ import { Controller, Get, Header, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { RequirePermission } from '../../core/rbac/decorators.js';
 import { AuditService } from '../../core/audit/audit.service.js';
+import { UsageService } from '../../core/usage/usage.service.js';
 import { ReportsService } from './reports.service.js';
 import { csv, csvFilename } from './csv.js';
 
@@ -11,6 +12,7 @@ export class FinanceReportsController {
   constructor(
     private readonly reports: ReportsService,
     private readonly audit: AuditService,
+    private readonly usage: UsageService,
   ) {}
 
   @RequirePermission('finance.overview.read')
@@ -30,6 +32,7 @@ export class FinanceReportsController {
   @Header('Content-Type', 'text/csv; charset=utf-8')
   async statementCsv(@Query('from') from: string, @Query('to') to: string, @Res() res: Response) {
     const statement = await this.reports.statement(from, to);
+    this.usage.inc('finance.exports');
     await this.audit.recordNow({
       action: 'finance.statement.exported',
       summary: `Downloaded the statement for ${from} to ${to}`,

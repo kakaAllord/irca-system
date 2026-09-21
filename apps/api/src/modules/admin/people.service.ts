@@ -4,6 +4,7 @@ import { Db } from '../../core/database/db.service.js';
 import { AppError } from '../../core/http/app-error.js';
 import { RequestAuth } from '../../core/context/request-auth.js';
 import { AuditService } from '../../core/audit/audit.service.js';
+import { UsageService } from '../../core/usage/usage.service.js';
 import { SessionService } from '../../core/auth/session.service.js';
 import { ImpersonationService } from '../../core/impersonation/impersonation.service.js';
 
@@ -43,6 +44,7 @@ export class PeopleService {
     private readonly audit: AuditService,
     private readonly sessions: SessionService,
     private readonly impersonation: ImpersonationService,
+    private readonly usage: UsageService,
   ) {}
 
   async list(query: PeopleQuery): Promise<{ rows: PersonRow[]; total: number }> {
@@ -206,6 +208,8 @@ export class PeopleService {
     const had = new Set(membership.roles.map((r) => r.roleId));
     const want = new Set(roleIds);
     const removing = membership.roles.filter((r) => !want.has(r.roleId));
+    const adding = roles.filter((r) => !had.has(r.id)).length;
+    if (adding + removing.length) this.usage.inc('admin.role_changes', adding + removing.length);
     if (removing.some((r) => r.role.systemKey === 'admin.administrator')) {
       await this.guardLastAdministrator(churchId, userId);
     }
