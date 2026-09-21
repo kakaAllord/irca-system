@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { CHURCH_MODULES, ErrorCode, moduleByKey } from '@irca/shared';
 import { Db } from '../../core/database/db.service.js';
-import { PrismaCore } from '../../core/database/prisma-clients.js';
 import { AppError } from '../../core/http/app-error.js';
 import { RequestAuth } from '../../core/context/request-auth.js';
 import { AuditService } from '../../core/audit/audit.service.js';
@@ -21,7 +20,6 @@ import { RegistrySync } from '../../core/rbac/registry-sync.service.js';
 export class ChurchModulesService {
   constructor(
     private readonly db: Db,
-    private readonly core: PrismaCore,
     private readonly auth: RequestAuth,
     private readonly audit: AuditService,
     private readonly usage: UsageService,
@@ -84,11 +82,7 @@ export class ChurchModulesService {
     });
 
     // Its built-in roles appear the moment it is turned on.
-    if (enabled) {
-      await this.core.$transaction((tx) =>
-        this.registry.ensureModuleRoles(tx, churchId, moduleKey),
-      );
-    }
+    if (enabled) await this.registry.syncModuleRoles(churchId, moduleKey);
     this.usage.inc('admin.modules.toggled');
   }
 }

@@ -1,12 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { ErrorCode, initialsOf } from '@irca/shared';
 import { Db } from '../../core/database/db.service.js';
-import { PrismaCore } from '../../core/database/prisma-clients.js';
 import { AppError } from '../../core/http/app-error.js';
 import { RequestAuth } from '../../core/context/request-auth.js';
 import { AuditService } from '../../core/audit/audit.service.js';
 import { SessionService } from '../../core/auth/session.service.js';
-import { impersonationRefusal } from '../../core/impersonation/policy.js';
+import { ImpersonationService } from '../../core/impersonation/impersonation.service.js';
 
 export type PersonRow = {
   userId: string;
@@ -40,10 +39,10 @@ export type PeopleQuery = {
 export class PeopleService {
   constructor(
     private readonly db: Db,
-    private readonly core: PrismaCore,
     private readonly auth: RequestAuth,
     private readonly audit: AuditService,
     private readonly sessions: SessionService,
+    private readonly impersonation: ImpersonationService,
   ) {}
 
   async list(query: PeopleQuery): Promise<{ rows: PersonRow[]; total: number }> {
@@ -82,7 +81,7 @@ export class PeopleService {
       this.db.client.churchMembership.count({ where }),
     ]);
 
-    const lastSeen = await this.lastSeen(
+    const lastSeen = await this.sessions.lastSeenInChurch(
       churchId,
       memberships.map((m) => m.userId),
     );
@@ -128,7 +127,7 @@ export class PeopleService {
     if (!membership) throw new AppError(404, ErrorCode.NOT_FOUND, 'No such person here.');
 
     const invitedBy = membership.invitedById
-      ? await this.core.user.findUnique({ where: { id: membership.invitedById } })
+      ? await this.db.client.user.findUnique({ where: { id: membership.invitedById } })
       : null;
     const recent = await this.db.client.auditEvent.findMany({
       where: { churchId, actorUserId: userId, impersonationId: null },
@@ -292,37 +291,7 @@ export class PeopleService {
     }
   }
 
-  private async canImpersonate(churchId: string, subjectUserId: string): Promise<boolean> {
-    if (!this.auth.hasAny('admin.users.impersonate', 'platform.users.impersonate')) return false;
-    const subject = await this.core.user.findUnique({ where: { id: subjectUserId } });
-    if (!subject) return false;
-    const membership = await this.core.churchMembership.findUnique({
-      where: { churchId_userId: { churchId, userId: subjectUserId } },
-    });
-    const church = await this.core.church.findUnique({ where: { id: churchId } });
-    return (
-      impersonationRefusal(
-        {
-          id: this.auth.actorUserId!,
-          isDev: this.auth.isDev,
-          canImpersonateHere: this.auth.has('admin.users.impersonate'),
-          alreadyImpersonating: this.auth.isImpersonating,
-          churchId: this.auth.churchId,
-        },
-        churchId,
-        { subject, membership, church },
-      ) === null
-    );
-  }
-
-  /** When each person was last seen, from their sessions in this church. */
-  private async lastSeen(churchId: string, userIds: string[]): Promise<Map<string, Date>> {
-    if (!userIds.length) return new Map();
-    const rows = await this.core.session.groupBy({
-      by: ['userId'],
-      where: { userId: { in: userIds }, activeChurchId: churchId },
-      _max: { lastSeenAt: true },
-    });
-    return new Map(rows.map((r) => [r.userId, r._max.lastSeenAt!]));
+  private canImpersonate(churchId: string, subjectUserId: string): Promise<boolean> {
+    return this.impersonation.canImpersonate(churchId, subjectUserId);
   }
 }

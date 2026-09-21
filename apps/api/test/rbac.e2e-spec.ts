@@ -87,7 +87,7 @@ describe('what each person may do', () => {
     );
     await db.query(
       `insert into role_permissions (church_id, role_id, permission_key) values ($1, $2, 'admin.users.manage')`,
-      [b.id, role.rows ? role.rows[0]!.id : role[0]!.id],
+      [b.id, role[0]!.id],
     );
     const { rows: membership } = await db.query<{ id: string }>(
       `select id from church_memberships where church_id = $1 and user_id = $2`,

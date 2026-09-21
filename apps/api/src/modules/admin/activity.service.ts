@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { Db } from '../../core/database/db.service.js';
-import { PrismaCore } from '../../core/database/prisma-clients.js';
 import { RequestAuth } from '../../core/context/request-auth.js';
 
 export type ActivityQuery = {
@@ -23,7 +22,6 @@ export type ActivityQuery = {
 export class ActivityService {
   constructor(
     private readonly db: Db,
-    private readonly core: PrismaCore,
     private readonly auth: RequestAuth,
   ) {}
 
@@ -53,7 +51,7 @@ export class ActivityService {
     });
 
     const page = rows.slice(0, query.limit);
-    const actors = await this.core.user.findMany({
+    const actors = await this.db.client.user.findMany({
       where: {
         id: { in: [...new Set(page.map((r) => r.actorUserId).filter(Boolean))] as string[] },
       },
