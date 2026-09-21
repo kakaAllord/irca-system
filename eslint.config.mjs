@@ -23,11 +23,4 @@ export default tseslint.config(
       'no-console': 'warn',
     },
   },
-  {
-    // A forgotten await on a write is a silent bug in the API: the request
-    // answers before the row exists, or the error goes nowhere.
-    files: ['apps/api/src/**/*.ts', 'apps/api/test/**/*.ts'],
-    languageOptions: { parserOptions: { projectService: true } },
-    rules: { '@typescript-eslint/no-floating-promises': 'error' },
-  },
 );

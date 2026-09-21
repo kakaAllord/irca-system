@@ -324,64 +324,60 @@ prints `irca_app`.
 
 ## Step 1.6 — Scaffold `apps/api`
 
-**Goal:** an empty NestJS 11 app living in the workspace.
+**Goal:** an empty NestJS 12 app living in the workspace.
+
+**What NestJS 12 generates, and why we keep it** (this differs from older
+Nest tutorials and from shoprex):
+
+| NestJS 12 default | What it means for you |
+| --- | --- |
+| `"type": "module"`, `module: nodenext` | The API is an **ES-module** project. **Relative imports end in `.js`** (`import { AppModule } from './app.module.js'`), even though the file is `.ts`. Leaving it off compiles but fails at runtime. |
+| **Vitest** (`vitest.config.ts`, `vitest.config.e2e.ts`) | Tests use Vitest, not Jest. `describe/it/expect` are globals. Unit tests are `*.spec.ts`, and e2e tests are `*.e2e-spec.ts` under `test/`. |
+| **oxlint** with type-aware rules | `npm run lint -w @irca/api` runs oxlint, whose config already makes `no-floating-promises` an error. The root ESLint still runs over the API for the shared rules (and the import restrictions from 1.9). |
+| **TypeScript 6** in the API's own `devDependencies` | npm installs it inside `apps/api/node_modules`. The rest of the repository stays on the root's TypeScript 5.9.3 until the registration app is upgraded. |
 
 **Do**
 
 1. From the repository root:
 
    ```bash
-   npx @nestjs/cli@11 new api --directory apps/api --package-manager npm \
+   npx -y @nestjs/cli@12 new api --directory apps/api --package-manager npm \
      --skip-git --skip-install --strict
    ```
 
-2. Delete what the scaffold makes that we do not use:
-   `apps/api/package-lock.json` (root lockfile only), `apps/api/.prettierrc`,
-   `apps/api/eslint.config.mjs` (the root one applies), `src/app.controller*.ts`
-   and `src/app.service.ts`.
-3. In `apps/api/package.json`: set `"name": "@irca/api"`, add
-   `"@irca/shared": "*"` to dependencies, and set the scripts:
+2. Delete what we do not use: `apps/api/.prettierrc` (the root one applies),
+   `src/app.controller.ts`, `src/app.service.ts`, `src/app.controller.spec.ts` and
+   `test/app.e2e-spec.ts`. In `package.json`, remove the `deploy` script and the
+   `@nestjs/mau` dev dependency (Nest's hosted deployment service; hosting is
+   decided in Phase 6).
+3. In `apps/api/package.json`: `"name": "@irca/api"`, add `"@irca/shared": "*"`
+   to dependencies, and make the scripts:
 
    ```json
    "scripts": {
      "build": "nest build",
      "start:dev": "nest start --watch",
+     "start:debug": "nest start --debug --watch",
      "start:prod": "node dist/main.js",
      "typecheck": "tsc --noEmit -p tsconfig.json",
-     "lint": "eslint src test",
-     "test": "jest",
-     "test:e2e": "jest --config ./test/jest-e2e.json --runInBand",
-     "db:migrate": "prisma migrate dev",
-     "db:deploy": "prisma migrate deploy",
-     "db:reset": "prisma migrate reset --force",
-     "db:seed": "prisma db seed",
-     "cli": "ts-node -r tsconfig-paths/register src/cli/main.ts"
+     "lint": "oxlint --type-aware src/ test/",
+     "test": "vitest run --passWithNoTests",
+     "test:watch": "vitest",
+     "test:e2e": "vitest run --config ./vitest.config.e2e.ts --passWithNoTests"
    }
    ```
 
-4. `apps/api/tsconfig.json` extends the base and adds Nest's needs:
+   Steps 1.8 and 1.14 add the `db:*` and `cli` scripts.
+4. `apps/api/tsconfig.json`: keep what Nest generated, and add
+   `"extends": "../../tsconfig.base.json"` at the top, so the repository-wide
+   strictness (`noUncheckedIndexedAccess` and the rest) applies here too.
+5. `src/app.module.ts` becomes an empty `@Module({})`, and `src/main.ts` listens
+   on `process.env.PORT ?? 4000` (the portal takes 3000, registration 3001).
+6. `npx prettier --write apps/api`, then `npm install` at the root.
 
-   ```json
-   {
-     "extends": "../../tsconfig.base.json",
-     "compilerOptions": {
-       "module": "commonjs",
-       "moduleResolution": "node",
-       "experimentalDecorators": true,
-       "emitDecoratorMetadata": true,
-       "outDir": "./dist",
-       "baseUrl": "./",
-       "paths": { "@/*": ["src/*"] },
-       "incremental": true
-     },
-     "include": ["src", "test", "prisma"]
-   }
-   ```
-
-5. Run `npm install` at the root.
-
-**Check:** `npm run start:dev -w @irca/api` starts and logs
-`Nest application successfully started`. Stop it.
+**Check:** `npm run build -w @irca/api && node apps/api/dist/main.js` logs
+`Nest application successfully started`. `npm run typecheck -w @irca/api` and
+`npm run lint -w @irca/api` are clean.
 
 **Commit:** "Scaffold the NestJS API".
 

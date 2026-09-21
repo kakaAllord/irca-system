@@ -12,7 +12,7 @@ one saying why. Do not rewrite history.
 | --- | --- | --- |
 | D1 | Tenancy | **Multi-church ready from day one.** `churches` table, `church_id` on every business row. Only IRCA exists at launch. The dev account shows per-church usage of everything that can be collected: database rows and bytes, requests, errors, active users, logins, emails, registrations, transactions. |
 | D2 | Repository layout | **Monorepo with npm workspaces.** *Revised 21 Sept (D18): a fresh repository in `~/dev/irca-system`, not the old `irca-administration`.* |
-| D3 | Database access | **Prisma** (same major version as shoprex, 6.x), on PostgreSQL. |
+| D3 | Database access | **Prisma**, on PostgreSQL. *Revised 21 Sept: the current majors, **Prisma 7** and **NestJS 12**, not the versions shoprex uses (owner: "no need to match shoprex"). Prisma 7 takes connection strings from `prisma.config.ts` and a driver adapter per client, not from the schema.* |
 | D4 | Transaction numbering | **`{CHURCH}-{INC|EXP}-{YYYY}-{MM}-{NNNNNN}`. The counter restarts every month, separately for income and expenses. The month comes from the transaction date.** Transactions are never deleted, only voided, so there are no gaps. |
 | D5 | Stack | Next.js (portal, registration), NestJS (API), PostgreSQL. |
 | D6 | Impersonation | Designed in from Phase 1. Church admins can impersonate any user in their church. Devs can impersonate anyone. **Read-only by design.** |
@@ -165,7 +165,7 @@ does today.
 | Logging | `nestjs-pino`, with `requestId`, `churchId`, `userId`, `actorUserId` on every line | Lets you trace one request, including who was really behind an impersonation. |
 | Request context | `nestjs-cls` (AsyncLocalStorage) | Lets the tenant extension, audit writer and DB selector read the current church/user without passing it through every function. |
 | Jobs | `@nestjs/schedule` + a Postgres advisory lock per job | Safe even if the API is later scaled to two instances. |
-| Tests | Jest + supertest against a real Postgres `irca_test` (API). Vitest + Testing Library (portal). Playwright for the critical journeys. | Mocks do not catch tenant leaks or permission holes. A real database does. |
+| Tests | Vitest + supertest against a real Postgres `irca_test` (API; NestJS 12's default). Vitest + Testing Library (portal). Playwright for the critical journeys. | Mocks do not catch tenant leaks or permission holes. A real database does. |
 | Money | `numeric(14,2)`, decimal strings in JSON, `currency char(3)` default `TZS` | Exact arithmetic, and room for other currencies later. |
 | Dates | `timestamptz` for moments, `date` for transaction dates, church `timezone` (`Africa/Dar_es_Salaam`) for "today" and month boundaries | A transaction on 30 Sept at 23:30 in Arusha is a September transaction, whatever the server clock says. |
 
