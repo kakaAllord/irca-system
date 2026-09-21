@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Sheet from './Sheet';
-import { DIAL_CODES, DIAL_BY_CC } from '@/lib/dialCodes';
-import { UI, t, type Lang } from '@/lib/flow';
+import { DIAL_CODES, DIAL_BY_CC } from '@irca/shared/registration';
+import { UI, t, type Lang } from '@irca/shared/registration';
 import { ChevronDown } from './icons';
 
 /**

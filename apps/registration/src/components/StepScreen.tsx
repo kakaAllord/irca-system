@@ -5,13 +5,13 @@ import { useRouter } from 'next/navigation';
 import {
   REGIONS, UI, WARDS, faithQuestions, fill, formatDob, labelOf, screenIds, stepById, t,
   type FaithQ, type Lang, type Opt, type Step, type Txt, type Values,
-} from '@/lib/flow';
-import { checkPhone, validateStep } from '@/lib/validate';
+} from '@irca/shared/registration';
+import { checkPhone, validateStep } from '@irca/shared/registration';
 import { saveStep } from '@/lib/actions';
 import { useAutosave } from '@/hooks/useAutosave';
 import { TopBar } from './Device';
 import CountryPicker from './CountryPicker';
-import { DIAL_BY_CC } from '@/lib/dialCodes';
+import { DIAL_BY_CC } from '@irca/shared/registration';
 import DateWheel from './DateWheel';
 import { ArrowRight, Check, ChevronDown, Lock, Minus, Plus } from './icons';
 

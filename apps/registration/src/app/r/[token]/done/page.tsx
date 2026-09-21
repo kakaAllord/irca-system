@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import { Device, LangBar } from '@/components/Device';
-import { UI, fill, firstName, t } from '@/lib/flow';
+import { UI, fill, firstName, t } from '@irca/shared/registration';
 import { getByToken } from '@/lib/registration';
 import { registerAnother } from '@/lib/actions';
 import { Check } from '@/components/icons';

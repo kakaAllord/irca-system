@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import type { Values } from '@/lib/flow';
+import type { Values } from '@irca/shared/registration';
 
 const ENDPOINT = '/api/draft';
 

@@ -11,6 +11,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./registration": {
+      "types": "./dist/registration/index.d.ts",
+      "import": "./dist/registration/index.js",
+      "require": "./dist/registration/index.cjs"
     }
   },
   "files": [
@@ -27,6 +32,7 @@
     "vitest": "^5.0.1"
   },
   "dependencies": {
-    "zod": "^4.6.5"
+    "zod": "^4.6.5",
+    "libphonenumber-js": "^1.13.13"
   }
 }

@@ -1,20 +1,16 @@
 import 'server-only';
 import { randomBytes } from 'node:crypto';
 import { query } from './db';
-import { EMPTY_VALUES, FIRST_STEP, screenIds, type Lang, type Values } from './flow';
+import {
+  EMPTY_VALUES,
+  FIRST_STEP,
+  screenIds,
+  type Lang,
+  type Registration,
+  type Values,
+} from '@irca/shared/registration';
 
-export type Registration = {
-  id: number;
-  token: string;
-  lang: Lang;
-  status: 'in_progress' | 'submitted';
-  currentStep: string | null;
-  furthestStep: string | null;
-  values: Values;
-  createdAt: Date;
-  updatedAt: Date;
-  submittedAt: Date | null;
-};
+export type { Registration };
 
 // Answer key -> column. Everything is a plain camel/snake swap except `where`,
 // which is a reserved word in SQL.

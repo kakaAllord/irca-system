@@ -1,8 +1,15 @@
 import {
-  STEPS, applicableSteps, labelOf, stepGroups, t, type Lang, type Step, type Values,
+  STEPS,
+  applicableSteps,
+  labelOf,
+  stepGroups,
+  t,
+  type Lang,
+  type Step,
+  type Values,
 } from './flow';
 import { isAnswered } from './validate';
-import type { Registration } from './registration';
+import type { Registration } from './types';
 
 /**
  * Where people get to, and what they leave blank.
@@ -68,9 +75,9 @@ function furthestIndex(reg: Registration, order: string[]): number {
 
 export function computeInsights(rows: Registration[], lang: Lang): Insights {
   const started = rows.length;
-  const submitted = rows.filter(r => r.status === 'submitted').length;
+  const submitted = rows.filter((r) => r.status === 'submitted').length;
 
-  const steps: StepInsight[] = STEPS.map(step => ({
+  const steps: StepInsight[] = STEPS.map((step) => ({
     id: step.id,
     label: t(step.short, lang),
     optional: !step.req,
@@ -82,14 +89,14 @@ export function computeInsights(rows: Registration[], lang: Lang): Insights {
     blankPct: 0,
     stoppedPct: 0,
   }));
-  const byId = new Map(steps.map(s => [s.id, s]));
+  const byId = new Map(steps.map((s) => [s.id, s]));
 
   for (const reg of rows) {
     // Each person is measured against the questions they were actually shown:
     // someone who is not joining the church was never asked where they study,
     // and must not count as having skipped it.
     const mine = applicableSteps(reg.values);
-    const order = mine.map(s => s.id);
+    const order = mine.map((s) => s.id);
     const furthest = furthestIndex(reg, order);
 
     mine.forEach((step, i) => {
@@ -117,7 +124,7 @@ export function computeInsights(rows: Registration[], lang: Lang): Insights {
     inProgress: started - submitted,
     completionPct: pct(submitted, started),
     dropOffPct: pct(started - submitted, started),
-    steps: steps.filter(s => s.reached > 0 || started === 0),
+    steps: steps.filter((s) => s.reached > 0 || started === 0),
     options: optionInsights(rows, lang),
   };
 }
@@ -142,7 +149,7 @@ function optionInsights(rows: Registration[], lang: Lang): OptionInsight[] {
       let base = 0;
 
       for (const reg of rows) {
-        if (!applicableSteps(reg.values).some(s => s.id === step.id)) continue;
+        if (!applicableSteps(reg.values).some((s) => s.id === step.id)) continue;
         const val = reg.values[key] as string[] | string;
         const chosen = Array.isArray(val) ? val : val ? [val] : [];
         if (!chosen.length) continue;
@@ -156,7 +163,7 @@ function optionInsights(rows: Registration[], lang: Lang): OptionInsight[] {
         label: t(group.label, lang),
         base,
         options: group.opts
-          .map(o => ({
+          .map((o) => ({
             value: o.val,
             label: labelOf(key as string, o.val, lang),
             count: counts.get(o.val) ?? 0,

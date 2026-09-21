@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { stepById, type Values } from '@/lib/flow';
-import { keysForStep } from '@/lib/validate';
+import { stepById, type Values } from '@irca/shared/registration';
+import { keysForStep } from '@irca/shared/registration';
 import { getByToken, saveValues } from '@/lib/registration';
 
 /**

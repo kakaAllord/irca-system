@@ -2,6 +2,9 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   typedRoutes: false,
+  // The questions, their languages and the validation live in the shared
+  // package now, so the API and the portal read the same copy.
+  transpilePackages: ['@irca/shared'],
   // next dev would otherwise write AGENTS.md and CLAUDE.md into this folder
   // whenever it detects a coding agent. Agent notes live outside the
   // repository, in the working folder around it.

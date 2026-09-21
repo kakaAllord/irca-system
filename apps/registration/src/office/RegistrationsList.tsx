@@ -1,7 +1,7 @@
 import Link from 'next/link';
-import { applicableSteps } from '@/lib/flow';
+import { applicableSteps } from '@irca/shared/registration';
 import { listRegistrations } from '@/lib/registration';
-import { isAnswered } from '@/lib/validate';
+import { isAnswered } from '@irca/shared/registration';
 import { ArrowRight } from '@/components/icons';
 
 /**

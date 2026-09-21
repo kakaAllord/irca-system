@@ -12,8 +12,8 @@
     "gen:dials": "node scripts/gen-dial-codes.mjs"
   },
   "dependencies": {
+    "@irca/shared": "*",
     "country-flag-icons": "^1.6.20",
-    "libphonenumber-js": "^1.13.13",
     "next": "16.3.5",
     "pg": "8.23.0",
     "react": "19.3.0",

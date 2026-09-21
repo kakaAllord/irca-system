@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { UI, t, type Lang } from '@/lib/flow';
+import { UI, t, type Lang } from '@irca/shared/registration';
 import { Calendar } from './icons';
 
 /**

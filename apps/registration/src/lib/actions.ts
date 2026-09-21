@@ -3,10 +3,9 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import {
-  EMPTY_VALUES, FIRST_STEP, LANGS, screenIds, stepById, t, UI,
+  EMPTY_VALUES, FIRST_STEP, LANGS, keysForStep, screenIds, stepById, t, UI, validateStep,
   type Lang, type Values,
-} from './flow';
-import { keysForStep, validateStep } from './validate';
+} from '@irca/shared/registration';
 import {
   createRegistration, getByToken, PhoneTakenError, saveValues, setLanguage, submit,
 } from './registration';

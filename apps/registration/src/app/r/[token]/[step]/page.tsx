@@ -1,9 +1,9 @@
 import { notFound, redirect } from 'next/navigation';
 import { Device } from '@/components/Device';
 import StepScreen from '@/components/StepScreen';
-import { applicableSteps, progress, screenIds, stepById } from '@/lib/flow';
+import { applicableSteps, progress, screenIds, stepById } from '@irca/shared/registration';
 import { getByToken } from '@/lib/registration';
-import { isAnswered } from '@/lib/validate';
+import { isAnswered } from '@irca/shared/registration';
 
 /**
  * One question, one URL. Everything else follows from this: the browser's back

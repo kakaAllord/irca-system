@@ -3,7 +3,7 @@ import { Device, TopBar } from '@/components/Device';
 import { Logo } from '@/components/Logo';
 import { changeLanguage, startRegistration, currentToken } from '@/lib/actions';
 import { getByToken } from '@/lib/registration';
-import { FIRST_STEP, UI, t, type Lang } from '@/lib/flow';
+import { FIRST_STEP, UI, t, type Lang } from '@irca/shared/registration';
 import { ArrowRight, Check } from '@/components/icons';
 
 const CHOICES: { code: Lang; label: string; note: string }[] = [

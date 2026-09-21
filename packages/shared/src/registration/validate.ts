@@ -9,10 +9,7 @@ import { faithQuestions, t, UI, type Lang, type Step, type Txt, type Values } fr
  * digits" rule would be wrong almost everywhere: Tanzania is exactly 9, Kenya
  * accepts 7 to 10, the UK 7, 9, 10, 11 or 12.
  */
-export function checkPhone(
-  phone: string,
-  cc: string,
-): 'ok' | 'empty' | 'short' | 'long' {
+export function checkPhone(phone: string, cc: string): 'ok' | 'empty' | 'short' | 'long' {
   const digits = phone.replace(/\D/g, '');
   if (!digits) return 'empty';
 
@@ -66,10 +63,14 @@ export function validateStep(step: Step, v: Values, lang: Lang): string {
       const country = DIAL_BY_CC[v.dialCc];
       const name = country ? country.name : v.dial;
       switch (checkPhone(v.phone, v.dialCc)) {
-        case 'ok': return '';
-        case 'empty': return s(UI.ePhone);
-        case 'short': return s(UI.ePhoneShort).replace('{country}', name);
-        case 'long': return s(UI.ePhoneLong).replace('{country}', name);
+        case 'ok':
+          return '';
+        case 'empty':
+          return s(UI.ePhone);
+        case 'short':
+          return s(UI.ePhoneShort).replace('{country}', name);
+        case 'long':
+          return s(UI.ePhoneLong).replace('{country}', name);
       }
     }
 
@@ -111,7 +112,7 @@ export function validateStep(step: Step, v: Values, lang: Lang): string {
     case 'closing': {
       if (v.wantMore === null) return need('pick', UI.lblWantMore, lang);
       if (v.wantMore && !v.interest.length) {
-        const g = step.groups?.find(x => x.key === 'interest');
+        const g = step.groups?.find((x) => x.key === 'interest');
         return need('pick', g?.label ?? step.q, lang);
       }
       return '';
@@ -140,7 +141,7 @@ export function validateStep(step: Step, v: Values, lang: Lang): string {
 
 function hasValue(v: Values, k: keyof Values): boolean {
   const val = v[k];
-  if (Array.isArray(val)) return val.some(x => String(x).trim() !== '');
+  if (Array.isArray(val)) return val.some((x) => String(x).trim() !== '');
   if (typeof val === 'boolean') return true;
   return val !== null && val !== undefined && String(val).trim() !== '';
 }
@@ -161,35 +162,63 @@ export function isAnswered(step: Step, v: Values, lang: Lang): boolean {
   // shows has been answered — which is fewer questions for someone who is not
   // yet born again.
   if (step.type === 'faith') {
-    return faithQuestions(v).every(q => {
-      switch (q) {
-        case 'saved': return v.saved !== null;
-        case 'bapt': return v.bapt !== null;
-        case 'holy': return v.holy !== null;
-        case 'prevChurch': return v.prevChurch !== null;
-        default: return true;
-      }
-    }) && v.saved !== null;
+    return (
+      faithQuestions(v).every((q) => {
+        switch (q) {
+          case 'saved':
+            return v.saved !== null;
+          case 'bapt':
+            return v.bapt !== null;
+          case 'holy':
+            return v.holy !== null;
+          case 'prevChurch':
+            return v.prevChurch !== null;
+          default:
+            return true;
+        }
+      }) && v.saved !== null
+    );
   }
 
-  return keysForStep(step).some(k => hasValue(v, k));
+  return keysForStep(step).some((k) => hasValue(v, k));
 }
 
 /** The Values keys a given step is allowed to write. */
 export function keysForStep(step: Step): (keyof Values)[] {
   switch (step.type) {
-    case 'who': return ['fullname', 'gender', 'age', 'occ', 'dialCc', 'dial', 'phone', 'email'];
-    case 'intent': return [
-      ...(step.groups ?? []).flatMap(
-        g => (g.other ? [g.key, g.other] : [g.key]) as (keyof Values)[],
-      ),
-      'ward', 'wardOther', 'region', 'country', 'stay', 'often',
-    ];
-    case 'occDetail': return ['school', 'course', 'year', 'profession'];
-    case 'closing': return ['liked', 'wantMore', 'interest', 'prayer'];
-    case 'faith': return ['dob', 'saved', 'savedYear', 'bapt', 'baptYear', 'holy', 'prevChurch', 'prevChurchName'];
-    case 'family': return ['marital', 'marriedYear', 'kids', 'children'];
-    case 'serve': return ['ministries', 'otherMinistry'];
+    case 'who':
+      return ['fullname', 'gender', 'age', 'occ', 'dialCc', 'dial', 'phone', 'email'];
+    case 'intent':
+      return [
+        ...(step.groups ?? []).flatMap(
+          (g) => (g.other ? [g.key, g.other] : [g.key]) as (keyof Values)[],
+        ),
+        'ward',
+        'wardOther',
+        'region',
+        'country',
+        'stay',
+        'often',
+      ];
+    case 'occDetail':
+      return ['school', 'course', 'year', 'profession'];
+    case 'closing':
+      return ['liked', 'wantMore', 'interest', 'prayer'];
+    case 'faith':
+      return [
+        'dob',
+        'saved',
+        'savedYear',
+        'bapt',
+        'baptYear',
+        'holy',
+        'prevChurch',
+        'prevChurchName',
+      ];
+    case 'family':
+      return ['marital', 'marriedYear', 'kids', 'children'];
+    case 'serve':
+      return ['ministries', 'otherMinistry'];
     default: {
       const keys: (keyof Values)[] = [];
       if (step.key) keys.push(step.key);

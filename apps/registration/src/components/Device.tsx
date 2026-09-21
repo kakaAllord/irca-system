@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import LanguageSwitch from './LanguageSwitch';
-import type { Lang } from '@/lib/flow';
+import type { Lang } from '@irca/shared/registration';
 import { ArrowLeft } from './icons';
 
 /**

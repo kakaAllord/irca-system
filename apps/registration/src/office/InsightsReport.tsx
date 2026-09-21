@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { listRegistrations } from '@/lib/registration';
-import { computeInsights } from '@/lib/insights';
+import { computeInsights } from '@irca/shared/registration';
 import { ArrowLeft } from '@/components/icons';
 
 /**

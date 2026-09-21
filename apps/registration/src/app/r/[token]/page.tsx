@@ -2,9 +2,9 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { Device, LangBar } from '@/components/Device';
 import { Logo } from '@/components/Logo';
-import { UI, applicableSteps, fill, t } from '@/lib/flow';
+import { UI, applicableSteps, fill, t } from '@irca/shared/registration';
 import { getByToken } from '@/lib/registration';
-import { isAnswered } from '@/lib/validate';
+import { isAnswered } from '@irca/shared/registration';
 import { Check } from '@/components/icons';
 
 /**

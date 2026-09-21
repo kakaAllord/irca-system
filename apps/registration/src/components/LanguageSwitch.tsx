@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { UI, t, type Lang } from '@/lib/flow';
+import { UI, t, type Lang } from '@irca/shared/registration';
 import { switchLanguage } from '@/lib/actions';
 import Sheet from './Sheet';
 import { ArrowRight, Check } from './icons';
