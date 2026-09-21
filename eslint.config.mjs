@@ -21,6 +21,12 @@ export default tseslint.config(
     rules: {
       // Use the logger. A stray console.log in the API bypasses redaction.
       'no-console': 'warn',
+      // A leading underscore marks a value left unused on purpose, e.g. one
+      // destructured out of an object to leave the rest.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', destructuredArrayIgnorePattern: '^_' },
+      ],
     },
   },
 );
