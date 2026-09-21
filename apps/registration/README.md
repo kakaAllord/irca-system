@@ -9,11 +9,16 @@ screens should look and feel, not as an implementation.
 Postgres must be running locally. Copy `.env.example` to `.env.local`; the
 connection string is set to `postgres:postgres@localhost:5432`.
 
+This app is one workspace of the IRCA system monorepo. Install from the
+repository root, then run it from here or by workspace name:
+
 ```bash
-npm install
+npm install                      # at the repository root: one lockfile for every app
+cd apps/registration
 cp .env.example .env.local
 npm run db:setup   # creates the irca_registration database and applies db/schema.sql
-npm run dev
+npm run dev        # http://localhost:3001
+# or, from the root: npm run dev -w @irca/registration
 ```
 
 `DATABASE_URL` has no fallback. If it is unset the app says so and stops, rather
