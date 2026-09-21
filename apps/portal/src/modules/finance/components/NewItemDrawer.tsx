@@ -7,6 +7,7 @@ import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Drawer } from '@/components/ui/Drawer';
 import { Input } from '@/components/ui/Input';
+import { SubmitButton } from '@/components/ui/SubmitButton';
 
 type Item = { id: string; name: string };
 
@@ -114,15 +115,25 @@ export function NewItemDrawer({
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button loading={busy} disabled={value.trim().length < 2} onClick={() => create(false)}>
+          <SubmitButton
+            loading={busy}
+            missing={value.trim().length < 2 ? ['Name'] : []}
+            onClick={() => create(false)}
+          >
             Create and use
-          </Button>
+          </SubmitButton>
         </>
       }
     >
       <div className="flex flex-col gap-4">
         {error && <Alert tone="error">{error}</Alert>}
-        <Input label="Name" value={value} onChange={(e) => setValue(e.target.value)} autoFocus />
+        <Input
+          label="Name"
+          required
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          autoFocus
+        />
         <Input
           label="Description"
           hint="Optional. What it covers, for whoever reads this next year."

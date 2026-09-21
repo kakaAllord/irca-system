@@ -1,8 +1,11 @@
 import { useId, type InputHTMLAttributes, type ReactNode, type Ref } from 'react';
 import { cn } from '@/lib/cn';
+import { RequiredMark } from './RequiredMark';
 
 export type InputProps = InputHTMLAttributes<HTMLInputElement> & {
   label: string;
+  /** Draws the red asterisk and tells assistive tech the same thing. */
+  required?: boolean;
   hint?: ReactNode;
   error?: string;
   /** Rendered inside the field, on the right (e.g. a show/hide button). */
@@ -16,7 +19,17 @@ export type InputProps = InputHTMLAttributes<HTMLInputElement> & {
  * screen readers through aria-describedby. Every form in the portal uses it,
  * so no field is ever unlabelled.
  */
-export function Input({ label, hint, error, trailing, className, id, ref, ...rest }: InputProps) {
+export function Input({
+  label,
+  hint,
+  error,
+  trailing,
+  required,
+  className,
+  id,
+  ref,
+  ...rest
+}: InputProps) {
   const auto = useId();
   const inputId = id ?? auto;
   const hintId = hint ? `${inputId}-hint` : undefined;
@@ -26,11 +39,14 @@ export function Input({ label, hint, error, trailing, className, id, ref, ...res
     <div className="flex flex-col gap-1.5">
       <label htmlFor={inputId} className="text-[12px] font-medium text-fg2">
         {label}
+        {required && <RequiredMark />}
       </label>
       <div className="relative">
         <input
           ref={ref}
           id={inputId}
+          required={required}
+          aria-required={required || undefined}
           aria-invalid={error ? true : undefined}
           aria-describedby={[hintId, errorId].filter(Boolean).join(' ') || undefined}
           className={cn(

@@ -9,6 +9,7 @@ import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Drawer } from '@/components/ui/Drawer';
 import { Input } from '@/components/ui/Input';
+import { SubmitButton } from '@/components/ui/SubmitButton';
 
 /**
  * Approve and reject, with the four-eyes rule made plain: the person who
@@ -72,19 +73,20 @@ export function DecideButtons({ request }: { request: ChangeRequestView }) {
             <Button variant="ghost" onClick={() => setConfirm(null)}>
               Cancel
             </Button>
-            <Button
+            <SubmitButton
               variant={confirm === 'reject' ? 'danger' : 'primary'}
               loading={busy !== null}
-              disabled={confirm === 'reject' && note.trim().length < 3}
+              missing={confirm === 'reject' && note.trim().length < 3 ? ['Why not?'] : []}
               onClick={() => decide(confirm!)}
             >
               {confirm === 'reject' ? 'Reject' : 'Approve'}
-            </Button>
+            </SubmitButton>
           </>
         }
       >
         <Input
           label={confirm === 'reject' ? 'Why not?' : 'Note (optional)'}
+          required={confirm === 'reject'}
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder={confirm === 'reject' ? 'The receipt says otherwise' : ''}

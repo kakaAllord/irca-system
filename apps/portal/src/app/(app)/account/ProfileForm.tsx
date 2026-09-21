@@ -4,7 +4,7 @@ import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { clientApi } from '@/lib/api/client';
 import { Alert } from '@/components/ui/Alert';
-import { Button } from '@/components/ui/Button';
+import { SubmitButton } from '@/components/ui/SubmitButton';
 import { Input } from '@/components/ui/Input';
 
 export function ProfileForm({ fullName, readOnly }: { fullName: string; readOnly: boolean }) {
@@ -27,6 +27,7 @@ export function ProfileForm({ fullName, readOnly }: { fullName: string; readOnly
     <form onSubmit={onSubmit} className="flex flex-col gap-3">
       <Input
         label="Your name"
+        required
         value={name}
         onChange={(e) => setName(e.target.value)}
         disabled={readOnly}
@@ -34,9 +35,15 @@ export function ProfileForm({ fullName, readOnly }: { fullName: string; readOnly
       {saved && <Alert>Saved.</Alert>}
       {!readOnly && (
         <div>
-          <Button type="submit" loading={busy} disabled={name.trim() === fullName}>
+          <SubmitButton
+            type="submit"
+            loading={busy}
+            missing={
+              !name.trim() ? ['Full name'] : name.trim() === fullName ? ['a change to make'] : []
+            }
+          >
             Save
-          </Button>
+          </SubmitButton>
         </div>
       )}
     </form>

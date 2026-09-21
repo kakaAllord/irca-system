@@ -57,6 +57,8 @@ in development).
 - Anything you fill in — inviting someone, a new role, a new item, asking for a
   correction — slides in from the right, over the page you were reading. Plain
   yes-or-no questions still open in the middle.
+- Fields that must be filled in carry a red star, and a Save button that is
+  greyed out says what it is still waiting for when you point at it.
 - A number appears beside **Requests** when something is waiting for you.
 
 ---

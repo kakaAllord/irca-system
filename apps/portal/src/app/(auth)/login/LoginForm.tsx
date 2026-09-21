@@ -74,6 +74,7 @@ export function LoginForm({ next }: { next: string }) {
     <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
       <Input
         label="Email"
+        required
         name="email"
         type="email"
         autoComplete="username"
@@ -85,6 +86,7 @@ export function LoginForm({ next }: { next: string }) {
       <PasswordInput
         ref={passwordRef}
         label="Password"
+        required
         name="password"
         autoComplete="current-password"
         value={password}

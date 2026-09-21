@@ -8,6 +8,7 @@ import { clientApi } from '@/lib/api/client';
 import { ApiRequestError } from '@/lib/api/errors';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
+import { SubmitButton } from '@/components/ui/SubmitButton';
 import { Dialog } from '@/components/ui/Dialog';
 import { EntryFields, type EntryValues } from '@/modules/finance/components/EntryFields';
 
@@ -165,9 +166,19 @@ export function EntryForm({
         >
           Cancel
         </Link>
-        <Button type="submit" loading={busy}>
+        <SubmitButton
+          type="submit"
+          loading={busy}
+          missing={
+            [
+              !values.txnDate && 'Date',
+              !values.item && (kind === 'income' ? 'Income source' : 'Expense item'),
+              !values.amount.trim() && 'Amount',
+            ].filter(Boolean) as string[]
+          }
+        >
           Save {kind === 'income' ? 'income' : 'expense'}
-        </Button>
+        </SubmitButton>
       </div>
 
       <Dialog

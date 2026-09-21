@@ -62,16 +62,14 @@ export function validateStep(step: Step, v: Values, lang: Lang): string {
       if (!v.occ) return need('pick', UI.lblOcc, lang);
       const country = DIAL_BY_CC[v.dialCc];
       const name = country ? country.name : v.dial;
-      switch (checkPhone(v.phone, v.dialCc)) {
-        case 'ok':
-          return '';
-        case 'empty':
-          return s(UI.ePhone);
-        case 'short':
-          return s(UI.ePhoneShort).replace('{country}', name);
-        case 'long':
-          return s(UI.ePhoneLong).replace('{country}', name);
-      }
+      // Ifs rather than a switch: the switch was exhaustive, but only
+      // TypeScript could see that, and lint read it as falling through to the
+      // next question.
+      const phone = checkPhone(v.phone, v.dialCc);
+      if (phone === 'empty') return s(UI.ePhone);
+      if (phone === 'short') return s(UI.ePhoneShort).replace('{country}', name);
+      if (phone === 'long') return s(UI.ePhoneLong).replace('{country}', name);
+      return '';
     }
 
     case 'occDetail':

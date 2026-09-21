@@ -104,6 +104,10 @@ line puts it in the Portals page, the role editor and the sidebar.
 - Anything with fields in it opens in the right-hand `Drawer`: inviting
   someone, a new role, a new item, asking for a correction. A plain yes-or-no
   question keeps the centred `Dialog`, because it should interrupt.
+- Required fields carry the red star (`required` on `Input`/`Select`, or
+  `<RequiredMark />` on a group's legend), and the submit is a `SubmitButton`
+  with `missing={[...]}` so a greyed-out button says what it is waiting for
+  rather than leaving someone to hunt for it.
 - A form that waits on the network while the person keeps typing must merge
   into current state, not into the state its handler was rendered with: pass
   an updater (`onChange((previous) => …)`), as the finance entry fields do.

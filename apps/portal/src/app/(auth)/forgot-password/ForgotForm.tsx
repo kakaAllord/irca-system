@@ -35,6 +35,7 @@ export function ForgotForm() {
     <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
       <Input
         label="Email"
+        required
         type="email"
         autoComplete="username"
         autoFocus

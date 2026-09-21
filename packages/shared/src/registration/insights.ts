@@ -1,13 +1,4 @@
-import {
-  STEPS,
-  applicableSteps,
-  labelOf,
-  stepGroups,
-  t,
-  type Lang,
-  type Step,
-  type Values,
-} from './flow';
+import { STEPS, applicableSteps, labelOf, stepGroups, t, type Lang, type Step } from './flow';
 import { isAnswered } from './validate';
 import type { Registration } from './types';
 

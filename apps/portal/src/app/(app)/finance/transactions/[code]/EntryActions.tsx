@@ -10,6 +10,7 @@ import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Drawer } from '@/components/ui/Drawer';
 import { Input } from '@/components/ui/Input';
+import { SubmitButton } from '@/components/ui/SubmitButton';
 import { useCan } from '@/lib/session';
 import { EntryFields, type EntryValues } from '@/modules/finance/components/EntryFields';
 
@@ -121,13 +122,18 @@ export function EntryActions({ entry, currency }: { entry: Entry; currency: stri
             <Button variant="ghost" onClick={() => setOpen(null)}>
               Cancel
             </Button>
-            <Button
+            <SubmitButton
               loading={busy}
-              disabled={Object.keys(changed).length === 0 || reason.trim().length < 5}
+              missing={
+                [
+                  Object.keys(changed).length === 0 && 'a change to something',
+                  reason.trim().length < 5 && 'What was wrong?',
+                ].filter(Boolean) as string[]
+              }
               onClick={() => void send('EDIT')}
             >
               Send request
-            </Button>
+            </SubmitButton>
           </>
         }
       >
@@ -148,6 +154,7 @@ export function EntryActions({ entry, currency }: { entry: Entry; currency: stri
           )}
           <Input
             label="What was wrong?"
+            required
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="Typed an extra zero"
@@ -165,14 +172,14 @@ export function EntryActions({ entry, currency }: { entry: Entry; currency: stri
             <Button variant="ghost" onClick={() => setOpen(null)}>
               Cancel
             </Button>
-            <Button
+            <SubmitButton
               variant="danger"
               loading={busy}
-              disabled={reason.trim().length < 5}
+              missing={reason.trim().length < 5 ? ['Why?'] : []}
               onClick={() => void send('VOID')}
             >
               Send request
-            </Button>
+            </SubmitButton>
           </>
         }
       >
@@ -180,6 +187,7 @@ export function EntryActions({ entry, currency }: { entry: Entry; currency: stri
           {error && <Alert tone="error">{error}</Alert>}
           <Input
             label="Why?"
+            required
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="Entered twice — duplicate of 000013"

@@ -5,7 +5,7 @@ import { PASSWORD_MIN } from '@irca/shared';
 import { clientApi } from '@/lib/api/client';
 import { ApiRequestError } from '@/lib/api/errors';
 import { Alert } from '@/components/ui/Alert';
-import { Button } from '@/components/ui/Button';
+import { SubmitButton } from '@/components/ui/SubmitButton';
 import { PasswordInput } from '@/components/ui/PasswordInput';
 
 export function PasswordForm() {
@@ -46,12 +46,14 @@ export function PasswordForm() {
     <form onSubmit={onSubmit} noValidate className="flex flex-col gap-3">
       <PasswordInput
         label="Current password"
+        required
         autoComplete="current-password"
         value={current}
         onChange={(e) => setCurrent(e.target.value)}
       />
       <PasswordInput
         label="New password"
+        required
         autoComplete="new-password"
         value={next}
         onChange={(e) => setNext(e.target.value)}
@@ -60,9 +62,15 @@ export function PasswordForm() {
       {error && <Alert tone="error">{error}</Alert>}
       {done && <Alert>Your password is changed, and other devices are signed out.</Alert>}
       <div>
-        <Button type="submit" loading={busy} disabled={!current || !next}>
+        <SubmitButton
+          type="submit"
+          loading={busy}
+          missing={
+            [!current && 'Current password', !next && 'New password'].filter(Boolean) as string[]
+          }
+        >
           Change password
-        </Button>
+        </SubmitButton>
       </div>
     </form>
   );

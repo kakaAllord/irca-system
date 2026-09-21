@@ -11,6 +11,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CatalogSuggestResponse, CatalogSuggestion } from '@irca/shared';
 import { clientApi } from '@/lib/api/client';
 import { useCan } from '@/lib/session';
+import { RequiredMark } from '@/components/ui/RequiredMark';
 import { Spinner } from '@/components/ui/Spinner';
 import { NewItemDrawer } from './NewItemDrawer';
 
@@ -94,6 +95,7 @@ export function CatalogCombobox({
       >
         <label className="text-[12px] font-medium text-fg2" htmlFor={`catalog-${kind}`}>
           {label ?? (kind === 'income' ? 'Income source' : 'Expense item')}
+          <RequiredMark />
         </label>
         <div className="relative">
           <ComboboxInput

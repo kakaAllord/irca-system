@@ -53,6 +53,7 @@ export function ResetForm({ token }: { token: string }) {
     <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
       <PasswordInput
         label="New password"
+        required
         autoComplete="new-password"
         autoFocus
         value={password}
@@ -66,6 +67,7 @@ export function ResetForm({ token }: { token: string }) {
       />
       <PasswordInput
         label="Type it again"
+        required
         autoComplete="new-password"
         value={repeat}
         onChange={(e) => setRepeat(e.target.value)}

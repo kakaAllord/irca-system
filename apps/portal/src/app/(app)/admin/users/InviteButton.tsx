@@ -8,6 +8,8 @@ import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Drawer } from '@/components/ui/Drawer';
 import { Input } from '@/components/ui/Input';
+import { RequiredMark } from '@/components/ui/RequiredMark';
+import { SubmitButton } from '@/components/ui/SubmitButton';
 
 type RoleGroup = {
   moduleName: string;
@@ -64,6 +66,13 @@ export function InviteButton({ roleGroups }: { roleGroups: RoleGroup[] }) {
     }
   }
 
+  // What the form is still waiting for, in the words on the labels.
+  const missing = [
+    !email.trim() && 'Email',
+    !fullName.trim() && 'Full name',
+    roleIds.length === 0 && 'at least one role',
+  ].filter(Boolean) as string[];
+
   return (
     <>
       {sentTo && <Alert>Invitation sent to {sentTo}.</Alert>}
@@ -79,9 +88,9 @@ export function InviteButton({ roleGroups }: { roleGroups: RoleGroup[] }) {
             <Button variant="ghost" onClick={close}>
               Cancel
             </Button>
-            <Button type="submit" form="invite-form" loading={busy} disabled={roleIds.length === 0}>
+            <SubmitButton type="submit" form="invite-form" loading={busy} missing={missing}>
               Send invitation
-            </Button>
+            </SubmitButton>
           </>
         }
       >
@@ -89,15 +98,24 @@ export function InviteButton({ roleGroups }: { roleGroups: RoleGroup[] }) {
           <Input
             label="Email"
             type="email"
+            required
             autoFocus
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             error={emailError}
           />
-          <Input label="Full name" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+          <Input
+            label="Full name"
+            required
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+          />
 
           <fieldset className="flex flex-col gap-3">
-            <legend className="text-[12px] font-medium text-fg2">What can they use?</legend>
+            <legend className="text-[12px] font-medium text-fg2">
+              What can they use?
+              <RequiredMark />
+            </legend>
             {roleGroups.length === 0 && (
               <p className="text-[12px] text-fg3">
                 No portals are on yet. Turn one on under Portals first.

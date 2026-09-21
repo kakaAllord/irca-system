@@ -82,6 +82,7 @@ export function AcceptForm({
         <>
           <PasswordInput
             label="Choose a password"
+            required
             autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -94,6 +95,7 @@ export function AcceptForm({
           />
           <PasswordInput
             label="Type it again"
+            required
             autoComplete="new-password"
             value={repeat}
             onChange={(e) => setRepeat(e.target.value)}

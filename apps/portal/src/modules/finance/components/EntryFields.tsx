@@ -2,6 +2,7 @@
 
 import { PAYMENT_METHODS, type PaymentMethod } from '@irca/shared';
 import { Input } from '@/components/ui/Input';
+import { RequiredMark } from '@/components/ui/RequiredMark';
 import { CatalogCombobox, type CatalogValue } from './CatalogCombobox';
 import { cn } from '@/lib/cn';
 
@@ -44,6 +45,7 @@ export function EntryFields({
     <div className="flex flex-col gap-4">
       <Input
         label="Date"
+        required
         type="date"
         value={values.txnDate}
         max={new Date().toISOString().slice(0, 10)}
@@ -60,6 +62,7 @@ export function EntryFields({
 
       <Input
         label={`Amount (${currency})`}
+        required
         inputMode="decimal"
         value={values.amount}
         error={errors.amount?.[0]}
@@ -70,6 +73,7 @@ export function EntryFields({
       <fieldset className="flex flex-col gap-1.5">
         <legend className="text-[12px] font-medium text-fg2">
           {kind === 'income' ? 'Received by' : 'Paid by'}
+          <RequiredMark />
         </legend>
         <div className="flex flex-wrap gap-1.5">
           {Object.entries(PAYMENT_METHODS).map(([value, label]) => (

@@ -8,6 +8,7 @@ import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Drawer } from '@/components/ui/Drawer';
 import { Input } from '@/components/ui/Input';
+import { SubmitButton } from '@/components/ui/SubmitButton';
 import type { PermissionDef } from './page';
 
 type Role = {
@@ -106,6 +107,11 @@ export function RoleDrawer({
     </div>
   );
 
+  const missing = [
+    !name.trim() && 'Name',
+    keys.length === 0 && 'at least one thing this role can do',
+  ].filter(Boolean) as string[];
+
   return (
     <>
       <Button variant={role ? 'ghost' : 'secondary'} size="sm" onClick={() => setOpen(true)}>
@@ -132,15 +138,16 @@ export function RoleDrawer({
             <Button variant="ghost" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button loading={busy} disabled={!name.trim() || keys.length === 0} onClick={save}>
+            <SubmitButton loading={busy} missing={missing} onClick={save}>
               {role ? 'Save changes' : 'Create role'}
-            </Button>
+            </SubmitButton>
           </>
         }
       >
         <div className="flex flex-col gap-4">
           <Input
             label="Name"
+            required
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Treasurer"
@@ -151,6 +158,8 @@ export function RoleDrawer({
             onChange={(e) => setDescription(e.target.value)}
             placeholder="What this role is for"
           />
+          {/* A role that allows nothing is not a role, so at least one of
+              these has to be ticked; the button says so when none is. */}
           {list('Can see', reads)}
           {list('Can change', writes)}
           {error && <Alert tone="error">{error}</Alert>}

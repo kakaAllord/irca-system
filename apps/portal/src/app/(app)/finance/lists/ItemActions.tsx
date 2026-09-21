@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { Drawer } from '@/components/ui/Drawer';
 import { Input } from '@/components/ui/Input';
+import { SubmitButton } from '@/components/ui/SubmitButton';
 import { Can } from '@/lib/session';
 import { NewItemDrawer } from '@/modules/finance/components/NewItemDrawer';
 
@@ -73,9 +74,9 @@ export function ItemActions({ kind, item }: { kind: Kind; item: CatalogItem }) {
             <Button variant="ghost" onClick={() => setOpen(null)}>
               Cancel
             </Button>
-            <Button
+            <SubmitButton
               loading={busy}
-              disabled={name.trim().length < 2}
+              missing={name.trim().length < 2 ? ['Name'] : []}
               onClick={() =>
                 call(() =>
                   clientApi(`/finance/${path}/${item.id}`, { method: 'PATCH', body: { name } }),
@@ -83,13 +84,19 @@ export function ItemActions({ kind, item }: { kind: Kind; item: CatalogItem }) {
               }
             >
               Rename
-            </Button>
+            </SubmitButton>
           </>
         }
       >
         <div className="flex flex-col gap-4">
           {error && <Alert tone="error">{error}</Alert>}
-          <Input label="Name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+          <Input
+            label="Name"
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoFocus
+          />
         </div>
       </Drawer>
 
