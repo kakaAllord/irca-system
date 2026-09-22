@@ -49,6 +49,10 @@ jobs:
           alter role irca_backup   set timezone = 'UTC';
           SQL
 
+      # Red for an advisory nobody has looked at; green for the ones written
+      # down in scripts/audit-check.mjs with a reason and a review date.
+      - run: npm run audit
+
       - run: npm run build -w @irca/shared
       - run: npm run typecheck
       - run: npm run lint
