@@ -168,6 +168,20 @@ nothing.
 
 ---
 
+## 7a. What is coming, and what it will add here
+
+Two phases add personal data, and this page is rewritten in the same pull
+request as each:
+
+- **Phase 7, the Communication system.** SMS through Beem Africa. It adds: the
+  language a person answered the form in (`people.lang`), so messages are
+  written in their own language; whether they have asked for no messages
+  (`sms_opt_out`); a record of every message sent, to which audience, at what
+  cost; and the replies that come back. Recipient phone numbers pass through
+  Beem, as email addresses pass through Resend today. Every message carries
+  the way to stop, and a STOP is honoured permanently (`00-decisions.md` D22).
+- **Phase 9, pledges.** Per-person promises and payments — see section 3.
+
 ## 8. Before launch
 
 - [ ] Leadership has read this page.

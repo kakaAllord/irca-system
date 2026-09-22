@@ -18,6 +18,10 @@ Phase 0 (`00-restructure.md`) comes before everything else.
 | `04-finance-portal.md` | Phase 4 (built) — the Finance portal: income sources, expense items with suggestions, transactions with `IRCA-EXP-2026-09-000001` codes, corrections and voids only through change requests that an admin approves, reports. This is the RBAC test case. |
 | `05-registration-and-membership.md` | Phase 5 (built; cutover is the owner's) — the registration form moved onto the API, live data migrated, and the Membership portal (Dashboard, Members, Applications, Discipleship, Insights) from the design. |
 | `06-dev-console-hardening-launch.md` | Phase 6 — the dev console with per-church usage, security hardening, deployment, cutover, and the runbook for adding the next department. |
+| `07-communications.md` | Phase 7 — the Communication system: SMS through Beem, templates approved once and used weekly, audiences, recurring "beat" messages, opt-out, and what it all costs. Central control, departments sending their own routine messages. |
+| `08-outreach.md` | Phase 8 — the Outreach & Evangelism portal: the team, Saturday sessions, people reached in four fields, follow-up, one timeline per person, Friday training, the dashboard, and the session report as a PDF. |
+| `09-pledges-and-giving-reminders.md` | Phase 9 — pledges: what someone promised, what they have paid, what is left, and reminding them through Communications. |
+| `docs/modules/*-brief.md` | What a department actually does, in its own words, filled in before its module is built (step 6.12). `comms-brief.md` and `outreach-brief.md` exist. |
 | `multi-tenancy.md` | How churches are kept apart everywhere: sign-in, permissions, database (extension + row-level security), endpoints, files, caching, jobs, logs, backups, monitoring, rate limits, testing. Also the path from one shared database to dedicated databases for large churches. |
 | `appendix-database.md` | Every table in one place, with what owns it and why it exists. |
 
