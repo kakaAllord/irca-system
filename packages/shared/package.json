@@ -32,7 +32,7 @@
     "vitest": "^5.0.1"
   },
   "dependencies": {
-    "zod": "^4.6.5",
-    "libphonenumber-js": "^1.13.13"
+    "libphonenumber-js": "^1.13.13",
+    "zod": "^4.6.5"
   }
 }
