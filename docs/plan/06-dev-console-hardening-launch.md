@@ -609,15 +609,28 @@ should be a single read-only list page plus its permission matrix test. That
 gets the department something to react to within days, and proves the RBAC
 wiring before any writes exist.
 
-**Example: the Comms module brief, drafted from the 17 Sept notes (confirm with the department):**
+**Two of them are now written.** The owner gave the Outreach and
+Communications departments' own accounts on 22 September, so those two are no
+longer guesses:
 
-| Need from the notes | Likely permission | Depends on |
-| --- | --- | --- |
-| Send messages via Beem: welcome to Bible study, thanks for giving, pledge reminders | `comms.messages.send` (write) | a Beem account, `sms.sent` metric |
-| See names, gender and phone numbers | `membership.people.read` (granted to the Comms role) | Membership |
-| See what a person still owes on a pledge | `finance.pledges.read` | the Finance pledges iteration (00-decisions Q8) |
-| Filter who gave in a given week | `finance.transactions.read` scoped to a "givers" view | Finance per-person income (Q8) |
-| See visitors and approved members to welcome them | `membership.people.read` + `membership.applications.read` | Membership |
+- `docs/modules/comms-brief.md` → built by **Phase 7**
+  (`07-communications.md`).
+- `docs/modules/outreach-brief.md` → built by **Phase 8** (`08-outreach.md`).
+
+Both still have "TBC" where the department itself has to answer — the
+Communications budget, the Outreach team's size, which figures they report
+upward — and those are step 7.1 and step 8.1 respectively. Media and Programs
+remain unwritten: do not build them from guesses either.
+
+The needs from the 17 September notes that the two phases answer:
+
+| Need from the notes | Where it is built |
+| --- | --- |
+| Send messages via Beem: welcome, thanks for giving, reminders | Phase 7, steps 7.4 and 7.7 |
+| See names, gender and phone numbers | `membership.people.read` (+ `read_sensitive`), granted to the Comms role |
+| See what a person still owes on a pledge | Phase 9, step 9.3's audience provider |
+| Filter who gave in a given week | still not planned — see Q8, which says why |
+| See visitors and approved members to welcome them | `membership.people.read` + the `church.people` audience |
 
 ---
 
