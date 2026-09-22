@@ -282,6 +282,126 @@ requirement asks. The owner decides, on the dev console's evidence.
 
 ---
 
+## D21. Communications is central control with decentralised sending (owner, 22 Sept 2026)
+
+**The owner's words:** *"Centralize control, standards, data, and
+infrastructure — decentralize routine communication."*
+
+| Option | What it costs |
+| --- | --- |
+| Every department sends freely, with its own provider settings | Four Beem accounts, four styles of writing, no idea what messaging costs, and no way to stop a department texting the whole church by accident. |
+| Everything goes through Communications, every time | Consistent, and a bottleneck. A Friday-training reminder that needs a person to approve it at four on a Friday does not get sent. |
+| **Central infrastructure, standards and permissions; departments send their own routine messages (taken)** | One provider, one history, one cost, one set of approved words — and no queue. The approval moves to the **template**: agreed once, used weekly by whoever the leader nominates. |
+
+Consequences, built in Phase 7:
+
+- A department reaches only the audiences it has been **granted**; its own
+  team is granted when its portal is switched on, and anything wider is an
+  administrator's deliberate act.
+- Only the department's leader and **one** delegate may send. It is a row in
+  `comms_senders` with a unique index enforcing "one", not a second role
+  system.
+- Free text needs a separate permission nobody holds by default. Ordinary
+  sending uses an approved template.
+- A template edit is a new version needing approval; the old version keeps
+  working meanwhile, so nobody is left wordless mid-week.
+- Cross-department and church-wide sending stays with Communications.
+
+---
+
+## D22. Nobody is messaged who asked not to be, and everyone is messaged in their own language (owner, 22 Sept 2026)
+
+Tanzania's Personal Data Protection Act applies to a phone number given at a
+doorstep as much as to one typed into the form. Three rules, decided together
+and enforced in one place so no caller can forget them:
+
+1. **Consent is asked for where the number is taken** — on the registration
+   form and on the evangelism capture screen — and every message carries the
+   way out (`Jibu ACHA kuacha.` / `Reply STOP to stop.`), counted into the
+   cost so the figure is honest.
+2. **A STOP is permanent.** An inbound reply blocks that number for the
+   church and sets `sms_opt_out` on the matching person or membership. The
+   resolver refuses blocked numbers, counts them as skipped, and shows the
+   sender "12 of 143 were left alone".
+3. **A department's contacts are not its team.** The owner chose: a
+   department reaches its own team by default, and the people it recorded —
+   evangelism contacts — only once an administrator grants that audience
+   explicitly. People reached on a doorstep are not staff.
+
+And, from the same conversation: *"in members remember to capture the
+languages they used in the registration, so we can design messages for them
+specifically."* So `people.lang` carries the language they answered in,
+copied from the registration and editable afterwards; a template holds a body
+per language, approved together; the sender picks each recipient's own, and
+falls back to the church's default. A church that writes in Swahili and texts
+in English has not communicated.
+
+---
+
+## D23. One person record, and one timeline written by every portal (owner, 22 Sept 2026)
+
+**The owner's words:** *"The person then becomes part of the central church
+People system, so if they later attend church, register for something, or
+become a member, the church doesn't create another duplicate record."*
+
+| Option | What it costs |
+| --- | --- |
+| Outreach keeps its own contacts, merged into Membership later | Two lists, both half right, and a merge nobody ever does. It is how churches end up with the same family three times. |
+| One `people` row, and a rigid status that moves forward | One record, but the status lies: someone is visited three times and called twice, and a single status cannot say that. |
+| **One `people` row, plus an append-only `person_interactions` timeline (taken)** | Every contact is its own row, from any portal, in order. `people.stage` stays as the coarse label and is a *summary* of the timeline, never a competing truth. |
+
+The owner's own example is the specification: evangelised on 5 Sept,
+follow-up call on the 7th, home visit on the 12th, invited on the 19th, first
+attendance on the 20th, attended again on the 27th — six rows, not one status.
+
+Consequences: Outreach records a doorstep contact through the same person
+matching the office uses (phone first, then a close name), so a person already
+known gains an interaction rather than a twin; `person_interactions` may not
+be deleted by the application role; and the Membership person page and the
+Outreach follow-up page render the same timeline component.
+
+---
+
+## D24. Files live in object storage, with one table for all of them (22 Sept 2026)
+
+Outreach asked to attach the Saturday report as a PDF — *"rather than forcing
+them to reproduce their existing reporting process inside the system"*. That
+is the first file the system keeps, and the finance receipts of Q7 are the
+second, so it is decided once:
+
+- S3-compatible object storage (Cloudflare R2 or Backblaze B2), one bucket,
+  keys prefixed by church slug and module. Private; read through a
+  short-lived signed URL.
+- One core `files` table recording church, module, what it belongs to, the
+  key, the size and who uploaded it — so the next module does not invent a
+  second one.
+- The browser uploads straight to storage with a presigned POST; a 10 MB PDF
+  never travels through the API. Type and size are refused by the presign
+  itself.
+- `storage.bytes` and `storage.files` per church, which the dev console has
+  been reserving since Phase 6.
+- **Erasure cannot reach inside a PDF.** `docs/data-inventory.md` and the
+  erasure runbook say so plainly, and the runbook tells the operator to check
+  the period's session reports by hand.
+
+---
+
+## D25. SMS cost is counted in segments, priced from settings, and capped (owner, 22 Sept 2026)
+
+A message is not a unit: 160 GSM-7 characters are one segment, 161 are two,
+and one curly apostrophe pasted from Word turns the whole thing into UCS-2 at
+70. Swahili reminders are exactly the long ones. So the system counts
+segments (shared code, unit-tested), multiplies by a rate held in church
+settings, and shows the total **before** the send button does anything:
+"Send to 143 people · about 4,290 TZS".
+
+Beside it, two guards the owner's budget depends on: a per-church **daily
+cap** that refuses an over-budget send and names the figure it would have
+been, and an hourly read of Beem's balance into `sms.balance_minor`, which the
+monitoring of 6.9 alerts on before a Sunday rather than after one.
+
+---
+
 ## Open questions (each with a recommendation — proceed on the recommendation unless the owner overrules)
 
 | # | Question | Recommendation and why |
@@ -292,6 +412,10 @@ requirement asks. The owner decides, on the dev console's evidence.
 | Q4 | Your notes (17 Sept) describe portal users *requesting* access and an admin approving. This request says the admin invites by email. | **Build the invite flow now (Phase 3), and add "request access" later** as a small `access_requests` table that, once approved, calls the same invite code. |
 | Q5 | Should income sources also be a suggest-or-create catalog like expenses? | **Yes.** Same component, same rules, so "Tithe", "Sadaka" and "Harambee" do not end up spelled five ways. |
 | Q6 | Can a posted transaction be edited? | *Superseded by D17 (21 Sept 2026): nothing is edited directly; every change is a request an administrator approves.* |
-| Q7 | Receipts / attachments on transactions? | **Not in Phase 4.** The schema leaves room (`finance_attachments`). The dev console already reserves a `storage_bytes` metric for it. |
-| Q8 | Pledges and per-person tithe tracking (from the 17 Sept notes)? | **After Phase 6**, as a second Finance iteration, once Membership has `Person` records to link money to. Phase 4 is deliberately church-level income and expenses only. |
-| Q9 | Language of staff emails and portal UI | **English at launch, with a `locale` column on users** so Swahili can follow without a migration. The registration form stays trilingual as today. |
+| Q7 | Receipts / attachments on transactions? | **Not in Phase 4.** The schema leaves room (`finance_attachments`). *Updated 22 Sept 2026: how files are stored is now decided (D24), and Phase 8 step 8.9 builds the one `files` table and the presigned upload for Outreach's session reports. Finance receipts become a small slice on top of it rather than a new decision.* |
+| Q8 | Pledges and per-person tithe tracking (from the 17 Sept notes)? | *Answered 22 Sept 2026: pledges are **Phase 9** (`09-pledges-and-giving-reminders.md`), after Communications, because the owner asked for pledge reminders by SMS. Per-person **tithe** tracking is still not planned: a pledge is a promise the church is owed, which is a different thing from recording what each person drops in an envelope.* |
+| Q9 | Language of staff emails and portal UI | **English at launch, with a `locale` column on users** so Swahili can follow without a migration. The registration form stays trilingual as today. *Updated 22 Sept 2026: this is about **staff**. Messages to visitors and members are a separate matter and are always in the person's own language, from `people.lang` — see D22.* |
+
+| Q10 | Does a pledge reminder name the figure someone still owes? | **No by default.** A text saying "you promised 200,000 and have paid 50,000" is readable by whoever picks up the phone. The default template invites them to the office instead; a template carrying `{{balance}}` is possible, and needs the leadership's approval like any other (Phase 7 step 7.6, Phase 9 step 9.0). |
+| Q11 | Who owns a person reached by Outreach who never comes to church? | **The church, as an ordinary person record**, with `source = 'OUTREACH'` and their interactions. They are not a lesser kind of record. The retention question in `docs/data-inventory.md` section 5 covers them: if the church sets a period for never-followed-up registrations, it covers these too. |
+| Q12 | One Beem account for the platform, or one per church? | **One platform account at launch**, credentials in the host's environment, with the sender id settable per church. A church that grows into its own account gets `comms.provider_credentials` in its settings later; nothing in the schema assumes the shared one. |
