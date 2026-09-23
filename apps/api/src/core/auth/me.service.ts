@@ -61,7 +61,7 @@ export class MeService {
       },
       churches: memberships.map((m) => ({ id: m.church.id, name: m.church.name })),
       permissions,
-      modules: await this.modulesFor(churchId, permitted, user.platformRole === 'DEV'),
+      modules: await this.modulesFor(churchId, permitted),
       badges: await this.badges(churchId, permitted),
       roleLabels: await this.roleLabels(userId, churchId),
       impersonation: await this.impersonation(),
@@ -71,21 +71,21 @@ export class MeService {
   /**
    * The sidebar: modules this church has switched on, with only the pages this
    * person may open. A module with no visible page is left out entirely, and
-   * admin comes last. Devs also get the dev console, which belongs to no church.
+   * admin comes last. The dev console, which belongs to no church, appears for
+   * anyone holding one of its permissions: every dev, and a church
+   * administrator while ADMIN_DEV_CONSOLE lends them the read-only part of it.
    */
-  private async modulesFor(churchId: string | null, permitted: Set<string>, isDev: boolean) {
+  private async modulesFor(churchId: string | null, permitted: Set<string>) {
     const out: MeResponse['modules'] = [];
 
-    if (isDev) {
-      const nav = platformModule.nav.filter((item) => permitted.has(item.permission));
-      if (nav.length) {
-        out.push({
-          key: platformModule.key,
-          name: platformModule.name,
-          home: platformModule.home,
-          nav,
-        });
-      }
+    const platformNav = platformModule.nav.filter((item) => permitted.has(item.permission));
+    if (platformNav.length) {
+      out.push({
+        key: platformModule.key,
+        name: platformModule.name,
+        home: platformModule.home,
+        nav: platformNav,
+      });
     }
 
     if (churchId) {

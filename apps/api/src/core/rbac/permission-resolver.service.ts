@@ -1,8 +1,25 @@
 import { Injectable } from '@nestjs/common';
 import { ALL_PERMISSIONS, permissionKind, platformModule } from '@irca/shared';
 import { PrismaCore } from '../database/prisma-clients.js';
+import { AppConfig } from '../../config/app-config.js';
 
 const IMPERSONATE = ['admin.users.impersonate', 'platform.users.impersonate'];
+
+/**
+ * The slice of the dev console a church administrator may be lent when
+ * ADMIN_DEV_CONSOLE is on: health, and the logs — scoped to their own church
+ * wherever a line names one.
+ *
+ * Deliberately short. `platform.churches.read` and `platform.usage.read` list
+ * and compare *every* church, which is precisely what a tenant must not see,
+ * so lending them would need each of those services scoped first.
+ * `platform.users.impersonate` is left out because viewing as someone is a
+ * power they already have for their own church, scoped to it.
+ * `platform.impersonations.read` is left out because D16 makes the view-as log
+ * readable by devs alone — an administrator who could read it could check
+ * whether anyone had been watching them.
+ */
+const ADMIN_CONSOLE = ['platform.health.read', 'platform.logs.read'] as const;
 
 /**
  * What a request may do, worked out from roles, the church, and which modules
@@ -14,7 +31,10 @@ const IMPERSONATE = ['admin.users.impersonate', 'platform.users.impersonate'];
  */
 @Injectable()
 export class PermissionResolver {
-  constructor(private readonly db: PrismaCore) {}
+  constructor(
+    private readonly db: PrismaCore,
+    private readonly config: AppConfig,
+  ) {}
 
   /** Everything a person may do in one church. */
   async forMember(userId: string, churchId: string): Promise<Set<string>> {
@@ -52,8 +72,14 @@ export class PermissionResolver {
     churchId: string | null,
   ): Promise<Set<string>> {
     const own = churchId ? await this.forMember(userId, churchId) : new Set<string>();
-    if (platformRole !== 'DEV') return own;
-    return new Set([...this.forDev(), ...own]);
+    if (platformRole === 'DEV') return new Set([...this.forDev(), ...own]);
+    // Lent, not granted: a church administrator can be shown the dev console
+    // read-only while the owner has asked for it. It is still a view across
+    // every church, which is why it is a deliberate setting and not a role.
+    if (this.config.get('ADMIN_DEV_CONSOLE') && own.has('admin.users.manage')) {
+      return new Set([...ADMIN_CONSOLE, ...own]);
+    }
+    return own;
   }
 
   /** A platform dev's own permissions: the dev console, and nothing of any church. */

@@ -4,6 +4,7 @@ import { ChurchesService } from './churches.service.js';
 import { PlatformUsageService } from './usage.service.js';
 import { HealthService } from './health.service.js';
 import { ImpersonationLogService } from './impersonations.service.js';
+import { PlatformLogsService } from './logs.service.js';
 
 /**
  * The dev console: every church, what it uses, the platform's health, and the
@@ -12,6 +13,12 @@ import { ImpersonationLogService } from './impersonations.service.js';
  */
 @Module({
   controllers: [PlatformController],
-  providers: [ChurchesService, PlatformUsageService, HealthService, ImpersonationLogService],
+  providers: [
+    ChurchesService,
+    PlatformUsageService,
+    HealthService,
+    ImpersonationLogService,
+    PlatformLogsService,
+  ],
 })
 export class PlatformModule {}

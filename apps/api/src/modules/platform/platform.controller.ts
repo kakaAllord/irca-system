@@ -6,6 +6,7 @@ import { ChurchesService, type NewChurch } from './churches.service.js';
 import { PlatformUsageService } from './usage.service.js';
 import { HealthService } from './health.service.js';
 import { ImpersonationLogService } from './impersonations.service.js';
+import { PlatformLogsService } from './logs.service.js';
 
 const NewChurchSchema = z.object({
   code: z
@@ -27,6 +28,22 @@ const ReasonSchema = z.object({
 });
 const KeySchema = z.object({ name: z.string().trim().min(2).max(80) });
 
+const ServerLogSchema = z.object({
+  level: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).optional(),
+  search: z.string().trim().max(120).optional(),
+  since: z.coerce.number().int().min(0).optional(),
+  limit: z.coerce.number().int().min(1).max(1_000).default(200),
+});
+
+const ActionLogSchema = z.object({
+  churchId: z.uuid().optional(),
+  actorUserId: z.uuid().optional(),
+  action: z.string().trim().max(80).optional(),
+  search: z.string().trim().max(120).optional(),
+  before: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+});
+
 const today = () => new Date().toISOString().slice(0, 10);
 const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
 const list = (value?: string) =>
@@ -47,6 +64,7 @@ export class PlatformController {
     private readonly usage: PlatformUsageService,
     private readonly health: HealthService,
     private readonly log: ImpersonationLogService,
+    private readonly logs: PlatformLogsService,
   ) {}
 
   @RequirePermission('platform.churches.read')
@@ -143,6 +161,20 @@ export class PlatformController {
     @Query('to') to?: string,
   ) {
     return this.usage.platform(list(metrics), from ?? daysAgo(89), to ?? today());
+  }
+
+  /** What the server wrote, newest first. Held in memory, so empty after a restart. */
+  @RequirePermission('platform.logs.read')
+  @Get('logs/server')
+  serverLogs(@Query(new ZodPipe(ServerLogSchema)) query: z.infer<typeof ServerLogSchema>) {
+    return this.logs.server(query);
+  }
+
+  /** What people did. A dev sees every church; anyone else sees their own. */
+  @RequirePermission('platform.logs.read')
+  @Get('logs/actions')
+  actionLogs(@Query(new ZodPipe(ActionLogSchema)) query: z.infer<typeof ActionLogSchema>) {
+    return this.logs.actions(query);
   }
 
   @RequirePermission('platform.impersonations.read')
