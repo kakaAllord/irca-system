@@ -51,8 +51,9 @@ test.describe('recording money', () => {
     await signIn(page, CLERK);
 
     await page.getByRole('link', { name: 'Transactions' }).click();
-    await page.getByRole('link', { name: '+ Record expense' }).click();
-    await expect(page.getByRole('heading', { name: 'Record an expense' })).toBeVisible();
+    await page.getByRole('button', { name: '+ Record expense' }).click();
+    // The form is the right-hand drawer, as every other form in the portal is.
+    await expect(page.getByRole('dialog')).toContainText('Record an expense');
 
     // Typing a name nothing matches offers to create it, without leaving the form.
     await createItem(page, 'Expense item', item);
@@ -126,8 +127,8 @@ test.describe('recording money', () => {
 
     await page.goto('/finance/transactions');
     await expect(page.getByRole('heading', { name: 'Transactions' })).toBeVisible();
-    await expect(page.getByRole('link', { name: '+ Record expense' })).toHaveCount(0);
-    await expect(page.getByRole('link', { name: '+ Record income' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '+ Record expense' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '+ Record income' })).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Stop viewing' }).click();
     await expect(page.getByText('Viewing as Neema Mollel', { exact: true })).toHaveCount(0);

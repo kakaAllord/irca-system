@@ -8,26 +8,35 @@ import { clientApi } from '@/lib/api/client';
 import { ApiRequestError } from '@/lib/api/errors';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
-import { SubmitButton } from '@/components/ui/SubmitButton';
 import { Dialog } from '@/components/ui/Dialog';
+import { Drawer } from '@/components/ui/Drawer';
+import { SubmitButton } from '@/components/ui/SubmitButton';
 import { EntryFields, type EntryValues } from '@/modules/finance/components/EntryFields';
 
 /** Older than this and the form asks whether the date is really right. */
 const OLD_DAYS = 60;
 
 /**
- * Recording an entry.
+ * Recording an entry, in the panel every other form in the portal uses.
  *
- * The id that makes a submit idempotent is made once when the form opens and
+ * It slides in over the page the clerk was reading, which is the point: a
+ * stack of receipts is entered against a list of what is already recorded,
+ * and sending them to a separate page took that list away.
+ *
+ * The id that makes a submit idempotent is made once when the drawer opens and
  * again only after a save, so a double-click, or a retry after the connection
  * drops, cannot put the same expense in the books twice.
  */
-export function EntryForm({
+export function EntryDrawer({
   kind,
+  open,
+  onClose,
   currency,
   timezone,
 }: {
   kind: 'income' | 'expense';
+  open: boolean;
+  onClose: () => void;
   currency: string;
   timezone: string;
 }) {
@@ -53,13 +62,26 @@ export function EntryForm({
 
   const dirty = Boolean(values.item ?? values.amount ?? values.reference ?? values.counterparty);
 
+  // A fresh drawer every time it is opened, and a fresh idempotency key with it.
+  useEffect(() => {
+    if (!open) return;
+    requestId.current = crypto.randomUUID();
+    setValues(blank());
+    setErrors({});
+    setError(null);
+    setSaved(null);
+    setConfirmOld(false);
+    // Deliberately keyed on `open` alone: the blank row depends only on today
+    // and the church's clock, neither of which moves while the drawer is open.
+  }, [open]);
+
   // Leaving with something typed asks first. The browser decides the wording.
   useEffect(() => {
-    if (!dirty || saved) return;
+    if (!open || !dirty || saved) return;
     const warn = (e: BeforeUnloadEvent) => e.preventDefault();
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
-  }, [dirty, saved]);
+  }, [open, dirty, saved]);
 
   async function save() {
     setBusy(true);
@@ -83,6 +105,7 @@ export function EntryForm({
         },
       });
       setSaved(entry);
+      // The page behind the drawer is a list this entry now belongs in.
       router.refresh();
     } catch (err) {
       if (err instanceof ApiRequestError) {
@@ -98,8 +121,8 @@ export function EntryForm({
     }
   }
 
-  function onSubmit(e: FormEvent) {
-    e.preventDefault();
+  function submit(e?: FormEvent) {
+    e?.preventDefault();
     if (!values.item) {
       return setErrors({
         item: [
@@ -111,75 +134,101 @@ export function EntryForm({
     void save();
   }
 
+  /** Asking before throwing away something half typed. */
+  function close() {
+    if (!saved && dirty && !window.confirm('Leave without saving this entry?')) return;
+    onClose();
+  }
+
+  const title = kind === 'income' ? 'Record income' : 'Record an expense';
+
   if (saved) {
     return (
-      <div className="rounded-[12px] border border-pos-br bg-pos-bg p-5">
-        <p className="text-[14px] font-semibold text-pos">✓ Saved as {saved.code}</p>
-        <p className="mt-1 text-[12.5px] text-fg2">
-          {saved.item?.name} · {formatMoney(saved.amount, currency)} ·{' '}
-          {new Date(`${saved.txnDate}T00:00:00Z`).toLocaleDateString('en-GB', {
-            day: 'numeric',
-            month: 'short',
-            year: 'numeric',
-            timeZone: 'UTC',
-          })}
-        </p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button
-            onClick={() => {
-              // Clerks enter a stack of receipts from one day, so the date and
-              // the method stay and the rest is cleared.
-              requestId.current = crypto.randomUUID();
-              setValues(blank({ txnDate: saved.txnDate, method: saved.method as PaymentMethod }));
-              setSaved(null);
-            }}
-          >
-            Record another {kind === 'income' ? 'income' : 'expense'}
-          </Button>
+      <Drawer
+        open={open}
+        onClose={onClose}
+        title={title}
+        footer={
+          <>
+            <Button variant="ghost" onClick={onClose}>
+              Done
+            </Button>
+            <Button
+              onClick={() => {
+                // Clerks enter a stack of receipts from one day, so the date and
+                // the method stay and the rest is cleared.
+                requestId.current = crypto.randomUUID();
+                setValues(blank({ txnDate: saved.txnDate, method: saved.method as PaymentMethod }));
+                setSaved(null);
+              }}
+            >
+              Record another {kind === 'income' ? 'income' : 'expense'}
+            </Button>
+          </>
+        }
+      >
+        <div className="rounded-[12px] border border-pos-br bg-pos-bg p-5">
+          <p className="text-[14px] font-semibold text-pos">✓ Saved as {saved.code}</p>
+          <p className="mt-1 text-[12.5px] text-fg2">
+            {saved.item?.name} · {formatMoney(saved.amount, currency)} ·{' '}
+            {new Date(`${saved.txnDate}T00:00:00Z`).toLocaleDateString('en-GB', {
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric',
+              timeZone: 'UTC',
+            })}
+          </p>
           <Link
             href={`/finance/transactions/${saved.code}`}
-            className="inline-flex h-9 items-center rounded-[7px] border border-border px-3.5 text-[12.5px] font-medium text-fg hover:bg-hover"
+            className="mt-4 inline-flex h-9 items-center rounded-[7px] border border-border px-3.5 text-[12.5px] font-medium text-fg hover:bg-hover"
           >
             View entry
           </Link>
         </div>
-      </div>
+      </Drawer>
     );
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
-      {error && <Alert tone="error">{error}</Alert>}
-
-      <EntryFields
-        kind={kind}
-        values={values}
-        onChange={setValues}
-        errors={errors}
-        currency={currency}
-      />
-
-      <div className="flex justify-end gap-2">
-        <Link
-          href="/finance/transactions"
-          className="inline-flex h-9 items-center rounded-[7px] px-3.5 text-[12.5px] font-medium text-fg2 hover:bg-hover"
-        >
-          Cancel
-        </Link>
-        <SubmitButton
-          type="submit"
-          loading={busy}
-          missing={
-            [
-              !values.txnDate && 'Date',
-              !values.item && (kind === 'income' ? 'Income source' : 'Expense item'),
-              !values.amount.trim() && 'Amount',
-            ].filter(Boolean) as string[]
-          }
-        >
-          Save {kind === 'income' ? 'income' : 'expense'}
-        </SubmitButton>
-      </div>
+    <>
+      <Drawer
+        open={open}
+        onClose={close}
+        title={title}
+        footer={
+          <>
+            <Button variant="ghost" onClick={close}>
+              Cancel
+            </Button>
+            <SubmitButton
+              loading={busy}
+              missing={
+                [
+                  !values.txnDate && 'Date',
+                  !values.item && (kind === 'income' ? 'Income source' : 'Expense item'),
+                  !values.amount.trim() && 'Amount',
+                ].filter(Boolean) as string[]
+              }
+              onClick={() => submit()}
+            >
+              Save {kind === 'income' ? 'income' : 'expense'}
+            </SubmitButton>
+          </>
+        }
+      >
+        <form onSubmit={submit} noValidate className="flex flex-col gap-5">
+          {error && <Alert tone="error">{error}</Alert>}
+          <EntryFields
+            kind={kind}
+            values={values}
+            onChange={setValues}
+            errors={errors}
+            currency={currency}
+          />
+          {/* Enter in any field saves, the same as pressing the button. */}
+          <button type="submit" className="hidden" aria-hidden tabIndex={-1} />
+        </form>
+      </Drawer>
 
       <Dialog
         open={confirmOld}
@@ -197,7 +246,7 @@ export function EntryForm({
           </>
         }
       />
-    </form>
+    </>
   );
 }
 

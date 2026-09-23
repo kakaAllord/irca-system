@@ -74,7 +74,10 @@ export default async function TransactionsPage({
         actions={
           <>
             {can(me, 'finance.transactions.export') && <ExportButton query={query.toString()} />}
-            <RecordButtons />
+            <RecordButtons
+              currency={me.church?.currency ?? 'TZS'}
+              timezone={me.church?.timezone ?? 'UTC'}
+            />
           </>
         }
       />
