@@ -39,14 +39,13 @@ export class DashboardService {
   ) {}
 
   async dashboard() {
-    const churchId = this.auth.requireChurch();
     const now = Date.now();
     const since = new Date(now - 30 * DAY);
     const before = new Date(now - 60 * DAY);
 
-    const registrations = await this.db.client.registration.findMany({ where: { churchId } });
+    const registrations = await this.db.client.registration.findMany({ where: {} });
     const people = await this.db.client.person.findMany({
-      where: { churchId },
+      where: {},
       select: { id: true, saved: true, baptised: true, registrationId: true, createdAt: true },
     });
     const personByReg = new Map(people.map((p) => [p.registrationId, p]));
@@ -106,7 +105,6 @@ export class DashboardService {
   }
 
   async insights(period: Period) {
-    const churchId = this.auth.requireChurch();
     const from =
       period === '90d'
         ? new Date(Date.now() - 90 * DAY)
@@ -114,7 +112,7 @@ export class DashboardService {
           ? new Date(Date.UTC(new Date().getUTCFullYear(), 0, 1))
           : null;
     const rows = await this.db.client.registration.findMany({
-      where: { churchId, ...(from ? { createdAt: { gte: from } } : {}) },
+      where: { ...(from ? { createdAt: { gte: from } } : {}) },
     });
 
     // The shared report the old office screen used, now per church and period.
@@ -149,13 +147,13 @@ export class DashboardService {
 
   private async openApplications(churchId: string) {
     const rows = await this.db.client.membershipApplication.findMany({
-      where: { churchId, status: 'UNDER_REVIEW' },
+      where: { status: 'UNDER_REVIEW' },
       orderBy: { submittedAt: 'desc' },
       take: 3,
       include: { person: true },
     });
     const total = await this.db.client.membershipApplication.count({
-      where: { churchId, status: 'UNDER_REVIEW' },
+      where: { status: 'UNDER_REVIEW' },
     });
     return {
       total,
@@ -172,10 +170,10 @@ export class DashboardService {
 
   private async newConverts(churchId: string) {
     const sessions = await this.db.tx((tx) =>
-      setting(tx, churchId, 'membership.foundationSessions'),
+      setting(tx, 'membership.foundationSessions'),
     );
     const people = await this.db.client.person.findMany({
-      where: { churchId, stage: { in: ['NEW_CONVERT', 'FOUNDATION_CLASS'] } },
+      where: { stage: { in: ['NEW_CONVERT', 'FOUNDATION_CLASS'] } },
       orderBy: { updatedAt: 'desc' },
       take: 4,
       include: {

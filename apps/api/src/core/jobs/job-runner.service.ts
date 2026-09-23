@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ClsService } from 'nestjs-cls';
 import type { Prisma } from '../../generated/prisma/client.js';
-import { PrismaCore } from '../database/prisma-clients.js';
+import { PrismaDb } from '../database/prisma-clients.js';
 import type { RequestContext } from '../context/request-context.js';
 
 /**
@@ -20,7 +20,7 @@ export class JobRunner {
   private readonly logger = new Logger('Jobs');
 
   constructor(
-    private readonly db: PrismaCore,
+    private readonly db: PrismaDb,
     private readonly cls: ClsService<RequestContext>,
   ) {}
 
@@ -70,7 +70,7 @@ export class JobRunner {
       let failed = 0;
 
       for (const church of churches) {
-        const run = await this.db.jobRun.create({ data: { job, churchId: church.id } });
+        const run = await this.db.jobRun.create({ data: { job, id } });
         try {
           const stats = await this.inContext(church.id, () =>
             withTimeout(
@@ -90,7 +90,7 @@ export class JobRunner {
           ok++;
         } catch (err) {
           failed++;
-          this.logger.error({ msg: `job ${job} failed for a church`, churchId: church.id, err });
+          this.logger.error({ msg: `job ${job} failed for a church`, id, err });
           await this.db.jobRun.update({
             where: { id: run.id },
             data: {

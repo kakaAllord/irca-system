@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client.js';
-import { PrismaCore } from '../database/prisma-clients.js';
+import { PrismaDb } from '../database/prisma-clients.js';
 import { TENANT_TABLES } from '../database/planes.js';
 import { UsageService } from './usage.service.js';
 
@@ -33,7 +33,7 @@ type Grouped = { church_id: string | null; rows: bigint; bytes: bigint };
 @Injectable()
 export class UsageSnapshot {
   constructor(
-    private readonly db: PrismaCore,
+    private readonly db: PrismaDb,
     private readonly usage: UsageService,
   ) {}
 
@@ -65,7 +65,7 @@ export class UsageSnapshot {
       }
     }
 
-    for (const [churchId, bytes] of totals) {
+    for (const [bytes] of totals) {
       this.usage.gauge('db.bytes.total', bytes, churchId);
       // As a whole number of hundredths of a percent, to stay an integer.
       this.usage.gauge('db.share_pct', size > 0n ? (bytes * 10_000n) / size : 0n, churchId);

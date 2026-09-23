@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { RequestAuth } from '../context/request-auth.js';
-import type { TenantTx } from '../database/db.service.js';
+import type { Tx } from '../database/db.service.js';
 
 /**
  * Per-church counters that leave no gaps.
@@ -22,8 +22,7 @@ export class SequenceService {
    * The next number for this key. **Only** call this inside the transaction
    * that writes the record using it, or the numbers will have gaps.
    */
-  async next(tx: TenantTx, key: string): Promise<number> {
-    const churchId = this.auth.requireChurch();
+  async next(tx: Tx, key: string): Promise<number> {
     const rows = await tx.$queryRaw<{ last_value: number }[]>`
       -- tenant: church_id is pinned below
       insert into church_sequences (church_id, key, last_value, updated_at)

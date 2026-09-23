@@ -36,7 +36,6 @@ export class RateLimitGuard implements CanActivate {
     if (req.path === '/health') return true;
 
     const userId = this.auth.actorUserId;
-    const churchId = this.auth.churchId;
     if (userId)
       this.hit(`u:${userId}`, PER_USER, 'You are making too many requests. Wait a minute.');
     if (churchId) {

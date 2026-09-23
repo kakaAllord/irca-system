@@ -36,7 +36,6 @@ const ServerLogSchema = z.object({
 });
 
 const ActionLogSchema = z.object({
-  churchId: z.uuid().optional(),
   actorUserId: z.uuid().optional(),
   action: z.string().trim().max(80).optional(),
   search: z.string().trim().max(120).optional(),

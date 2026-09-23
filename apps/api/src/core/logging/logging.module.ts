@@ -53,7 +53,6 @@ import { logBuffer } from './log-buffer.service.js';
                 ? {
                     userId: cls.get('userId') ?? undefined,
                     actorUserId: cls.get('actorUserId') ?? undefined,
-                    churchId: cls.get('churchId') ?? undefined,
                   }
                 : {},
             redact: {

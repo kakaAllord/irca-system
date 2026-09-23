@@ -11,7 +11,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/generated/prisma/client.js';
 import { PasswordService } from '../src/core/auth/password.service.js';
 import { RegistrySync } from '../src/core/rbac/registry-sync.service.js';
-import type { PrismaCore } from '../src/core/database/prisma-clients.js';
+import type { PrismaDb } from '../src/core/database/prisma-clients.js';
 
 config({ path: process.env.NODE_ENV === 'test' ? '.env.test' : '.env', quiet: true });
 
@@ -102,7 +102,7 @@ await portal(irca.id, 'membership');
 
 // The permissions and built-in roles the code defines, written before anyone
 // is given one.
-await new RegistrySync(db as unknown as PrismaCore).sync();
+await new RegistrySync(db as unknown as PrismaDb).sync();
 
 await user('dev@irca.local', 'Dev Account', 'dev-password-123', 'DEV');
 await member(irca.id, (await user('admin@irca.local', 'IRCA Admin', 'admin-password-123')).id, [

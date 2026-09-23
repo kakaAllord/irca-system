@@ -55,7 +55,7 @@ export class SessionGuard implements CanActivate {
         this.cls.set(
           'permissions',
           this.permissions.readOnly(
-            await this.permissions.forMember(impersonation.subjectUserId, impersonation.churchId),
+            await this.permissions.forUser(impersonation.subjectUserId),
           ),
         );
       } else {
@@ -64,7 +64,7 @@ export class SessionGuard implements CanActivate {
         this.cls.set('platformRole', user.platformRole);
         this.cls.set(
           'permissions',
-          await this.permissions.forSignedIn(user.id, user.platformRole, session.activeChurchId),
+          await this.permissions.forUser(user.id),
         );
       }
     }

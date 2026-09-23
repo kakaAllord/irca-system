@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ALL_MODULES, ALL_PERMISSIONS, CHURCH_MODULES, moduleByKey } from '@irca/shared';
-import { PrismaCore } from '../database/prisma-clients.js';
+import { PrismaDb } from '../database/prisma-clients.js';
 
 /**
  * Makes the database agree with the code at every boot.
@@ -16,7 +16,7 @@ import { PrismaCore } from '../database/prisma-clients.js';
 export class RegistrySync implements OnApplicationBootstrap {
   private readonly logger = new Logger('RegistrySync');
 
-  constructor(private readonly db: PrismaCore) {}
+  constructor(private readonly db: PrismaDb) {}
 
   async onApplicationBootstrap() {
     await this.sync();
@@ -47,7 +47,7 @@ export class RegistrySync implements OnApplicationBootstrap {
       for (const church of churches) {
         await this.ensureCoreModules(tx, church.id);
         const enabled = await tx.churchModule.findMany({
-          where: { churchId: church.id, enabled: true },
+          where: { id, enabled: true },
           select: { moduleKey: true },
         });
         for (const { moduleKey } of enabled) await this.ensureModuleRoles(tx, church.id, moduleKey);
@@ -63,9 +63,9 @@ export class RegistrySync implements OnApplicationBootstrap {
   private async ensureCoreModules(tx: TxLike, churchId: string): Promise<void> {
     for (const m of CHURCH_MODULES.filter((m) => m.kind === 'core')) {
       await tx.churchModule.upsert({
-        where: { churchId_moduleKey: { churchId, moduleKey: m.key } },
+        where: { moduleKey: m.key },
         update: { enabled: true },
-        create: { churchId, moduleKey: m.key, enabled: true, enabledAt: new Date() },
+        create: { moduleKey: m.key, enabled: true, enabledAt: new Date() },
       });
     }
   }
@@ -77,7 +77,7 @@ export class RegistrySync implements OnApplicationBootstrap {
    */
   /** The same, for one church and one portal, in its own transaction. */
   async syncModuleRoles(churchId: string, moduleKey: string): Promise<void> {
-    await this.db.$transaction((tx) => this.ensureModuleRoles(tx, churchId, moduleKey));
+    await this.db.$transaction((tx) => this.ensureModuleRoles(tx, moduleKey));
   }
 
   async ensureModuleRoles(tx: TxLike, churchId: string, moduleKey: string): Promise<void> {
@@ -86,10 +86,9 @@ export class RegistrySync implements OnApplicationBootstrap {
 
     for (const def of module.systemRoles) {
       const role = await tx.role.upsert({
-        where: { churchId_systemKey: { churchId, systemKey: def.key } },
+        where: { churchId_systemKey: { systemKey: def.key } },
         update: { name: def.name, description: def.description, moduleKey, deletedAt: null },
         create: {
-          churchId,
           moduleKey,
           systemKey: def.key,
           name: def.name,
@@ -108,7 +107,7 @@ export class RegistrySync implements OnApplicationBootstrap {
       const toRemove = [...have].filter((p) => !want.has(p));
       if (toAdd.length) {
         await tx.rolePermission.createMany({
-          data: toAdd.map((permissionKey) => ({ churchId, roleId: role.id, permissionKey })),
+          data: toAdd.map((permissionKey) => ({ roleId: role.id, permissionKey })),
           skipDuplicates: true,
         });
       }
@@ -123,7 +122,7 @@ export class RegistrySync implements OnApplicationBootstrap {
 
 /** What Prisma hands a transaction callback on the core client. */
 type TxLike = Parameters<
-  Parameters<PrismaCore['$transaction']>[0] extends (tx: infer T) => unknown
+  Parameters<PrismaDb['$transaction']>[0] extends (tx: infer T) => unknown
     ? (tx: T) => void
     : never
 >[0];

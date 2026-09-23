@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import pg from 'pg';
-import { PrismaCore } from '../src/core/database/prisma-clients.js';
+import { PrismaDb } from '../src/core/database/prisma-clients.js';
 import { importRegistrations } from '../src/cli/commands/registrations-import.js';
 import { createApp, createChurch, ownerDb, truncateAll } from './helpers.js';
 
@@ -54,7 +54,7 @@ describe('copying the live registrations across', () => {
       from: oldUrl,
       churchCode: 'IRCA',
       dryRun,
-      db: app.get(PrismaCore),
+      db: app.get(PrismaDb),
     });
 
   it('copies every row with its token and exact times, and a person for each', async () => {

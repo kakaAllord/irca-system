@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaCore } from '../../core/database/prisma-clients.js';
+import { PrismaDb } from '../../core/database/prisma-clients.js';
 
 /**
  * How the platform itself is doing: the database, the slowest queries, the
@@ -7,7 +7,7 @@ import { PrismaCore } from '../../core/database/prisma-clients.js';
  */
 @Injectable()
 export class HealthService {
-  constructor(private readonly db: PrismaCore) {}
+  constructor(private readonly db: PrismaDb) {}
 
   async report() {
     const [size] = await this.db.$queryRaw<{ bytes: bigint; connections: number }[]>`

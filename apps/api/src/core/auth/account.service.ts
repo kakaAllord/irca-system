@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ClsService } from 'nestjs-cls';
 import { ErrorCode } from '@irca/shared';
-import { PrismaCore } from '../database/prisma-clients.js';
+import { PrismaDb } from '../database/prisma-clients.js';
 import { AppError } from '../http/app-error.js';
 import { RequestAuth } from '../context/request-auth.js';
 import { AuditService } from '../audit/audit.service.js';
@@ -39,7 +39,7 @@ function describeDevice(userAgent: string | null): string {
 @Injectable()
 export class AccountService {
   constructor(
-    private readonly db: PrismaCore,
+    private readonly db: PrismaDb,
     private readonly auth: RequestAuth,
     private readonly passwords: PasswordService,
     private readonly sessions: SessionService,

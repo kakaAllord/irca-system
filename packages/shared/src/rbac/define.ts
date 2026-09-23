@@ -33,7 +33,6 @@ export type NavIcon =
   | 'roles'
   | 'portals'
   | 'activity'
-  | 'churches'
   | 'terminal'
   | 'health';
 

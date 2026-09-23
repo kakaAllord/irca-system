@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { ClsService } from 'nestjs-cls';
 import type { Prisma } from '../../generated/prisma/client.js';
-import { PrismaCore } from '../database/prisma-clients.js';
-import type { TenantTx } from '../database/db.service.js';
+import { PrismaDb } from '../database/prisma-clients.js';
+import type { Tx } from '../database/db.service.js';
 import type { RequestContext } from '../context/request-context.js';
 import { UsageService } from '../usage/usage.service.js';
 
@@ -55,14 +55,13 @@ export function redact(value: unknown): unknown {
 @Injectable()
 export class AuditService {
   constructor(
-    private readonly db: PrismaCore,
+    private readonly db: PrismaDb,
     private readonly cls: ClsService<RequestContext>,
     private readonly usage: UsageService,
   ) {}
 
   private common(event: AuditEventInput) {
     return {
-      churchId: event.churchId !== undefined ? event.churchId : this.cls.get('churchId'),
       actorUserId: this.cls.get('actorUserId'),
       subjectUserId: this.cls.get('userId'),
       impersonationId: this.cls.get('impersonationId'),
@@ -96,7 +95,7 @@ export class AuditService {
    * A church's own changes, written inside the transaction that makes them.
    * `tx` is the caller's transaction, so nothing is logged that did not happen.
    */
-  async recordIn(tx: TenantTx, event: AuditEventInput): Promise<void> {
+  async recordIn(tx: Tx, event: AuditEventInput): Promise<void> {
     await tx.auditEvent.create({ data: { ...this.common(event), source: 'feature' } });
     this.usage.inc('audit.events');
   }

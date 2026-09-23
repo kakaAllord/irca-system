@@ -1,13 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ClsService } from 'nestjs-cls';
-import {
-  CHURCH_MODULES,
-  ErrorCode,
-  initialsOf,
-  platformModule,
-  type MeResponse,
-} from '@irca/shared';
-import { PrismaCore } from '../database/prisma-clients.js';
+import { CHURCH_MODULES, ErrorCode, initialsOf, type MeResponse } from '@irca/shared';
+import { PrismaDb } from '../database/prisma-clients.js';
 import { ChangeRequestService } from '../change-requests/change-request.service.js';
 import type { RequestContext } from '../context/request-context.js';
 import { AppError } from '../http/app-error.js';
@@ -15,14 +9,14 @@ import { AppError } from '../http/app-error.js';
 /**
  * Everything the portal needs to draw itself for the person it is serving.
  *
- * While impersonating, this describes the **subject**: their church, their
- * permissions (read-only ones), their modules and their role labels. Only the
+ * While impersonating, this describes the **subject**: their permissions
+ * (read-only ones), their portals and their role labels. Only the
  * impersonation block names the actor, and it is what draws the banner.
  */
 @Injectable()
 export class MeService {
   constructor(
-    private readonly db: PrismaCore,
+    private readonly db: PrismaDb,
     private readonly cls: ClsService<RequestContext>,
     private readonly changeRequests: ChangeRequestService,
   ) {}
@@ -32,16 +26,9 @@ export class MeService {
     if (!userId) throw new AppError(401, ErrorCode.UNAUTHENTICATED, 'Please sign in.');
 
     const user = await this.db.user.findUniqueOrThrow({ where: { id: userId } });
-    const churchId = this.cls.get('churchId');
     const permissions = [...this.cls.get('permissions')].sort();
     const permitted = new Set(permissions);
-
-    const memberships = await this.db.churchMembership.findMany({
-      where: { userId, status: 'ACTIVE', church: { status: 'ACTIVE' } },
-      include: { church: true },
-      orderBy: { church: { name: 'asc' } },
-    });
-    const church = churchId ? await this.db.church.findUnique({ where: { id: churchId } }) : null;
+    const church = await this.db.church.findFirst();
 
     return {
       user: {
@@ -49,63 +36,44 @@ export class MeService {
         email: user.email,
         fullName: user.fullName,
         initials: initialsOf(user.fullName),
-        platformRole: user.platformRole,
       },
       church: church && {
-        id: church.id,
         code: church.code,
-        slug: church.slug,
         name: church.name,
         timezone: church.timezone,
         currency: church.currency,
       },
-      churches: memberships.map((m) => ({ id: m.church.id, name: m.church.name })),
       permissions,
-      modules: await this.modulesFor(churchId, permitted),
-      badges: await this.badges(churchId, permitted),
-      roleLabels: await this.roleLabels(userId, churchId),
+      modules: await this.modulesFor(permitted),
+      badges: await this.badges(permitted),
+      roleLabels: await this.roleLabels(userId),
       impersonation: await this.impersonation(),
     };
   }
 
   /**
-   * The sidebar: modules this church has switched on, with only the pages this
-   * person may open. A module with no visible page is left out entirely, and
-   * admin comes last. The dev console, which belongs to no church, appears for
-   * anyone holding one of its permissions: every dev, and a church
-   * administrator while ADMIN_DEV_CONSOLE lends them the read-only part of it.
+   * The sidebar: the portals that are switched on, with only the pages this
+   * person may open. A portal with no visible page is left out entirely, and
+   * admin and the dev console come last.
    */
-  private async modulesFor(churchId: string | null, permitted: Set<string>) {
+  private async modulesFor(permitted: Set<string>) {
     const out: MeResponse['modules'] = [];
-
-    const platformNav = platformModule.nav.filter((item) => permitted.has(item.permission));
-    if (platformNav.length) {
-      out.push({
-        key: platformModule.key,
-        name: platformModule.name,
-        home: platformModule.home,
-        nav: platformNav,
-      });
-    }
-
-    if (churchId) {
-      const enabled = new Set(
-        (
-          await this.db.churchModule.findMany({
-            where: { churchId, enabled: true },
-            select: { moduleKey: true },
-          })
-        ).map((m) => m.moduleKey),
-      );
-      const ordered = [
-        ...CHURCH_MODULES.filter((m) => m.kind !== 'core'),
-        ...CHURCH_MODULES.filter((m) => m.kind === 'core'),
-      ];
-      for (const module of ordered) {
-        if (!enabled.has(module.key)) continue;
-        const nav = module.nav.filter((item) => permitted.has(item.permission));
-        if (nav.length) out.push({ key: module.key, name: module.name, home: module.home, nav });
-      }
+    const enabled = new Set(
+      (
+        await this.db.moduleState.findMany({
+          where: { enabled: true },
+          select: { moduleKey: true },
+        })
+      ).map((m) => m.moduleKey),
+    );
+    const ordered = [
+      ...CHURCH_MODULES.filter((m) => m.kind !== 'core'),
+      ...CHURCH_MODULES.filter((m) => m.kind === 'core'),
+    ];
+    for (const module of ordered) {
+      if (!enabled.has(module.key)) continue;
+      const nav = module.nav.filter((item) => permitted.has(item.permission));
+      if (nav.length) out.push({ key: module.key, name: module.name, home: module.home, nav });
     }
     return out;
   }
@@ -114,40 +82,30 @@ export class MeService {
    * What the sidebar shows beside a page. Only requests so far: an
    * administrator should see that something is waiting without opening it.
    */
-  private async badges(
-    churchId: string | null,
-    permitted: Set<string>,
-  ): Promise<Record<string, number>> {
-    if (!churchId || !permitted.has('admin.requests.read')) return {};
-    const pending = await this.changeRequests.pendingCount(churchId);
+  private async badges(permitted: Set<string>): Promise<Record<string, number>> {
+    if (!permitted.has('admin.requests.read')) return {};
+    const pending = await this.changeRequests.pendingCount();
     return pending ? { '/admin/requests': pending } : {};
   }
 
   /** "Church administrator · Finance clerk", for the sidebar's user row. */
-  private async roleLabels(userId: string, churchId: string | null): Promise<string[]> {
-    if (!churchId) return [];
-    const roles = await this.db.membershipRole.findMany({
-      where: { membership: { userId, churchId, status: 'ACTIVE' }, role: { deletedAt: null } },
+  private async roleLabels(userId: string): Promise<string[]> {
+    const roles = await this.db.userRole.findMany({
+      where: { userId, role: { deletedAt: null } },
       include: { role: true },
     });
     return roles.map((r) => r.role.name).sort();
   }
 
-  /** The church administrators of the church this person is in. Names only. */
+  /** The church administrators. Names only. */
   async administrators(): Promise<{ name: string }[]> {
-    const churchId = this.cls.get('churchId');
-    if (!churchId) return [];
-    const roles = await this.db.membershipRole.findMany({
-      where: {
-        churchId,
-        role: { systemKey: 'admin.administrator', deletedAt: null },
-        membership: { status: 'ACTIVE' },
-      },
-      include: { membership: { include: { user: true } } },
+    const roles = await this.db.userRole.findMany({
+      where: { role: { systemKey: 'admin.administrator', deletedAt: null } },
+      include: { user: true },
     });
     return roles
-      .filter((r) => r.membership.user.status === 'ACTIVE')
-      .map((r) => ({ name: r.membership.user.fullName }));
+      .filter((r) => r.user.status === 'ACTIVE')
+      .map((r) => ({ name: r.user.fullName }));
   }
 
   private async impersonation(): Promise<MeResponse['impersonation']> {

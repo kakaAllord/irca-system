@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { ClsService } from 'nestjs-cls';
 import { ErrorCode, type LoginInput } from '@irca/shared';
-import { PrismaCore } from '../database/prisma-clients.js';
+import { PrismaDb } from '../database/prisma-clients.js';
 import { AppError } from '../http/app-error.js';
 import type { RequestContext } from '../context/request-context.js';
 import { UsageService } from '../usage/usage.service.js';
@@ -23,7 +23,7 @@ export class AuthService {
   private readonly logger = new Logger('Auth');
 
   constructor(
-    private readonly db: PrismaCore,
+    private readonly db: PrismaDb,
     private readonly passwords: PasswordService,
     private readonly sessions: SessionService,
     private readonly cls: ClsService<RequestContext>,
@@ -75,7 +75,6 @@ export class AuthService {
 
     const { token, session } = await this.sessions.create({
       userId: user.id,
-      activeChurchId: await this.sessions.defaultChurchFor(user.id),
       ip: this.cls.get('ip'),
       userAgent: this.cls.get('userAgent'),
     });
@@ -84,41 +83,12 @@ export class AuthService {
     this.cls.set('sessionId', session.id);
     this.cls.set('userId', user.id);
     this.cls.set('actorUserId', user.id);
-    this.cls.set('churchId', session.activeChurchId);
-    this.cls.set('platformRole', user.platformRole);
-    this.cls.set(
-      'permissions',
-      await this.permissions.forSignedIn(user.id, user.platformRole, session.activeChurchId),
-    );
+    this.cls.set('permissions', await this.permissions.forUser(user.id));
 
-    this.usage.inc('auth.logins', 1, session.activeChurchId);
-    this.usage.inc('auth.sessions_created', 1, session.activeChurchId);
+    this.usage.inc('auth.logins');
+    this.usage.inc('auth.sessions_created');
     this.logger.log({ msg: 'signed in', userId: user.id });
     return { token };
-  }
-
-  /**
-   * Moves this session to another of the person's churches. Their permissions
-   * are worked out again straight away, so the answer to this very request
-   * already describes the new church.
-   */
-  async switchChurch(churchId: string): Promise<void> {
-    const userId = this.cls.get('userId');
-    const sessionId = this.cls.get('sessionId');
-    if (!userId || !sessionId)
-      throw new AppError(401, ErrorCode.UNAUTHENTICATED, 'Please sign in.');
-
-    const membership = await this.db.churchMembership.findUnique({
-      where: { churchId_userId: { churchId, userId } },
-      include: { church: true },
-    });
-    if (!membership || membership.status !== 'ACTIVE' || membership.church.status !== 'ACTIVE') {
-      throw new AppError(403, ErrorCode.FORBIDDEN, 'You do not have access to that church.');
-    }
-
-    await this.db.session.update({ where: { id: sessionId }, data: { activeChurchId: churchId } });
-    this.cls.set('churchId', churchId);
-    this.cls.set('permissions', await this.permissions.forMember(userId, churchId));
   }
 
   async logout(): Promise<void> {

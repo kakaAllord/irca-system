@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ClsService } from 'nestjs-cls';
 import { ErrorCode } from '@irca/shared';
-import { PrismaCore } from '../database/prisma-clients.js';
+import { PrismaDb } from '../database/prisma-clients.js';
 import { AppError } from '../http/app-error.js';
 import { RequestAuth } from '../context/request-auth.js';
 import { UsageService } from '../usage/usage.service.js';
@@ -23,7 +23,7 @@ const MINUTES = 30;
 @Injectable()
 export class ImpersonationService {
   constructor(
-    private readonly db: PrismaCore,
+    private readonly db: PrismaDb,
     private readonly cls: ClsService<RequestContext>,
     private readonly auth: RequestAuth,
     private readonly usage: UsageService,
@@ -54,7 +54,6 @@ export class ImpersonationService {
         isDev: this.auth.isDev,
         canImpersonateHere: this.auth.has('admin.users.impersonate'),
         alreadyImpersonating: this.auth.isImpersonating,
-        churchId: this.auth.churchId,
       },
       target,
       { subject, membership, church },
@@ -68,7 +67,6 @@ export class ImpersonationService {
           sessionId,
           actorUserId: actorId,
           subjectUserId,
-          churchId: target,
           previousChurchId: session.activeChurchId,
           expiresAt: new Date(Date.now() + MINUTES * 60_000),
         },
@@ -79,7 +77,6 @@ export class ImpersonationService {
       });
       await tx.auditEvent.create({
         data: {
-          churchId: target,
           source: 'core',
           actorUserId: actorId,
           subjectUserId,
@@ -109,7 +106,7 @@ export class ImpersonationService {
     const subject = await this.db.user.findUnique({ where: { id: subjectUserId } });
     if (!subject) return false;
     const membership = await this.db.churchMembership.findUnique({
-      where: { churchId_userId: { churchId, userId: subjectUserId } },
+      where: { churchId_userId: { userId: subjectUserId } },
     });
     const church = await this.db.church.findUnique({ where: { id: churchId } });
     return (
@@ -119,9 +116,7 @@ export class ImpersonationService {
           isDev: this.auth.isDev,
           canImpersonateHere: this.auth.has('admin.users.impersonate'),
           alreadyImpersonating: this.auth.isImpersonating,
-          churchId: this.auth.churchId,
         },
-        churchId,
         { subject, membership, church },
       ) === null
     );
@@ -147,11 +142,7 @@ export class ImpersonationService {
     this.cls.set('platformRole', actor?.platformRole ?? 'NONE');
     this.cls.set(
       'permissions',
-      await this.permissions.forSignedIn(
-        impersonation.actorUserId,
-        actor?.platformRole ?? 'NONE',
-        impersonation.previousChurchId,
-      ),
+      await this.permissions.forUser(impersonation.actorUserId),
     );
   }
 
@@ -159,7 +150,6 @@ export class ImpersonationService {
   private async actAsSubject(
     impersonationId: string,
     subjectUserId: string,
-    churchId: string,
     platformRole: 'NONE' | 'DEV',
   ): Promise<void> {
     this.cls.set('userId', subjectUserId);
@@ -168,7 +158,7 @@ export class ImpersonationService {
     this.cls.set('platformRole', platformRole);
     this.cls.set(
       'permissions',
-      this.permissions.readOnly(await this.permissions.forMember(subjectUserId, churchId)),
+      this.permissions.readOnly(await this.permissions.forUser(subjectUserId)),
     );
   }
 
@@ -240,8 +230,6 @@ export class ImpersonationService {
       });
       await tx.auditEvent.create({
         data: {
-          churchId: impersonation.churchId,
-          source: 'core',
           actorUserId: impersonation.actorUserId,
           subjectUserId: impersonation.subjectUserId,
           impersonationId: impersonation.id,

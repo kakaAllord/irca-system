@@ -75,7 +75,6 @@ export class PeopleService {
   }
 
   async list(query: PeopleQuery) {
-    const churchId = this.auth.requireChurch();
     const where = this.filters(query, churchId);
     const tab = TABS.includes(query.tab as Tab) ? (query.tab as Tab) : 'all';
     const pageSize = Math.min(query.pageSize ?? 25, 100);
@@ -104,7 +103,7 @@ export class PeopleService {
     );
 
     const people = await this.db.client.person.findMany({
-      where: { churchId, id: { in: ids.map((r) => r.id) } },
+      where: { id: { in: ids.map((r) => r.id) } },
       include: { registration: true },
     });
     const byId = new Map(people.map((p) => [p.id, p]));
@@ -148,13 +147,13 @@ export class PeopleService {
     const person = await this.require(id);
     const [events, notes] = await Promise.all([
       this.db.client.personStageEvent.findMany({
-        where: { churchId: person.churchId, personId: id },
+        where: { personId: id },
         orderBy: { at: 'desc' },
         take: 50,
       }),
       this.canReadSensitive
         ? this.db.client.personNote.findMany({
-            where: { churchId: person.churchId, personId: id },
+            where: { personId: id },
             orderBy: { createdAt: 'desc' },
             take: 100,
           })
@@ -201,11 +200,9 @@ export class PeopleService {
     phone?: string;
     email?: string;
   }) {
-    const churchId = this.auth.requireChurch();
     const created = await this.db.tx(async (tx) => {
       const person = await tx.person.create({
         data: {
-          churchId,
           fullName: input.fullName.trim(),
           gender: input.gender ?? '',
           ageGroup: input.ageGroup ?? '',
@@ -236,7 +233,7 @@ export class PeopleService {
     const person = await this.require(id);
     await this.db.tx(async (tx) => {
       await tx.person.update({
-        where: { churchId_id: { churchId: person.churchId, id } },
+        where: { churchId_id: { id } },
         data:
           flag === 'saved'
             ? { saved: value, savedSetById: this.auth.userId, savedSetAt: new Date() }
@@ -274,7 +271,7 @@ export class PeopleService {
     const person = await this.require(id);
     const note = await this.db.tx(async (tx) => {
       const created = await tx.personNote.create({
-        data: { churchId: person.churchId, personId: id, kind, body, authorId: this.auth.userId! },
+        data: { personId: id, kind, body, authorId: this.auth.userId! },
       });
       await this.audit.recordIn(tx, {
         action: 'membership.note.added',
@@ -316,8 +313,6 @@ export class PeopleService {
     }
     await this.db.client.registrationReminder.create({
       data: {
-        churchId: person.churchId,
-        registrationId: person.registration.id,
         channel,
         sentById: this.auth.userId!,
       },
@@ -339,11 +334,10 @@ export class PeopleService {
   }
 
   private async require(id: string) {
-    const churchId = this.auth.requireChurch();
     if (!/^[0-9a-f-]{36}$/i.test(id))
       throw new AppError(404, ErrorCode.NOT_FOUND, 'No such person.');
     const person = await this.db.client.person.findFirst({
-      where: { churchId, id },
+      where: { id },
       include: { registration: true },
     });
     if (!person) throw new AppError(404, ErrorCode.NOT_FOUND, 'No such person.');

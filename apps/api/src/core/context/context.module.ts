@@ -26,10 +26,8 @@ export const requestContextOptions: ClsMiddlewareOptions = {
     cls.set('sessionId', null);
     cls.set('userId', null);
     cls.set('actorUserId', null);
-    cls.set('churchId', null);
     cls.set('impersonationId', null);
     cls.set('permissions', new Set<string>());
-    cls.set('platformRole', null);
     cls.set('apiClientId', null);
   },
 };

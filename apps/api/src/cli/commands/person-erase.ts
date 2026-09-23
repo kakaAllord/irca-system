@@ -1,5 +1,5 @@
 import pg from 'pg';
-import type { PrismaCore } from '../../core/database/prisma-clients.js';
+import type { PrismaDb } from '../../core/database/prisma-clients.js';
 
 /* eslint-disable no-console -- a command-line tool reports to its terminal */
 
@@ -43,7 +43,7 @@ export async function erasePerson(options: {
   churchCode: string;
   personId: string;
   dryRun: boolean;
-  db: PrismaCore;
+  db: PrismaDb;
   ownerUrl: string;
   /** Asked before anything is deleted; must answer with the person's id. */
   confirm?: (person: { fullName: string; phone: string }) => Promise<string>;
@@ -54,7 +54,7 @@ export async function erasePerson(options: {
   if (!/^[0-9a-f-]{36}$/i.test(options.personId)) throw new Error('That is not a person id.');
 
   const person = await db.person.findFirst({
-    where: { churchId: church.id, id: options.personId },
+    where: { id, id: options.personId },
   });
   if (!person) throw new Error(`No person ${options.personId} in ${church.code}.`);
 

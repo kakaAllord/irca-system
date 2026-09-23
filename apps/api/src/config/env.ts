@@ -20,18 +20,6 @@ export const EnvSchema = z
     LOG_LEVEL: z.enum(LOG_LEVELS).default('info'),
     /** How many recent log lines the dev console can read back. */
     LOG_BUFFER_LINES: z.coerce.number().int().min(0).max(20_000).default(2_000),
-    /**
-     * Lets a church administrator open the dev console, read-only: its churches,
-     * usage, health and logs, but never creating or suspending a church, never
-     * viewing as anyone, and never the view-as log (D16 keeps that for devs).
-     *
-     * It is still a cross-church view, so it is off in production unless the
-     * owner deliberately turns it on.
-     */
-    ADMIN_DEV_CONSOLE: z
-      .enum(['true', 'false'])
-      .optional()
-      .transform((v) => v === 'true'),
 
     /** 'log' prints emails, 'memory' keeps them for tests, 'resend' sends them. */
     EMAIL_PROVIDER: z.enum(['log', 'memory', 'resend']).default('log'),

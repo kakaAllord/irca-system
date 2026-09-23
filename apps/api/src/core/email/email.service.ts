@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { PrismaCore } from '../database/prisma-clients.js';
+import { PrismaDb } from '../database/prisma-clients.js';
 import { UsageService } from '../usage/usage.service.js';
 import { EMAIL_PROVIDER, type EmailProvider } from './email.types.js';
 import { TEMPLATES, type TemplateName } from './templates/index.js';
@@ -34,7 +34,7 @@ export class EmailService {
   private readonly logger = new Logger('Email');
 
   constructor(
-    private readonly db: PrismaCore,
+    private readonly db: PrismaDb,
     private readonly usage: UsageService,
     @Inject(EMAIL_PROVIDER) private readonly provider: EmailProvider,
   ) {}
@@ -43,7 +43,6 @@ export class EmailService {
   async enqueue(tx: TxLike, email: Enqueue): Promise<void> {
     await tx.emailOutbox.create({
       data: {
-        churchId: email.churchId ?? null,
         toEmail: email.to,
         template: email.template,
         payload: email.payload,

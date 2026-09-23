@@ -1,5 +1,5 @@
 import pg from 'pg';
-import { PrismaCore } from '../../core/database/prisma-clients.js';
+import { PrismaDb } from '../../core/database/prisma-clients.js';
 import { identifier, join, sql } from '../../core/database/sql.js';
 
 /* eslint-disable no-console -- a command-line tool reports to its terminal */
@@ -103,7 +103,7 @@ export async function importRegistrations(options: {
   from: string;
   churchCode: string;
   dryRun: boolean;
-  db: PrismaCore;
+  db: PrismaDb;
 }): Promise<void> {
   const { db } = options;
   const church = await db.church.findUnique({ where: { code: options.churchCode.toUpperCase() } });
@@ -180,7 +180,7 @@ export async function exportRegistrationsBack(options: {
   to: string;
   churchCode: string;
   since: string;
-  db: PrismaCore;
+  db: PrismaDb;
 }): Promise<void> {
   const { db } = options;
   const church = await db.church.findUnique({ where: { code: options.churchCode.toUpperCase() } });
@@ -226,8 +226,7 @@ export async function exportRegistrationsBack(options: {
 /** Both sides, counted and fingerprinted. Exits non-zero if they differ. */
 async function report(
   old: pg.Client,
-  db: PrismaCore,
-  churchId: string,
+  db: PrismaDb,
   code: string,
 ): Promise<void> {
   const oldCounts = await old.query<{ status: string; count: string }>(
@@ -238,12 +237,12 @@ async function report(
   // report a difference that is not one.
   const newCounts = await db.$queryRaw<{ status: string; count: string }[]>(
     sql`select status, count(*)::text as count from registrations
-     where church_id = ${churchId}::uuid and legacy_id is not null
+     where legacy_id is not null
      group by status order by status`,
   );
   const [own] = await db.$queryRaw<{ count: string }[]>(
     sql`select count(*)::text as count from registrations
-     where church_id = ${churchId}::uuid and legacy_id is null`,
+     where legacy_id is null`,
   );
   // The instant, not its text: the two databases may print a timestamp in
   // different time zones and mean the same moment.
@@ -254,7 +253,7 @@ async function report(
   );
   const newPrint = await db.$queryRaw<{ md5: string }[]>(
     sql`select md5(string_agg(token || ':' || extract(epoch from updated_at)::text, ',' order by token)) as md5
-     from registrations where church_id = ${churchId}::uuid and legacy_id is not null`,
+     from registrations where legacy_id is not null`,
   );
 
   console.log('');

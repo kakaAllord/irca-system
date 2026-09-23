@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ErrorCode, initialsOf, normalizeEmail } from '@irca/shared';
 import { Prisma } from '../../generated/prisma/client.js';
-import { PrismaCore } from '../../core/database/prisma-clients.js';
+import { PrismaDb } from '../../core/database/prisma-clients.js';
 import { AppError } from '../../core/http/app-error.js';
 import { AuditService } from '../../core/audit/audit.service.js';
 import { RegistrySync } from '../../core/rbac/registry-sync.service.js';
@@ -40,7 +40,7 @@ export type NewChurch = {
 @Injectable()
 export class ChurchesService {
   constructor(
-    private readonly db: PrismaCore,
+    private readonly db: PrismaDb,
     private readonly audit: AuditService,
     private readonly registry: RegistrySync,
     private readonly invitations: InvitationService,
@@ -115,7 +115,6 @@ export class ChurchesService {
     const church = await this.require(id);
     const admins = await this.db.membershipRole.findMany({
       where: {
-        churchId: id,
         role: { systemKey: 'admin.administrator', deletedAt: null },
         membership: { status: { in: ['ACTIVE', 'INVITED'] } },
       },
@@ -175,7 +174,6 @@ export class ChurchesService {
     await this.require(id);
     const rows = await this.db.auditEvent.findMany({
       where: {
-        churchId: id,
         source: 'feature',
         impersonationId: null,
         ...(before ? { createdAt: { lt: new Date(before) } } : {}),
@@ -224,16 +222,16 @@ export class ChurchesService {
           currency: input.currency.toUpperCase(),
         },
       });
-      await tx.churchPlacement.create({ data: { churchId: created.id } });
+      await tx.churchPlacement.create({ data: { id } });
       await tx.churchModule.create({
-        data: { churchId: created.id, moduleKey: 'admin', enabled: true, enabledAt: new Date() },
+        data: { id, moduleKey: 'admin', enabled: true, enabledAt: new Date() },
       });
       return created;
     });
     await this.registry.syncModuleRoles(church.id, 'admin');
 
     const role = await this.db.role.findUniqueOrThrow({
-      where: { churchId_systemKey: { churchId: church.id, systemKey: 'admin.administrator' } },
+      where: { churchId_systemKey: { id, systemKey: 'admin.administrator' } },
     });
     await this.invitations.inviteInto(church.id, {
       email: normalizeEmail(input.adminEmail),
@@ -246,7 +244,6 @@ export class ChurchesService {
       entityType: 'church',
       entityId: church.id,
       summary: `Set up ${church.name} (${church.code}) and invited ${input.adminEmail}`,
-      churchId: null,
     });
     return { id: church.id, code: church.code };
   }
@@ -267,7 +264,6 @@ export class ChurchesService {
       entityType: 'church',
       entityId: id,
       summary,
-      churchId: null,
     });
     // As 'feature', so it stands in the church's own activity log: being
     // paused is the one platform act its administrators must be able to read.
@@ -277,7 +273,6 @@ export class ChurchesService {
         entityType: 'church',
         entityId: id,
         summary,
-        churchId: id,
       },
       'feature',
     );
@@ -306,7 +301,6 @@ export class ChurchesService {
       entityType: 'api_client',
       entityId: client.id,
       summary: `Made a registration key "${name}" for ${church.code}`,
-      churchId: null,
     });
     return { id: client.id, key };
   }
@@ -321,7 +315,6 @@ export class ChurchesService {
       entityType: 'api_client',
       entityId: clientId,
       summary: `Revoked the key "${client.name}" of ${church.code}`,
-      churchId: null,
     });
   }
 

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ErrorCode, initialsOf } from '@irca/shared';
 import type { AttendanceMark, PersonStage } from '../../../generated/prisma/client.js';
-import { Db, type TenantTx } from '../../../core/database/db.service.js';
+import { Db, type Tx } from '../../../core/database/db.service.js';
 import { RequestAuth } from '../../../core/context/request-auth.js';
 import { AppError } from '../../../core/http/app-error.js';
 import { AuditService } from '../../../core/audit/audit.service.js';
@@ -37,18 +37,16 @@ export class DiscipleshipService {
   ) {}
 
   groups() {
-    const churchId = this.auth.requireChurch();
     return this.db.client.foundationGroup.findMany({
-      where: { churchId },
+      where: {},
       orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
     });
   }
 
   async createGroup(name: string) {
-    const churchId = this.auth.requireChurch();
     const group = await this.db.tx(async (tx) => {
       const created = await tx.foundationGroup
-        .create({ data: { churchId, name: name.trim() } })
+        .create({ data: { name: name.trim() } })
         .catch((err: unknown) => {
           if ((err as { code?: string }).code === 'P2002') {
             throw new AppError(409, ErrorCode.ALREADY_EXISTS, `There is already a "${name}".`);
@@ -67,12 +65,11 @@ export class DiscipleshipService {
   }
 
   async updateGroup(id: string, input: { name?: string; isActive?: boolean }): Promise<void> {
-    const churchId = this.auth.requireChurch();
     await this.db.tx(async (tx) => {
-      const group = await tx.foundationGroup.findFirst({ where: { churchId, id } });
+      const group = await tx.foundationGroup.findFirst({ where: { id } });
       if (!group) throw new AppError(404, ErrorCode.NOT_FOUND, 'No such group.');
       await tx.foundationGroup.update({
-        where: { churchId_id: { churchId, id } },
+        where: { id },
         data: {
           ...(input.name ? { name: input.name.trim() } : {}),
           ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
@@ -89,17 +86,16 @@ export class DiscipleshipService {
 
   /** Signing someone up puts them in the class: that is the next stage. */
   async enroll(personId: string, groupId: string) {
-    const churchId = this.auth.requireChurch();
     const enrollment = await this.db.tx(async (tx) => {
       const [person, group] = await Promise.all([
-        tx.person.findFirst({ where: { churchId, id: personId } }),
-        tx.foundationGroup.findFirst({ where: { churchId, id: groupId, isActive: true } }),
+        tx.person.findFirst({ where: { id: personId } }),
+        tx.foundationGroup.findFirst({ where: { id: groupId, isActive: true } }),
       ]);
       if (!person) throw new AppError(404, ErrorCode.NOT_FOUND, 'No such person.');
       if (!group) throw new AppError(404, ErrorCode.NOT_FOUND, 'No such group, or it has closed.');
 
       const created = await tx.foundationEnrollment
-        .create({ data: { churchId, personId, groupId } })
+        .create({ data: { personId, groupId } })
         .catch((err: unknown) => {
           // foundation_enrollments_open_idx: one open sign-up per person.
           if ((err as { code?: string }).code === 'P2002') {
@@ -122,15 +118,14 @@ export class DiscipleshipService {
   }
 
   async drop(enrollmentId: string): Promise<void> {
-    const churchId = this.auth.requireChurch();
     await this.db.tx(async (tx) => {
       const enrollment = await tx.foundationEnrollment.findFirst({
-        where: { churchId, id: enrollmentId, completedAt: null, droppedAt: null },
+        where: { id: enrollmentId, completedAt: null, droppedAt: null },
         include: { person: true },
       });
       if (!enrollment) throw new AppError(404, ErrorCode.NOT_FOUND, 'No open sign-up like that.');
       await tx.foundationEnrollment.update({
-        where: { churchId_id: { churchId, id: enrollmentId } },
+        where: { id: enrollmentId },
         data: { droppedAt: new Date() },
       });
       await this.audit.recordIn(tx, {
@@ -147,36 +142,33 @@ export class DiscipleshipService {
    * Thursday evening should not be permanent.
    */
   async mark(enrollmentId: string, sessionNo: number, mark: AttendanceMark | null): Promise<void> {
-    const churchId = this.auth.requireChurch();
     await this.db.tx(async (tx) => {
-      const enrollment = await this.openEnrollment(tx, churchId, enrollmentId);
-      const sessions = await setting(tx, churchId, 'membership.foundationSessions');
+      const enrollment = await this.openEnrollment(tx, enrollmentId);
+      const sessions = await setting(tx, 'membership.foundationSessions');
       if (sessionNo < 1 || sessionNo > sessions) {
         throw new AppError(400, ErrorCode.VALIDATION_FAILED, `The class has ${sessions} sessions.`);
       }
-      await this.write(tx, churchId, enrollmentId, sessionNo, mark);
-      await this.finishIfDone(tx, churchId, enrollment.id, sessions);
+      await this.write(tx, enrollmentId, sessionNo, mark);
+      await this.finishIfDone(tx, enrollment.id, sessions);
     });
     this.usage.inc('membership.attendance.marked');
   }
 
   /** "Mark today's session": everyone ticked attended, everyone else missed. */
   async markAll(groupId: string, sessionNo: number, attended: string[]): Promise<void> {
-    const churchId = this.auth.requireChurch();
     await this.db.tx(async (tx) => {
-      const sessions = await setting(tx, churchId, 'membership.foundationSessions');
+      const sessions = await setting(tx, 'membership.foundationSessions');
       const enrollments = await tx.foundationEnrollment.findMany({
-        where: { churchId, groupId, completedAt: null, droppedAt: null },
+        where: { groupId, completedAt: null, droppedAt: null },
       });
       for (const enrollment of enrollments) {
         await this.write(
           tx,
-          churchId,
           enrollment.id,
           sessionNo,
           attended.includes(enrollment.id) ? 'ATTENDED' : 'MISSED',
         );
-        await this.finishIfDone(tx, churchId, enrollment.id, sessions);
+        await this.finishIfDone(tx, enrollment.id, sessions);
       }
       await this.audit.recordIn(tx, {
         action: 'membership.class.session_marked',
@@ -190,12 +182,11 @@ export class DiscipleshipService {
 
   /** The class register: every open sign-up in a group, and each session's mark. */
   async register(groupId: string) {
-    const churchId = this.auth.requireChurch();
     const sessions = await this.db.tx((tx) =>
-      setting(tx, churchId, 'membership.foundationSessions'),
+      setting(tx, 'membership.foundationSessions'),
     );
     const rows = await this.db.client.foundationEnrollment.findMany({
-      where: { churchId, groupId, droppedAt: null },
+      where: { groupId, droppedAt: null },
       include: { person: true, attendance: true },
       orderBy: { enrolledAt: 'asc' },
     });
@@ -222,15 +213,13 @@ export class DiscipleshipService {
 
   /** The five columns, each with its count and the first cards. */
   async board(groupId?: string) {
-    const churchId = this.auth.requireChurch();
     const sessions = await this.db.tx((tx) =>
-      setting(tx, churchId, 'membership.foundationSessions'),
+      setting(tx, 'membership.foundationSessions'),
     );
 
     const columns = await Promise.all(
       BOARD.map(async (stage) => {
         const where = {
-          churchId,
           stage,
           ...(groupId ? { enrollments: { some: { groupId } } } : {}),
         };
@@ -285,29 +274,28 @@ export class DiscipleshipService {
     return { sessions, columns };
   }
 
-  private async openEnrollment(tx: TenantTx, churchId: string, id: string) {
+  private async openEnrollment(tx: Tx, churchId: string, id: string) {
     const enrollment = await tx.foundationEnrollment.findFirst({
-      where: { churchId, id, droppedAt: null },
+      where: { id, droppedAt: null },
     });
     if (!enrollment) throw new AppError(404, ErrorCode.NOT_FOUND, 'No open sign-up like that.');
     return enrollment;
   }
 
   private async write(
-    tx: TenantTx,
-    churchId: string,
+    tx: Tx,
     enrollmentId: string,
     sessionNo: number,
     mark: AttendanceMark | null,
   ): Promise<void> {
     if (mark === null) {
-      await tx.foundationAttendance.deleteMany({ where: { churchId, enrollmentId, sessionNo } });
+      await tx.foundationAttendance.deleteMany({ where: { enrollmentId, sessionNo } });
       return;
     }
     await tx.foundationAttendance.upsert({
       where: { enrollmentId_sessionNo: { enrollmentId, sessionNo } },
       update: { mark, markedById: this.auth.userId!, markedAt: new Date() },
-      create: { churchId, enrollmentId, sessionNo, mark, markedById: this.auth.userId! },
+      create: { enrollmentId, sessionNo, mark, markedById: this.auth.userId! },
     });
   }
 
@@ -316,13 +304,12 @@ export class DiscipleshipService {
    * on to awaiting baptism; someone already baptised is ready to apply.
    */
   private async finishIfDone(
-    tx: TenantTx,
-    churchId: string,
+    tx: Tx,
     enrollmentId: string,
     sessions: number,
   ) {
     const enrollment = await tx.foundationEnrollment.findFirst({
-      where: { churchId, id: enrollmentId },
+      where: { id: enrollmentId },
       include: { attendance: true, person: { include: { registration: true } } },
     });
     if (!enrollment || enrollment.completedAt) return;
@@ -330,7 +317,7 @@ export class DiscipleshipService {
     if (attended < sessions) return;
 
     await tx.foundationEnrollment.update({
-      where: { churchId_id: { churchId, id: enrollmentId } },
+      where: { id: enrollmentId },
       data: { completedAt: new Date() },
     });
     const person = enrollment.person;

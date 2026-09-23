@@ -46,7 +46,7 @@ import { parseArgs } from 'node:util';
 import { NestFactory } from '@nestjs/core';
 import { normalizeEmail } from '@irca/shared';
 import { CliModule } from './cli.module.js';
-import { PrismaCore } from '../core/database/prisma-clients.js';
+import { PrismaDb } from '../core/database/prisma-clients.js';
 import { PasswordService } from '../core/auth/password.service.js';
 import { AppConfig } from '../config/app-config.js';
 import { RegistrySync } from '../core/rbac/registry-sync.service.js';
@@ -78,7 +78,7 @@ async function createDev(args: string[]) {
   const app = await NestFactory.createApplicationContext(CliModule, { logger: ['error', 'warn'] });
   try {
     const passwords = app.get(PasswordService);
-    const db = app.get(PrismaCore);
+    const db = app.get(PrismaDb);
 
     const password = await promptHidden('Password: ');
     const problem = passwords.check(password);
@@ -146,12 +146,11 @@ async function createApiClient(args: string[]) {
   if (values.kind !== 'REGISTRATION') throw new Error('The only kind today is REGISTRATION.');
 
   await withApp(async (app) => {
-    const db = app.get(PrismaCore);
+    const db = app.get(PrismaDb);
     const church = await db.church.findUnique({ where: { code: values.church!.toUpperCase() } });
     if (!church) throw new Error(`No church with the code ${values.church}.`);
 
     const { key, client } = await app.get(ApiClientService).create({
-      churchId: church.id,
       kind: 'REGISTRATION',
       name: values.name!,
     });
@@ -166,7 +165,7 @@ async function createApiClient(args: string[]) {
 async function listApiClients(args: string[]) {
   const { values } = parseArgs({ args, options: { church: { type: 'string' } } });
   await withApp(async (app) => {
-    const db = app.get(PrismaCore);
+    const db = app.get(PrismaDb);
     const church = values.church
       ? await db.church.findUnique({ where: { code: values.church.toUpperCase() } })
       : null;
@@ -209,7 +208,7 @@ async function importRegistrationsCommand(args: string[]) {
       from: values.from!,
       churchCode: values.church!,
       dryRun: values['dry-run'] ?? false,
-      db: app.get(PrismaCore),
+      db: app.get(PrismaDb),
     }),
   );
 }
@@ -229,7 +228,7 @@ async function exportRegistrationsCommand(args: string[]) {
       to: values.to!,
       churchCode: values.church!,
       since: values.since!,
-      db: app.get(PrismaCore),
+      db: app.get(PrismaDb),
     }),
   );
 }
@@ -269,7 +268,7 @@ async function erasePersonCommand(args: string[]) {
       churchCode: values.church!,
       personId: values.person!,
       dryRun,
-      db: app.get(PrismaCore),
+      db: app.get(PrismaDb),
       ownerUrl: app.get(AppConfig).get('DIRECT_DATABASE_URL'),
       // Typing the id back is the whole safety catch: it cannot be answered
       // by holding down y, and it proves the right record is in front of them.

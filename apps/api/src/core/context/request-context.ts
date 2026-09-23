@@ -4,9 +4,9 @@ import type { ClsStore } from 'nestjs-cls';
  * What the API knows about the request being served, available anywhere
  * through ClsService without being passed down every call.
  *
- * Most fields are filled by later steps: the session guard sets who and which
- * church, impersonation sets the actor, the permission guard the permissions.
- * Feature code reads this through RequestAuth (Phase 2), never directly.
+ * The session guard sets who, impersonation sets the actor, and the permission
+ * guard the permissions. Feature code reads this through RequestAuth, never
+ * directly.
  */
 export interface RequestContext extends ClsStore {
   ip: string | null;
@@ -16,10 +16,8 @@ export interface RequestContext extends ClsStore {
   userId: string | null;
   /** The real person. Differs from userId only while impersonating. */
   actorUserId: string | null;
-  churchId: string | null;
   impersonationId: string | null;
   permissions: ReadonlySet<string>;
-  platformRole: 'NONE' | 'DEV' | null;
-  /** Set when a church's own app is calling with its key, instead of a person. */
+  /** Set when the registration form is calling with its key, instead of a person. */
   apiClientId: string | null;
 }

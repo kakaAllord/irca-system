@@ -48,7 +48,6 @@ export class PeopleService {
   ) {}
 
   async list(query: PeopleQuery): Promise<{ rows: PersonRow[]; total: number }> {
-    const churchId = this.auth.requireChurch();
     const where = {
       ...(query.status ? { status: query.status } : {}),
       ...(query.roleId ? { roles: { some: { roleId: query.roleId } } } : {}),
@@ -84,7 +83,6 @@ export class PeopleService {
     ]);
 
     const lastSeen = await this.sessions.lastSeenInChurch(
-      churchId,
       memberships.map((m) => m.userId),
     );
     return {
@@ -110,16 +108,15 @@ export class PeopleService {
               }
             : null,
           isYou: m.userId === this.auth.actorUserId,
-          canImpersonate: await this.canImpersonate(churchId, m.userId),
+          canImpersonate: await this.canImpersonate(m.userId),
         })),
       ),
     };
   }
 
   async get(userId: string) {
-    const churchId = this.auth.requireChurch();
     const membership = await this.db.client.churchMembership.findUnique({
-      where: { churchId_userId: { churchId, userId } },
+      where: { userId },
       include: {
         user: true,
         roles: { include: { role: true }, where: { role: { deletedAt: null } } },
@@ -132,7 +129,7 @@ export class PeopleService {
       ? await this.db.client.user.findUnique({ where: { id: membership.invitedById } })
       : null;
     const recent = await this.db.client.auditEvent.findMany({
-      where: { churchId, actorUserId: userId, impersonationId: null },
+      where: { actorUserId: userId, impersonationId: null },
       orderBy: { createdAt: 'desc' },
       take: 10,
     });
@@ -161,7 +158,7 @@ export class PeopleService {
           }
         : null,
       isYou: userId === this.auth.actorUserId,
-      canImpersonate: await this.canImpersonate(churchId, userId),
+      canImpersonate: await this.canImpersonate(userId),
       // Deliberately no view-as history: the person viewed is never told, and
       // a church cannot look it up either (D16).
       recentActivity: recent.map((e) => ({
@@ -174,9 +171,8 @@ export class PeopleService {
 
   /** The roles someone holds, set to exactly this list. */
   async setRoles(userId: string, roleIds: string[]): Promise<void> {
-    const churchId = this.auth.requireChurch();
     const membership = await this.db.client.churchMembership.findUnique({
-      where: { churchId_userId: { churchId, userId } },
+      where: { userId },
       include: { roles: { include: { role: true } }, user: true },
     });
     if (!membership) throw new AppError(404, ErrorCode.NOT_FOUND, 'No such person here.');
@@ -211,14 +207,13 @@ export class PeopleService {
     const adding = roles.filter((r) => !had.has(r.id)).length;
     if (adding + removing.length) this.usage.inc('admin.role_changes', adding + removing.length);
     if (removing.some((r) => r.role.systemKey === 'admin.administrator')) {
-      await this.guardLastAdministrator(churchId, userId);
+      await this.guardLastAdministrator(userId);
     }
 
     await this.db.tx(async (tx) => {
       for (const role of roles.filter((r) => !had.has(r.id))) {
         await tx.membershipRole.create({
           data: {
-            churchId,
             membershipId: membership.id,
             roleId: role.id,
             grantedById: this.auth.actorUserId,
@@ -246,16 +241,15 @@ export class PeopleService {
   }
 
   async setEnabled(userId: string, enabled: boolean): Promise<void> {
-    const churchId = this.auth.requireChurch();
     if (userId === this.auth.actorUserId && !enabled) {
       throw new AppError(409, ErrorCode.CONFLICT, "You can't disable your own access.");
     }
     const membership = await this.db.client.churchMembership.findUnique({
-      where: { churchId_userId: { churchId, userId } },
+      where: { userId },
       include: { user: true },
     });
     if (!membership) throw new AppError(404, ErrorCode.NOT_FOUND, 'No such person here.');
-    if (!enabled) await this.guardLastAdministrator(churchId, userId);
+    if (!enabled) await this.guardLastAdministrator(userId);
 
     await this.db.tx(async (tx) => {
       await tx.churchMembership.update({
@@ -272,7 +266,7 @@ export class PeopleService {
 
     if (!enabled) {
       // Out of this church at once, and out of any view-as of them.
-      await this.sessions.revokeForChurch(userId, churchId, 'access-disabled');
+      await this.sessions.revokeForChurch(userId, 'access-disabled');
     }
   }
 
@@ -296,6 +290,6 @@ export class PeopleService {
   }
 
   private canImpersonate(churchId: string, subjectUserId: string): Promise<boolean> {
-    return this.impersonation.canImpersonate(churchId, subjectUserId);
+    return this.impersonation.canImpersonate(subjectUserId);
   }
 }

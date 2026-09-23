@@ -76,7 +76,7 @@ export class LogBufferService {
   private push(raw: string) {
     if (this.capacity === 0) return;
     const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const { level, time, msg, reqId, userId, actorUserId, churchId, req, res, responseTime, ...rest } =
+    const { level, time, msg, reqId, userId, actorUserId, req, res, responseTime, ...rest } =
       parsed;
 
     const request = req as { method?: string; url?: string; id?: string } | undefined;
@@ -91,7 +91,6 @@ export class LogBufferService {
       reqId: str(reqId ?? request?.id),
       userId: str(userId),
       actorUserId: str(actorUserId),
-      churchId: str(churchId),
       method: request?.method,
       url: request?.url,
       status: response?.statusCode,

@@ -49,7 +49,6 @@ export class ReadOnlyGuard implements CanActivate {
       );
     }
 
-    const churchId = this.auth.churchId;
     if (churchId) {
       const placement = await this.placements.forChurch(churchId);
       if (placement.state === 'MOVING') {

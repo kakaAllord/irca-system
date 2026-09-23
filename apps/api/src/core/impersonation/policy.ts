@@ -20,7 +20,6 @@ export function impersonationRefusal(
     alreadyImpersonating: boolean;
     churchId: string | null;
   },
-  churchId: string,
   candidate: ImpersonationCandidate,
 ): string | null {
   if (actor.alreadyImpersonating) return 'You are already viewing as someone else.';

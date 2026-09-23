@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ClsService } from 'nestjs-cls';
-import { PrismaCore } from '../database/prisma-clients.js';
+import { PrismaDb } from '../database/prisma-clients.js';
 import type { RequestContext } from '../context/request-context.js';
 
 type Kind = 'sum' | 'max' | 'set';
@@ -31,7 +31,7 @@ export class UsageService implements OnModuleDestroy {
   private timer: NodeJS.Timeout | null = null;
 
   constructor(
-    private readonly db: PrismaCore,
+    private readonly db: PrismaDb,
     private readonly cls: ClsService<RequestContext>,
   ) {
     this.timer = setInterval(() => void this.flush(), FLUSH_MS);
@@ -45,17 +45,17 @@ export class UsageService implements OnModuleDestroy {
 
   /** Add to a counter for the church this request is for. */
   inc(metric: string, by = 1, churchId = this.cls.get('churchId')): void {
-    this.add(churchId, metric, BigInt(by), 'sum');
+    this.add(metric, BigInt(by), 'sum');
   }
 
   /** Keep the largest value seen today, e.g. the slowest request. */
   max(metric: string, value: number, churchId = this.cls.get('churchId')): void {
-    this.add(churchId, metric, BigInt(Math.round(value)), 'max');
+    this.add(metric, BigInt(Math.round(value)), 'max');
   }
 
   /** A measurement that replaces yesterday's, e.g. how many rows a church has. */
   gauge(metric: string, value: bigint | number, churchId: string | null): void {
-    this.add(churchId, metric, BigInt(value), 'set');
+    this.add(metric, BigInt(value), 'set');
   }
 
   /**
@@ -69,7 +69,7 @@ export class UsageService implements OnModuleDestroy {
     if (!churchId || !userId) return;
     const day = this.localDay(churchId);
     const key = `${churchId}|${userId}|${day}`;
-    const row = this.activity.get(key) ?? { churchId, userId, day, requests: 0 };
+    const row = this.activity.get(key) ?? { userId, day, requests: 0 };
     row.requests++;
     this.activity.set(key, row);
   }
@@ -79,7 +79,7 @@ export class UsageService implements OnModuleDestroy {
     const key = `${churchId ?? '-'}|${day}|${metric}`;
     const row = this.buffer.get(key);
     if (!row) {
-      this.buffer.set(key, { churchId, day, metric, value, kind });
+      this.buffer.set(key, { day, metric, value, kind });
       return;
     }
     row.value =
@@ -109,7 +109,7 @@ export class UsageService implements OnModuleDestroy {
       where: { id: churchId },
       select: { timezone: true },
     });
-    if (church) this.timezones.set(churchId, { at: Date.now(), tz: church.timezone });
+    if (church) this.timezones.set({ at: Date.now(), tz: church.timezone });
   }
 
   /** Writes what has been counted. Swaps the buffer first, so counting continues meanwhile. */

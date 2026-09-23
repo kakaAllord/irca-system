@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ErrorCode } from '@irca/shared';
 import type { Prisma } from '../../generated/prisma/client.js';
-import { PrismaCore } from '../../core/database/prisma-clients.js';
+import { PrismaDb } from '../../core/database/prisma-clients.js';
 import { AppError } from '../../core/http/app-error.js';
 
 export type LogQuery = {
@@ -21,7 +21,7 @@ export type LogQuery = {
  */
 @Injectable()
 export class ImpersonationLogService {
-  constructor(private readonly db: PrismaCore) {}
+  constructor(private readonly db: PrismaDb) {}
 
   async sessions(query: LogQuery) {
     const limit = Math.min(Math.max(query.limit ?? 100, 1), 500);
@@ -47,7 +47,7 @@ export class ImpersonationLogService {
     const [actors, subjects] = await Promise.all([people(query.actor), people(query.subject)]);
 
     const where: Prisma.ImpersonationSessionWhereInput = {
-      ...(church ? { churchId: church.id } : {}),
+      ...(church ? { id } : {}),
       ...(actors ? { actorUserId: { in: actors } } : {}),
       ...(subjects ? { subjectUserId: { in: subjects } } : {}),
       startedAt: {
@@ -126,7 +126,7 @@ export class ImpersonationLogService {
       where: {
         createdAt: { gt: since },
         action: { in: ['impersonation.started', 'impersonation.view', 'impersonation.ended'] },
-        ...(church ? { churchId: church.id } : {}),
+        ...(church ? { id } : {}),
       },
       orderBy: { createdAt: 'asc' },
       take: 200,
@@ -230,8 +230,8 @@ export class ImpersonationLogService {
     const links = await this.db.membershipRole.findMany({
       where: {
         OR: rows.flatMap((r) => [
-          { churchId: r.churchId, membership: { userId: r.actorUserId } },
-          { churchId: r.churchId, membership: { userId: r.subjectUserId } },
+          { membership: { userId: r.actorUserId } },
+          { membership: { userId: r.subjectUserId } },
         ]),
         role: { deletedAt: null },
       },

@@ -70,10 +70,9 @@ export class RolesService {
   }
 
   async create(input: RoleInput) {
-    const churchId = this.auth.requireChurch();
     this.checkPermissions(input);
     const enabled = await this.db.client.churchModule.findUnique({
-      where: { churchId_moduleKey: { churchId, moduleKey: input.moduleKey } },
+      where: { moduleKey: input.moduleKey },
     });
     if (!enabled?.enabled) {
       throw new AppError(422, ErrorCode.ROLE_NOT_AVAILABLE, 'That portal is turned off.');
@@ -83,7 +82,6 @@ export class RolesService {
       const role = await tx.role.create({
         data: {
           // The extension sets this too; passing it keeps the types honest.
-          churchId,
           moduleKey: input.moduleKey,
           name: input.name.trim(),
           description: input.description.trim(),
@@ -92,7 +90,6 @@ export class RolesService {
       });
       await tx.rolePermission.createMany({
         data: input.permissionKeys.map((permissionKey) => ({
-          churchId,
           roleId: role.id,
           permissionKey,
         })),
@@ -109,7 +106,6 @@ export class RolesService {
   }
 
   async update(roleId: string, input: Omit<RoleInput, 'moduleKey'>) {
-    const churchId = this.auth.requireChurch();
     const role = await this.db.client.role.findUnique({
       where: { id: roleId },
       include: { permissions: true },
@@ -134,7 +130,7 @@ export class RolesService {
       const adding = [...want].filter((p) => !had.has(p));
       if (adding.length) {
         await tx.rolePermission.createMany({
-          data: adding.map((permissionKey) => ({ churchId, roleId, permissionKey })),
+          data: adding.map((permissionKey) => ({ roleId, permissionKey })),
           skipDuplicates: true,
         });
       }

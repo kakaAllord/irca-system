@@ -17,109 +17,59 @@ datasource db {
   provider = "postgresql"
 }
 
-enum ChurchStatus {
-  ACTIVE
-  SUSPENDED
-}
-
-enum PlatformRole {
-  NONE
-  DEV
-}
-
 enum UserStatus {
   INVITED // exists, has not set a password yet
   ACTIVE
   DISABLED
 }
 
-enum MembershipStatus {
-  INVITED
-  ACTIVE
-  DISABLED
-}
-
-/// A tenant. Everything a church owns points here.
+/// The church this system was deployed for. **Exactly one row, ever.**
+///
+/// Not a tenant: a second church gets its own deployment and its own database,
+/// which is the whole reason nothing else in this schema carries a church id.
+/// The row exists because the app genuinely needs these four facts — the code
+/// that every entry number is built from, the name on the screen, the clock
+/// dates are read in, and the currency money is shown in — and because the
+/// office should be able to fix a typo in the name without a redeploy.
 model Church {
-  id        String       @id @default(uuid(7)) @db.Uuid
-  /// Short uppercase code used in transaction numbers (IRCA-EXP-...). Frozen
-  /// once the church has any finance entry (a trigger, Phase 4).
-  code      String       @unique @db.VarChar(10)
-  /// Lowercase, used in URLs and by API clients.
-  slug      String       @unique @db.VarChar(40)
-  name      String       @db.VarChar(120)
-  timezone  String       @default("Africa/Dar_es_Salaam") @db.VarChar(64)
-  currency  String       @default("TZS") @db.Char(3)
-  status    ChurchStatus @default(ACTIVE)
-  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  /// Always 1. A check constraint in the migration is what makes it a singleton.
+  id        Int      @id @default(1)
+  /// Short uppercase code used in entry numbers (IRCA-EXP-...). Frozen once
+  /// there is any finance entry (a trigger, Phase 4).
+  code      String   @db.VarChar(10)
+  name      String   @db.VarChar(120)
+  timezone  String   @default("Africa/Dar_es_Salaam") @db.VarChar(64)
+  currency  String   @default("TZS") @db.Char(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  memberships      ChurchMembership[]
-  modules          ChurchModule[]
-  roles            Role[]
-  placement        ChurchPlacement?
-  sequences        ChurchSequence[]
-  changeRequests   ChangeRequest[]
-  registrations    Registration[]
-  people           Person[]
-  foundationGroups FoundationGroup[]
-  settings         ChurchSetting[]
-  apiClients       ApiClient[]
-  incomeSources    FinanceIncomeSource[]
-  expenseItems     FinanceExpenseItem[]
-  transactions     FinanceTransaction[]
-
-  @@map("churches")
+  @@map("church")
 }
 
-/// A person who can sign in. Global across churches.
+/// A person who can sign in.
 model User {
-  id                String       @id @default(uuid(7)) @db.Uuid
+  id                String     @id @default(uuid(7)) @db.Uuid
   /// Always stored trimmed and lowercased (normalizeEmail in @irca/shared).
-  email             String       @unique @db.VarChar(254)
-  fullName          String       @map("full_name") @db.VarChar(120)
-  phone             String?      @db.VarChar(20)
-  locale            String       @default("en") @db.VarChar(5)
+  email             String     @unique @db.VarChar(254)
+  fullName          String     @map("full_name") @db.VarChar(120)
+  phone             String?    @db.VarChar(20)
+  locale            String     @default("en") @db.VarChar(5)
   /// Null until the person accepts their invitation and sets a password.
-  passwordHash      String?      @map("password_hash")
-  passwordChangedAt DateTime?    @map("password_changed_at") @db.Timestamptz(6)
-  platformRole      PlatformRole @default(NONE) @map("platform_role")
-  status            UserStatus   @default(INVITED)
-  failedLoginCount  Int          @default(0) @map("failed_login_count")
-  lockedUntil       DateTime?    @map("locked_until") @db.Timestamptz(6)
-  lastLoginAt       DateTime?    @map("last_login_at") @db.Timestamptz(6)
-  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  passwordHash      String?    @map("password_hash")
+  passwordChangedAt DateTime?  @map("password_changed_at") @db.Timestamptz(6)
+  status            UserStatus @default(INVITED)
+  failedLoginCount  Int        @default(0) @map("failed_login_count")
+  lockedUntil       DateTime?  @map("locked_until") @db.Timestamptz(6)
+  lastLoginAt       DateTime?  @map("last_login_at") @db.Timestamptz(6)
+  createdAt         DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  memberships ChurchMembership[]
+  roles       UserRole[]
   sessions    Session[]
   resetTokens PasswordResetToken[]
-
-  @@map("users")
-}
-
-/// A user's place in one church. Roles hang off this, not off the user, so one
-/// person can hold different roles in two churches.
-model ChurchMembership {
-  id          String           @id @default(uuid(7)) @db.Uuid
-  churchId    String           @map("church_id") @db.Uuid
-  userId      String           @map("user_id") @db.Uuid
-  status      MembershipStatus @default(INVITED)
-  invitedById String?          @map("invited_by_id") @db.Uuid
-  joinedAt    DateTime?        @map("joined_at") @db.Timestamptz(6)
-  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  church      Church           @relation(fields: [churchId], references: [id])
-  user        User             @relation(fields: [userId], references: [id])
-  roles       MembershipRole[]
   invitations Invitation[]
 
-  @@unique([churchId, userId])
-  /// So a role can be linked only to a membership of the same church.
-  @@unique([churchId, id])
-  @@index([userId])
-  @@map("church_memberships")
+  @@map("users")
 }
 
 /// One signed-in browser. The cookie holds a random token; only its SHA-256 is stored.
@@ -127,9 +77,6 @@ model Session {
   id              String    @id @default(uuid(7)) @db.Uuid
   tokenHash       String    @unique @map("token_hash") @db.Char(64)
   userId          String    @map("user_id") @db.Uuid
-  /// The church this session is working in. Null for a dev who is not
-  /// impersonating, and for a user with no active membership.
-  activeChurchId  String?   @map("active_church_id") @db.Uuid
   /// Set while this session is impersonating someone. The foreign key to
   /// impersonation_sessions arrives in Phase 2; the column exists now so no
   /// session code has to change shape later.
@@ -170,26 +117,21 @@ model Permission {
   @@map("permissions")
 }
 
-/// Which modules a church has switched on. Turning one off keeps the row, its
-/// roles and its data, so turning it back on restores everything.
-model ChurchModule {
-  churchId     String    @map("church_id") @db.Uuid
-  moduleKey    String    @map("module_key") @db.VarChar(40)
+/// Which portals are switched on. Turning one off keeps the row, its roles and
+/// its data, so turning it back on restores everything.
+model ModuleState {
+  moduleKey    String    @id @map("module_key") @db.VarChar(40)
   enabled      Boolean   @default(true)
   enabledAt    DateTime? @map("enabled_at") @db.Timestamptz(6)
   enabledById  String?   @map("enabled_by_id") @db.Uuid
   disabledAt   DateTime? @map("disabled_at") @db.Timestamptz(6)
   disabledById String?   @map("disabled_by_id") @db.Uuid
 
-  church Church @relation(fields: [churchId], references: [id])
-
-  @@id([churchId, moduleKey])
-  @@map("church_modules")
+  @@map("module_state")
 }
 
 model Role {
   id          String    @id @default(uuid(7)) @db.Uuid
-  churchId    String    @map("church_id") @db.Uuid
   moduleKey   String    @map("module_key") @db.VarChar(40)
   name        String    @db.VarChar(80)
   description String    @default("") @db.VarChar(300)
@@ -201,45 +143,39 @@ model Role {
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  church      Church           @relation(fields: [churchId], references: [id])
   permissions RolePermission[]
-  members     MembershipRole[]
+  members     UserRole[]
 
-  @@unique([churchId, moduleKey, name])
-  @@unique([churchId, systemKey])
-  /// Referenced by role_permissions and membership_roles together with the
-  /// church, so a role of another church cannot be attached here.
-  @@unique([churchId, id])
+  @@unique([moduleKey, name])
+  @@unique([systemKey])
   @@map("roles")
 }
 
 model RolePermission {
-  churchId      String @map("church_id") @db.Uuid
   roleId        String @map("role_id") @db.Uuid
   permissionKey String @map("permission_key") @db.VarChar(80)
 
-  role       Role       @relation(fields: [churchId, roleId], references: [churchId, id], onDelete: Cascade)
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
   permission Permission @relation(fields: [permissionKey], references: [key])
 
   @@id([roleId, permissionKey])
-  @@index([churchId])
   @@map("role_permissions")
 }
 
-model MembershipRole {
-  churchId     String   @map("church_id") @db.Uuid
-  membershipId String   @map("membership_id") @db.Uuid
-  roleId       String   @map("role_id") @db.Uuid
-  grantedById  String?  @map("granted_by_id") @db.Uuid
-  grantedAt    DateTime @default(now()) @map("granted_at") @db.Timestamptz(6)
+/// A role granted to a person. Roles hang off the user now: with one church
+/// there is no second set of roles for the same person to hold.
+model UserRole {
+  userId      String   @map("user_id") @db.Uuid
+  roleId      String   @map("role_id") @db.Uuid
+  grantedById String?  @map("granted_by_id") @db.Uuid
+  grantedAt   DateTime @default(now()) @map("granted_at") @db.Timestamptz(6)
 
-  membership ChurchMembership @relation(fields: [churchId, membershipId], references: [churchId, id], onDelete: Cascade)
-  role       Role             @relation(fields: [churchId, roleId], references: [churchId, id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
-  @@id([membershipId, roleId])
-  @@index([churchId])
+  @@id([userId, roleId])
   @@index([roleId])
-  @@map("membership_roles")
+  @@map("user_roles")
 }
 
 enum ImpersonationEndReason {
@@ -252,22 +188,19 @@ enum ImpersonationEndReason {
 /// Every view-as: who, whom, where and when. No reason is asked for, and only
 /// devs can read it (docs/plan/00-decisions.md, D16).
 model ImpersonationSession {
-  id               String                  @id @default(uuid(7)) @db.Uuid
+  id            String                  @id @default(uuid(7)) @db.Uuid
   /// The actor's own session, the one doing the impersonating.
-  sessionId        String                  @map("session_id") @db.Uuid
-  actorUserId      String                  @map("actor_user_id") @db.Uuid
-  subjectUserId    String                  @map("subject_user_id") @db.Uuid
-  churchId         String                  @map("church_id") @db.Uuid
-  /// The church the actor's session was in before, restored when it ends.
-  previousChurchId String?                 @map("previous_church_id") @db.Uuid
-  startedAt        DateTime                @default(now()) @map("started_at") @db.Timestamptz(6)
-  expiresAt        DateTime                @map("expires_at") @db.Timestamptz(6)
-  endedAt          DateTime?               @map("ended_at") @db.Timestamptz(6)
-  endReason        ImpersonationEndReason? @map("end_reason")
+  sessionId     String                  @map("session_id") @db.Uuid
+  actorUserId   String                  @map("actor_user_id") @db.Uuid
+  subjectUserId String                  @map("subject_user_id") @db.Uuid
+  startedAt     DateTime                @default(now()) @map("started_at") @db.Timestamptz(6)
+  expiresAt     DateTime                @map("expires_at") @db.Timestamptz(6)
+  endedAt       DateTime?               @map("ended_at") @db.Timestamptz(6)
+  endReason     ImpersonationEndReason? @map("end_reason")
 
   sessions Session[]
 
-  @@index([churchId, startedAt(sort: Desc)])
+  @@index([startedAt(sort: Desc)])
   @@index([subjectUserId, startedAt(sort: Desc)])
   @@index([actorUserId, startedAt(sort: Desc)])
   @@map("impersonation_sessions")
@@ -276,7 +209,6 @@ model ImpersonationSession {
 /// Append-only. The app may insert and read, never update or delete.
 model AuditEvent {
   id              String   @id @default(uuid(7)) @db.Uuid
-  churchId        String?  @map("church_id") @db.Uuid
   /// 'core' for sign-ins and impersonation (platform plane), 'feature' for a
   /// church's own records (moves with the church, multi-tenancy.md section 13).
   source          String   @default("feature") @db.VarChar(10)
@@ -295,7 +227,7 @@ model AuditEvent {
   requestId       String?  @map("request_id") @db.VarChar(64)
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  @@index([churchId, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
   @@index([entityType, entityId])
   @@index([actorUserId, createdAt(sort: Desc)])
   @@index([subjectUserId, createdAt(sort: Desc)])
@@ -304,43 +236,30 @@ model AuditEvent {
 
 /// Counters and gauges per church per local day.
 model UsageDaily {
-  churchId String   @map("church_id") @db.Uuid
-  day      DateTime @db.Date
-  metric   String   @db.VarChar(80)
-  value    BigInt   @default(0)
-
-  @@id([churchId, day, metric])
-  @@index([day])
-  @@map("usage_daily")
-}
-
-/// Counters with no church: failed sign-ins for unknown emails, dev console use.
-model PlatformUsageDaily {
   day    DateTime @db.Date
   metric String   @db.VarChar(80)
   value  BigInt   @default(0)
 
   @@id([day, metric])
-  @@map("platform_usage_daily")
+  @@index([day])
+  @@map("usage_daily")
 }
 
 /// Who was active on which day, for daily, weekly and monthly active people.
 model UserActivityDaily {
-  churchId String   @map("church_id") @db.Uuid
   userId   String   @map("user_id") @db.Uuid
   day      DateTime @db.Date
   requests Int      @default(0)
 
-  @@id([churchId, userId, day])
-  @@index([churchId, day])
+  @@id([userId, day])
+  @@index([day])
   @@map("user_activity_daily")
 }
 
-/// One row per background job run, or per church for a per-church job.
+/// One row per background job run.
 model JobRun {
   id         String    @id @default(uuid(7)) @db.Uuid
   job        String    @db.VarChar(60)
-  churchId   String?   @map("church_id") @db.Uuid
   startedAt  DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
   finishedAt DateTime? @map("finished_at") @db.Timestamptz(6)
   ok         Boolean?
@@ -349,25 +268,6 @@ model JobRun {
 
   @@index([job, startedAt(sort: Desc)])
   @@map("job_runs")
-}
-
-enum PlacementState {
-  ACTIVE
-  /// Maintenance: writes are refused while the church's data is being moved.
-  MOVING
-}
-
-/// Which database cluster holds a church's own records. One cluster today;
-/// the column is what lets a large church move to its own database later.
-model ChurchPlacement {
-  churchId String         @id @map("church_id") @db.Uuid
-  cluster  String         @default("shared") @db.VarChar(40)
-  state    PlacementState @default(ACTIVE)
-  movedAt  DateTime?      @map("moved_at") @db.Timestamptz(6)
-
-  church Church @relation(fields: [churchId], references: [id])
-
-  @@map("church_placements")
 }
 
 enum EmailStatus {
@@ -383,7 +283,6 @@ enum EmailStatus {
 /// invitation; it never loses one.
 model EmailOutbox {
   id                String      @id @default(uuid(7)) @db.Uuid
-  churchId          String?     @map("church_id") @db.Uuid
   toEmail           String      @map("to_email") @db.VarChar(254)
   template          String      @db.VarChar(60)
   /// What the template needs. One-time links are scrubbed once sent.
@@ -398,32 +297,31 @@ model EmailOutbox {
   sentAt            DateTime?   @map("sent_at") @db.Timestamptz(6)
 
   @@index([status, nextAttemptAt])
-  @@index([churchId, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
   @@map("email_outbox")
 }
 
-/// One invitation to one church. The person, their membership and their roles
-/// are created when it is sent, so an administrator can adjust the roles
-/// before it is accepted, and the People page can show who is still invited.
-/// Roles do nothing until the membership becomes active.
+/// One invitation. The person and their roles are created when it is sent, so
+/// an administrator can adjust the roles before it is accepted, and the People
+/// page can show who is still invited. Roles do nothing until the account is
+/// active.
 model Invitation {
-  id           String    @id @default(uuid(7)) @db.Uuid
-  churchId     String    @map("church_id") @db.Uuid
-  membershipId String    @map("membership_id") @db.Uuid
-  email        String    @db.VarChar(254)
-  tokenHash    String    @unique @map("token_hash") @db.Char(64)
-  expiresAt    DateTime  @map("expires_at") @db.Timestamptz(6)
-  acceptedAt   DateTime? @map("accepted_at") @db.Timestamptz(6)
-  revokedAt    DateTime? @map("revoked_at") @db.Timestamptz(6)
-  createdById  String    @map("created_by_id") @db.Uuid
-  sentCount    Int       @default(1) @map("sent_count")
-  lastSentAt   DateTime  @default(now()) @map("last_sent_at") @db.Timestamptz(6)
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  id          String    @id @default(uuid(7)) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  email       String    @db.VarChar(254)
+  tokenHash   String    @unique @map("token_hash") @db.Char(64)
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz(6)
+  acceptedAt  DateTime? @map("accepted_at") @db.Timestamptz(6)
+  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdById String    @map("created_by_id") @db.Uuid
+  sentCount   Int       @default(1) @map("sent_count")
+  lastSentAt  DateTime  @default(now()) @map("last_sent_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  membership ChurchMembership @relation(fields: [churchId, membershipId], references: [churchId, id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([churchId, createdAt(sort: Desc)])
-  @@index([membershipId])
+  @@index([createdAt(sort: Desc)])
+  @@index([userId])
   @@map("invitations")
 }
 
@@ -458,7 +356,6 @@ enum ChangeRequestStatus {
 /// asked. Nothing about finance is known here: the module registers a handler.
 model ChangeRequest {
   id            String              @id @default(uuid(7)) @db.Uuid
-  churchId      String              @map("church_id") @db.Uuid
   moduleKey     String              @map("module_key") @db.VarChar(40)
   entityType    String              @map("entity_type") @db.VarChar(60)
   entityId      String              @map("entity_id") @db.VarChar(80)
@@ -478,25 +375,20 @@ model ChangeRequest {
   /// What applying produced, e.g. { "newCode": "IRCA-EXP-2026-08-000003" }.
   result        Json?
 
-  church Church @relation(fields: [churchId], references: [id], onDelete: Cascade)
-
-  @@index([churchId, status, requestedAt(sort: Desc)])
-  @@index([churchId, entityType, entityId])
+  @@index([status, requestedAt(sort: Desc)])
+  @@index([entityType, entityId])
   @@map("change_requests")
 }
 
-/// Per-church counters, locked and incremented inside the transaction that
-/// uses them. Finance uses 'finance:EXP:2026-09'; Phase 5 will use its own keys.
-model ChurchSequence {
-  churchId  String   @map("church_id") @db.Uuid
+/// Counters, locked and incremented inside the transaction that uses them.
+/// Finance uses 'finance:EXP:2026-09'; Membership uses 'membership:member_number'.
+model Sequence {
   key       String   @db.VarChar(80)
   lastValue Int      @default(0) @map("last_value")
   updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
 
-  church Church @relation(fields: [churchId], references: [id], onDelete: Cascade)
-
-  @@id([churchId, key])
-  @@map("church_sequences")
+  @@id([key])
+  @@map("sequences")
 }
 
 enum FinanceKind {
@@ -521,7 +413,6 @@ enum PaymentMethod {
 /// What income is recorded against: Tithe, Sunday offering, Harambee.
 model FinanceIncomeSource {
   id          String   @id @default(uuid(7)) @db.Uuid
-  churchId    String   @map("church_id") @db.Uuid
   /// As shown, with the capitals the person typed.
   name        String   @db.VarChar(80)
   /// Normalised for matching and uniqueness: "sunday offering".
@@ -532,18 +423,15 @@ model FinanceIncomeSource {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  church       Church               @relation(fields: [churchId], references: [id], onDelete: Cascade)
   transactions FinanceTransaction[]
 
-  @@unique([churchId, nameKey])
-  @@unique([churchId, id])
+  @@unique([nameKey])
   @@map("finance_income_sources")
 }
 
 /// What an expense is recorded against: Electricity bill, Generator fuel.
 model FinanceExpenseItem {
   id          String   @id @default(uuid(7)) @db.Uuid
-  churchId    String   @map("church_id") @db.Uuid
   name        String   @db.VarChar(80)
   nameKey     String   @map("name_key") @db.VarChar(80)
   description String   @default("") @db.VarChar(300)
@@ -552,11 +440,9 @@ model FinanceExpenseItem {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  church       Church               @relation(fields: [churchId], references: [id], onDelete: Cascade)
   transactions FinanceTransaction[]
 
-  @@unique([churchId, nameKey])
-  @@unique([churchId, id])
+  @@unique([nameKey])
   @@map("finance_expense_items")
 }
 
@@ -564,8 +450,7 @@ model FinanceExpenseItem {
 /// approved change request: a trigger in the database says so as well.
 model FinanceTransaction {
   id               String        @id @default(uuid(7)) @db.Uuid
-  churchId         String        @map("church_id") @db.Uuid
-  /// IRCA-EXP-2026-09-000001. Unique across every church.
+  /// IRCA-EXP-2026-09-000001, built from the church code in `church`.
   code             String        @unique @db.VarChar(40)
   kind             FinanceKind
   status           FinanceStatus @default(POSTED)
@@ -601,18 +486,17 @@ model FinanceTransaction {
   /// it, so the old entry is voided and this new one points back at it.
   replacesId       String?       @unique @map("replaces_id") @db.Uuid
 
-  church       Church               @relation(fields: [churchId], references: [id], onDelete: Cascade)
-  incomeSource FinanceIncomeSource? @relation(fields: [churchId, incomeSourceId], references: [churchId, id])
-  expenseItem  FinanceExpenseItem?  @relation(fields: [churchId, expenseItemId], references: [churchId, id])
+  incomeSource FinanceIncomeSource? @relation(fields: [incomeSourceId], references: [id])
+  expenseItem  FinanceExpenseItem?  @relation(fields: [expenseItemId], references: [id])
   replaces     FinanceTransaction?  @relation("replacement", fields: [replacesId], references: [id])
   replacedBy   FinanceTransaction?  @relation("replacement")
 
-  @@unique([churchId, kind, periodYear, periodMonth, seq])
-  @@unique([churchId, clientRequestId])
-  @@index([churchId, txnDate(sort: Desc)])
-  @@index([churchId, kind, status, txnDate])
-  @@index([churchId, incomeSourceId])
-  @@index([churchId, expenseItemId])
+  @@unique([kind, periodYear, periodMonth, seq])
+  @@unique([clientRequestId])
+  @@index([txnDate(sort: Desc)])
+  @@index([kind, status, txnDate])
+  @@index([incomeSourceId])
+  @@index([expenseItemId])
   @@map("finance_transactions")
 }
 
@@ -626,10 +510,9 @@ model FinanceTransaction {
 /// with the church, and the office asks plain questions of it ("how many
 /// first-time visitors last Sunday", "who asked for baptism") without
 /// pivoting. Column names are unchanged from that schema so the copy across
-/// is one for one; only church_id, a uuid id and the old id are new.
+/// is one for one; only a uuid id and the old id are new.
 model Registration {
   id           String  @id @default(uuid(7)) @db.Uuid
-  churchId     String  @map("church_id") @db.Uuid
   /// The bigserial id from the first database, kept so a row can be traced.
   legacyId     BigInt? @map("legacy_id")
   token        String  @unique @db.VarChar(32)
@@ -710,12 +593,10 @@ model Registration {
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   submittedAt DateTime? @map("submitted_at") @db.Timestamptz(6)
 
-  church    Church                 @relation(fields: [churchId], references: [id], onDelete: Cascade)
   person    Person?
   reminders RegistrationReminder[]
 
-  @@unique([churchId, id])
-  @@index([churchId, status, updatedAt(sort: Desc)])
+  @@index([status, updatedAt(sort: Desc)])
   @@map("registrations")
 }
 
@@ -732,7 +613,6 @@ enum PersonStage {
 /// office can also add someone who never filled in the form.
 model Person {
   id             String  @id @default(uuid(7)) @db.Uuid
-  churchId       String  @map("church_id") @db.Uuid
   registrationId String? @unique @map("registration_id") @db.Uuid
   /// Copied from the registration while it is linked; typed in otherwise.
   fullName       String  @default("") @map("full_name") @db.VarChar(120)
@@ -757,26 +637,22 @@ model Person {
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  church       Church        @relation(fields: [churchId], references: [id], onDelete: Cascade)
-  registration Registration? @relation(fields: [churchId, registrationId], references: [churchId, id])
+  registration Registration? @relation(fields: [registrationId], references: [id])
 
   stageEvents  PersonStageEvent[]
   notes        PersonNote[]
   applications MembershipApplication[]
   enrollments  FoundationEnrollment[]
 
-  @@unique([churchId, memberNumber])
-  @@unique([churchId, id])
-  @@unique([churchId, registrationId])
-  @@index([churchId, stage])
-  @@index([churchId, fullName])
+  @@unique([memberNumber])
+  @@index([stage])
+  @@index([fullName])
   @@map("people")
 }
 
 /// Every move along the journey, so "when did she join the class" has an answer.
 model PersonStageEvent {
   id        String       @id @default(uuid(7)) @db.Uuid
-  churchId  String       @map("church_id") @db.Uuid
   personId  String       @map("person_id") @db.Uuid
   fromStage PersonStage? @map("from_stage")
   toStage   PersonStage  @map("to_stage")
@@ -785,9 +661,9 @@ model PersonStageEvent {
   note      String?      @db.VarChar(300)
   at        DateTime     @default(now()) @db.Timestamptz(6)
 
-  person Person @relation(fields: [churchId, personId], references: [churchId, id], onDelete: Cascade)
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
 
-  @@index([churchId, personId, at])
+  @@index([personId, at])
   @@map("person_stage_events")
 }
 
@@ -801,16 +677,15 @@ enum PersonNoteKind {
 /// needs membership.people.read_sensitive.
 model PersonNote {
   id        String         @id @default(uuid(7)) @db.Uuid
-  churchId  String         @map("church_id") @db.Uuid
   personId  String         @map("person_id") @db.Uuid
   kind      PersonNoteKind @default(NOTE)
   body      String         @db.VarChar(2000)
   authorId  String         @map("author_id") @db.Uuid
   createdAt DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  person Person @relation(fields: [churchId, personId], references: [churchId, id], onDelete: Cascade)
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
 
-  @@index([churchId, personId, createdAt(sort: Desc)])
+  @@index([personId, createdAt(sort: Desc)])
   @@map("person_notes")
 }
 
@@ -825,7 +700,6 @@ enum ApplicationStatus {
 /// Asking to become a member, and what the pastors decided.
 model MembershipApplication {
   id            String            @id @default(uuid(7)) @db.Uuid
-  churchId      String            @map("church_id") @db.Uuid
   personId      String            @map("person_id") @db.Uuid
   status        ApplicationStatus @default(UNDER_REVIEW)
   /// 'FORM' when the registration asked to join, 'OFFICE' when entered here.
@@ -839,43 +713,38 @@ model MembershipApplication {
   confirmedById String?           @map("confirmed_by_id") @db.Uuid
   confirmedAt   DateTime?         @map("confirmed_at") @db.Timestamptz(6)
 
-  person Person @relation(fields: [churchId, personId], references: [churchId, id], onDelete: Cascade)
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
 
-  @@index([churchId, status, submittedAt(sort: Desc)])
+  @@index([status, submittedAt(sort: Desc)])
   @@map("membership_applications")
 }
 
 /// A foundation class group: 'Thursday group', 'Saturday group'.
 model FoundationGroup {
   id       String  @id @default(uuid(7)) @db.Uuid
-  churchId String  @map("church_id") @db.Uuid
   name     String  @db.VarChar(60)
   isActive Boolean @default(true) @map("is_active")
 
-  church      Church                 @relation(fields: [churchId], references: [id], onDelete: Cascade)
   enrollments FoundationEnrollment[]
 
-  @@unique([churchId, name])
-  @@unique([churchId, id])
+  @@unique([name])
   @@map("foundation_groups")
 }
 
 /// One person in one group, once. Finishing or dropping out closes it.
 model FoundationEnrollment {
   id          String    @id @default(uuid(7)) @db.Uuid
-  churchId    String    @map("church_id") @db.Uuid
   personId    String    @map("person_id") @db.Uuid
   groupId     String    @map("group_id") @db.Uuid
   enrolledAt  DateTime  @default(now()) @map("enrolled_at") @db.Timestamptz(6)
   completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
   droppedAt   DateTime? @map("dropped_at") @db.Timestamptz(6)
 
-  person     Person                 @relation(fields: [churchId, personId], references: [churchId, id], onDelete: Cascade)
-  group      FoundationGroup        @relation(fields: [churchId, groupId], references: [churchId, id], onDelete: Cascade)
+  person     Person                 @relation(fields: [personId], references: [id], onDelete: Cascade)
+  group      FoundationGroup        @relation(fields: [groupId], references: [id], onDelete: Cascade)
   attendance FoundationAttendance[]
 
-  @@unique([churchId, id])
-  @@index([churchId, groupId])
+  @@index([groupId])
   @@map("foundation_enrollments")
 }
 
@@ -886,56 +755,49 @@ enum AttendanceMark {
 
 /// One tick, for one session of one sign-up.
 model FoundationAttendance {
-  churchId     String         @map("church_id") @db.Uuid
   enrollmentId String         @map("enrollment_id") @db.Uuid
   sessionNo    Int            @map("session_no")
   mark         AttendanceMark
   markedById   String         @map("marked_by_id") @db.Uuid
   markedAt     DateTime       @default(now()) @map("marked_at") @db.Timestamptz(6)
 
-  enrollment FoundationEnrollment @relation(fields: [churchId, enrollmentId], references: [churchId, id], onDelete: Cascade)
+  enrollment FoundationEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
 
   @@id([enrollmentId, sessionNo])
-  @@index([churchId, enrollmentId])
+  @@index([enrollmentId])
   @@map("foundation_attendance")
 }
 
 /// When someone was sent their registration link again, and how.
 model RegistrationReminder {
   id             String   @id @default(uuid(7)) @db.Uuid
-  churchId       String   @map("church_id") @db.Uuid
   registrationId String   @map("registration_id") @db.Uuid
   /// 'COPY_LINK' | 'WHATSAPP' | later 'SMS'.
   channel        String   @db.VarChar(20)
   sentById       String   @map("sent_by_id") @db.Uuid
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  registration Registration @relation(fields: [churchId, registrationId], references: [churchId, id], onDelete: Cascade)
+  registration Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
 
-  @@index([churchId, registrationId])
+  @@index([registrationId])
   @@map("registration_reminders")
 }
 
-/// Per-church settings, with the defaults in code (probation days, how many
-/// foundation sessions there are).
-model ChurchSetting {
-  churchId  String   @map("church_id") @db.Uuid
+/// Settings the office can change, with the defaults in code (probation days,
+/// how many foundation sessions there are).
+model Setting {
   key       String   @db.VarChar(80)
   value     Json
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  church Church @relation(fields: [churchId], references: [id], onDelete: Cascade)
-
-  @@id([churchId, key])
-  @@map("church_settings")
+  @@id([key])
+  @@map("settings")
 }
 
-/// A key that lets a church's own app — the registration form — call the
-/// public API as that church. Core-owned: the guard reads it before there is
-/// a church in the request at all.
+/// A key that lets the registration form call the public API. Read by a guard
+/// before anything else, so it carries no permissions of its own.
 model ApiClient {
   id         String    @id @default(uuid(7)) @db.Uuid
-  churchId   String    @map("church_id") @db.Uuid
   name       String    @db.VarChar(80)
   /// 'REGISTRATION' today. A key is only good for the kind it was made for.
   kind       String    @db.VarChar(20)
@@ -946,8 +808,5 @@ model ApiClient {
   lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz(6)
   revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(6)
 
-  church Church @relation(fields: [churchId], references: [id], onDelete: Cascade)
-
-  @@index([churchId])
   @@map("api_clients")
 }

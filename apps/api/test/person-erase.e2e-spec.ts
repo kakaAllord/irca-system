@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import pg from 'pg';
-import { PrismaCore } from '../src/core/database/prisma-clients.js';
+import { PrismaDb } from '../src/core/database/prisma-clients.js';
 import { erasePerson } from '../src/cli/commands/person-erase.js';
 import { createApp, createChurch, createUser, ownerDb, truncateAll } from './helpers.js';
 
@@ -78,7 +78,7 @@ describe('erasing one person, at their request', () => {
       churchCode,
       personId,
       dryRun,
-      db: app.get(PrismaCore),
+      db: app.get(PrismaDb),
       ownerUrl: process.env.DIRECT_DATABASE_URL!,
     });
 
@@ -159,7 +159,7 @@ describe('erasing one person, at their request', () => {
         churchCode: church.code,
         personId,
         dryRun: false,
-        db: app.get(PrismaCore),
+        db: app.get(PrismaDb),
         ownerUrl: process.env.DIRECT_DATABASE_URL!,
         confirm: async () => 'yes',
       }),

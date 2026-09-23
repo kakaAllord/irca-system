@@ -1,5 +1,5 @@
 import type { ChangeRequest } from '../../generated/prisma/client.js';
-import type { TenantTx } from '../database/db.service.js';
+import type { Tx } from '../database/db.service.js';
 
 /** What a request asks for. A void is a change like any other (D17). */
 export type ChangeAction = 'EDIT' | 'VOID';
@@ -29,14 +29,14 @@ export interface ChangeRequestHandler {
   readonly entityType: string;
 
   /** The record as it is now, or null when it does not exist in this church. */
-  describe(tx: TenantTx, entityId: string): Promise<DescribedEntity | null>;
+  describe(tx: Tx, entityId: string): Promise<DescribedEntity | null>;
 
   /**
    * Refuses a proposal that cannot be applied. Called when the request is
    * made and again when it is approved, because the world moves in between.
    */
   validate(
-    tx: TenantTx,
+    tx: Tx,
     input: {
       action: ChangeAction;
       proposed: Record<string, unknown>;
@@ -45,11 +45,11 @@ export interface ChangeRequestHandler {
   ): Promise<void>;
 
   /** Applies an approved request, inside the approver's transaction. */
-  apply(tx: TenantTx, request: ChangeRequest): Promise<Record<string, unknown> | null>;
+  apply(tx: Tx, request: ChangeRequest): Promise<Record<string, unknown> | null>;
 
   /** The before → after table, in words, plus a warning worth reading twice. */
   explain(
-    tx: TenantTx,
+    tx: Tx,
     input: {
       action: ChangeAction;
       proposed: Record<string, unknown>;

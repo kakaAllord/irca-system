@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaCore } from '../../core/database/prisma-clients.js';
+import { PrismaDb } from '../../core/database/prisma-clients.js';
 import { RequestAuth } from '../../core/context/request-auth.js';
-import { LogBufferService, type LogLine } from '../../core/logging/log-buffer.service.js';
+import { LogBufferService } from '../../core/logging/log-buffer.service.js';
 
 export type ServerLogQuery = {
   level?: string;
@@ -11,7 +11,6 @@ export type ServerLogQuery = {
 };
 
 export type ActionLogQuery = {
-  churchId?: string;
   actorUserId?: string;
   action?: string;
   search?: string;
@@ -22,53 +21,36 @@ export type ActionLogQuery = {
 /**
  * The two logs the console shows: what the server wrote, and what people did.
  *
- * A dev sees both across every church. A church administrator lent this page
- * (`ADMIN_DEV_CONSOLE`) sees only their own church — the scoping is here
- * rather than in the controller, because a permission check cannot express
- * "the same rows, fewer of them".
+ * They answer each other, which is why they are one page: a request that
+ * failed at 12:04 and the entry somebody was trying to record at 12:04 are the
+ * same story told twice.
  */
 @Injectable()
-export class PlatformLogsService {
+export class DevLogsService {
   constructor(
-    private readonly db: PrismaCore,
+    private readonly db: PrismaDb,
     private readonly auth: RequestAuth,
     private readonly buffer: LogBufferService,
   ) {}
 
   /** The recent lines this process wrote. Empty after a restart, and says so. */
   server(query: ServerLogQuery) {
-    const result = this.buffer.list({
-      level: query.level,
-      search: query.search,
-      since: query.since,
-      // A non-dev is narrowed to their own church before the limit is applied,
-      // so they get a full page of their own lines rather than the leftovers.
-      churchId: this.auth.isDev ? undefined : (this.auth.churchId ?? undefined),
-      limit: query.limit,
-    });
-
-    return {
-      ...result,
-      lines: this.auth.isDev ? result.lines : result.lines.map(strip),
-      held: this.buffer.size,
-      scope: this.auth.isDev ? ('all' as const) : ('church' as const),
-    };
+    return { ...this.buffer.list(query), held: this.buffer.size };
   }
 
   /** What people did, newest first, from the same rows the activity log reads. */
   async actions(query: ActionLogQuery) {
-    // A dev may narrow to one church; anyone else is narrowed to theirs.
-    const churchId = this.auth.isDev ? query.churchId : (this.auth.churchId ?? undefined);
-
     const rows = await this.db.auditEvent.findMany({
       where: {
-        ...(churchId ? { churchId } : {}),
         ...(query.actorUserId ? { actorUserId: query.actorUserId } : {}),
         ...(query.action ? { action: { startsWith: query.action } } : {}),
         ...(query.search ? { summary: { contains: query.search, mode: 'insensitive' } } : {}),
         ...(query.before ? { createdAt: { lt: new Date(query.before) } } : {}),
-        // Impersonation rows belong to the view-as log and nowhere else (D16).
-        ...(this.auth.isDev ? {} : { source: 'feature', impersonationId: null }),
+        // Who viewed the portal as whom belongs to the view-as log and nowhere
+        // else (D16), so it is here only for someone who may read that log.
+        ...(this.auth.has('dev.impersonations.read')
+          ? {}
+          : { source: 'feature', impersonationId: null }),
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: query.limit + 1,
@@ -78,18 +60,16 @@ export class PlatformLogsService {
     const ids = [...new Set(page.flatMap((r) => [r.actorUserId, r.subjectUserId]))].filter(
       (id): id is string => Boolean(id),
     );
-    const [users, churches] = await Promise.all([
-      this.db.user.findMany({ where: { id: { in: ids } }, select: { id: true, fullName: true } }),
-      this.db.church.findMany({ select: { id: true, code: true } }),
-    ]);
+    const users = await this.db.user.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, fullName: true },
+    });
     const names = new Map(users.map((u) => [u.id, u.fullName]));
-    const codes = new Map(churches.map((c) => [c.id, c.code]));
 
     return {
       rows: page.map((r) => ({
         id: r.id,
         at: r.createdAt.toISOString(),
-        churchCode: r.churchId ? (codes.get(r.churchId) ?? null) : null,
         source: r.source,
         action: r.action,
         entityType: r.entityType,
@@ -102,13 +82,6 @@ export class PlatformLogsService {
       // Keyset paging: the log only grows, and counting pages would get slower
       // every month.
       nextBefore: rows.length > query.limit ? page.at(-1)?.createdAt.toISOString() : null,
-      scope: this.auth.isDev ? ('all' as const) : ('church' as const),
     };
   }
-}
-
-/** Everything a line says that is not this church's business. */
-function strip(line: LogLine): LogLine {
-  const { rest: _rest, ...rest } = line;
-  return rest;
 }

@@ -26,10 +26,8 @@ export class ActivityService {
   ) {}
 
   async list(query: ActivityQuery) {
-    const churchId = this.auth.requireChurch();
     const rows = await this.db.client.auditEvent.findMany({
       where: {
-        churchId,
         source: 'feature',
         impersonationId: null,
         ...(query.actorUserId ? { actorUserId: query.actorUserId } : {}),

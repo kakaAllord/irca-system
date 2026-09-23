@@ -12,7 +12,6 @@ import { ImpersonationService } from './impersonation.service.js';
 const StartSchema = z.object({
   subjectUserId: z.uuid(),
   /** Devs say which church; an administrator's own church is used. */
-  churchId: z.uuid().optional(),
 });
 
 @Controller('impersonation')

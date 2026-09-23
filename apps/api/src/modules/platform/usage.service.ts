@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ErrorCode, metricDef } from '@irca/shared';
 import { Prisma } from '../../generated/prisma/client.js';
-import { PrismaCore } from '../../core/database/prisma-clients.js';
+import { PrismaDb } from '../../core/database/prisma-clients.js';
 import { AppError } from '../../core/http/app-error.js';
 
 type Series = { metric: string; points: { day: string; value: number }[] };
@@ -18,13 +18,13 @@ const MAX_DAYS = 400;
  */
 @Injectable()
 export class PlatformUsageService {
-  constructor(private readonly db: PrismaCore) {}
+  constructor(private readonly db: PrismaDb) {}
 
   async church(churchId: string, metrics: string[], from: string, to: string): Promise<Series[]> {
     const days = this.days(from, to);
     const rows = await this.db.$queryRaw<{ metric: string; day: Date; value: bigint }[]>`
       select metric, day, value from usage_daily
-      where church_id = ${churchId}::uuid and metric in (${Prisma.join(metrics)})
+      where metric in (${Prisma.join(metrics)})
         and day between ${from}::date and ${to}::date
       order by day`;
     return metrics.map((metric) =>
@@ -63,7 +63,7 @@ export class PlatformUsageService {
   async database(churchId: string) {
     const rows = await this.db.$queryRaw<{ metric: string; day: Date; value: bigint }[]>`
       select metric, day, value from usage_daily
-      where church_id = ${churchId}::uuid and (metric like 'db.rows.%' or metric like 'db.bytes.%')
+      where (metric like 'db.rows.%' or metric like 'db.bytes.%')
         and day >= current_date - 31
       order by day desc`;
     const at = (metric: string, daysAgo: number) => {

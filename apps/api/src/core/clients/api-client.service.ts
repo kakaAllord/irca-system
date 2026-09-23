@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import type { ApiClient } from '../../generated/prisma/client.js';
-import { PrismaCore } from '../database/prisma-clients.js';
+import { PrismaDb } from '../database/prisma-clients.js';
 
 /** Long enough that guessing is hopeless, short enough to paste into an env file. */
 const BYTES = 32;
@@ -20,7 +20,7 @@ export const hashKey = (key: string) => createHash('sha256').update(key).digest(
  */
 @Injectable()
 export class ApiClientService {
-  constructor(private readonly db: PrismaCore) {}
+  constructor(private readonly db: PrismaDb) {}
 
   /** Makes a key. The plain text is returned once and never stored. */
   async create(input: {
@@ -31,8 +31,6 @@ export class ApiClientService {
     const key = PREFIX + randomBytes(BYTES).toString('base64url');
     const client = await this.db.apiClient.create({
       data: {
-        churchId: input.churchId,
-        kind: input.kind,
         name: input.name,
         keyPrefix: key.slice(0, 12),
         keyHash: hashKey(key),
@@ -77,7 +75,7 @@ export class ApiClientService {
 
   list(churchId?: string) {
     return this.db.apiClient.findMany({
-      where: churchId ? { churchId } : {},
+      where: churchId ? {} : {},
       orderBy: { createdAt: 'desc' },
     });
   }

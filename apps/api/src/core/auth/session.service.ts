@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AppConfig } from '../../config/app-config.js';
-import { PrismaCore } from '../database/prisma-clients.js';
+import { PrismaDb } from '../database/prisma-clients.js';
 import type { Session, User } from '../../generated/prisma/client.js';
 import { newToken, tokenHash } from './tokens.js';
 
@@ -20,7 +20,7 @@ const TOUCH_EVERY_MS = 5 * 60_000;
 @Injectable()
 export class SessionService {
   constructor(
-    private readonly db: PrismaCore,
+    private readonly db: PrismaDb,
     private readonly config: AppConfig,
   ) {}
 
@@ -80,7 +80,7 @@ export class SessionService {
   private async checkActiveChurch(session: Session, user: User): Promise<Session> {
     if (!session.activeChurchId) return session;
     const membership = await this.db.churchMembership.findUnique({
-      where: { churchId_userId: { churchId: session.activeChurchId, userId: user.id } },
+      where: { churchId_userId: { activeChurchId, userId: user.id } },
       include: { church: true },
     });
     const usable =
@@ -119,12 +119,12 @@ export class SessionService {
   /** Signs someone out of one church, leaving their other churches alone. */
   async revokeForChurch(userId: string, churchId: string, reason: string): Promise<void> {
     await this.db.session.updateMany({
-      where: { userId, activeChurchId: churchId, revokedAt: null },
+      where: { userId, revokedAt: null },
       data: { revokedAt: new Date(), revokeReason: reason },
     });
     // Anyone viewing as them in that church stops viewing as them.
     const open = await this.db.impersonationSession.findMany({
-      where: { subjectUserId: userId, churchId, endedAt: null },
+      where: { subjectUserId: userId, endedAt: null },
     });
     for (const impersonation of open) {
       await this.db.impersonationSession.update({

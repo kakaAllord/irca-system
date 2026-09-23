@@ -2,8 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { ErrorCode, moduleByKey, type ChangeRequestView } from '@irca/shared';
 import { AppConfig } from '../../config/app-config.js';
 import type { ChangeRequest } from '../../generated/prisma/client.js';
-import { Db, type TenantTx } from '../database/db.service.js';
-import { PrismaCore } from '../database/prisma-clients.js';
+import { Db, type Tx } from '../database/db.service.js';
+import { PrismaDb } from '../database/prisma-clients.js';
 import { AppError } from '../http/app-error.js';
 import { RequestAuth } from '../context/request-auth.js';
 import { AuditService } from '../audit/audit.service.js';
@@ -41,7 +41,7 @@ export type ChangeRequestQuery = {
 export class ChangeRequestService {
   constructor(
     private readonly db: Db,
-    private readonly core: PrismaCore,
+    private readonly core: PrismaDb,
     private readonly config: AppConfig,
     private readonly auth: RequestAuth,
     private readonly audit: AuditService,
@@ -52,7 +52,6 @@ export class ChangeRequestService {
 
   /** Someone asks for a change. Nothing about the record moves yet. */
   async create(input: CreateChangeRequest): Promise<{ id: string }> {
-    const churchId = this.auth.requireChurch();
     const userId = this.auth.userId!;
     const handler = this.registry.require(input.entityType);
 
@@ -79,7 +78,6 @@ export class ChangeRequestService {
       const created = await tx.changeRequest
         .create({
           data: {
-            churchId,
             moduleKey: handler.moduleKey,
             entityType: handler.entityType,
             entityId: input.entityId,
@@ -124,7 +122,7 @@ export class ChangeRequestService {
       };
     });
 
-    await this.notifyApprovers(churchId, userId, { id, label, change, reason });
+    await this.notifyApprovers(userId, { id, label, change, reason });
     this.usage.inc('change_requests.created');
     return { id };
   }
@@ -254,10 +252,8 @@ export class ChangeRequestService {
   }
 
   async list(query: ChangeRequestQuery): Promise<ChangeRequestView[]> {
-    const churchId = this.auth.requireChurch();
     const rows = await this.db.client.changeRequest.findMany({
       where: {
-        churchId,
         ...(query.status ? { status: query.status } : {}),
         ...(query.moduleKey ? { moduleKey: query.moduleKey } : {}),
         ...(query.mine ? { requestedById: this.auth.userId! } : {}),
@@ -269,7 +265,6 @@ export class ChangeRequestService {
   }
 
   async get(id: string): Promise<ChangeRequestView> {
-    const churchId = this.auth.requireChurch();
     const row = await this.db.client.changeRequest.findFirst({ where: { id, churchId } });
     if (!row) throw new AppError(404, ErrorCode.NOT_FOUND, 'No such request.');
     return (await this.views([row]))[0]!;
@@ -277,16 +272,15 @@ export class ChangeRequestService {
 
   /** The requests open on one record, for the record's own page. */
   async openFor(entityType: string, entityId: string): Promise<ChangeRequestView | null> {
-    const churchId = this.auth.requireChurch();
     const row = await this.db.client.changeRequest.findFirst({
-      where: { churchId, entityType, entityId, status: 'PENDING' },
+      where: { entityType, entityId, status: 'PENDING' },
     });
     return row ? ((await this.views([row]))[0] ?? null) : null;
   }
 
   /** The number on the sidebar's Requests badge. */
   async pendingCount(churchId: string): Promise<number> {
-    return this.core.changeRequest.count({ where: { churchId, status: 'PENDING' } });
+    return this.core.changeRequest.count({ where: { status: 'PENDING' } });
   }
 
   /** Turns stored rows into what a page shows: names, words and warnings. */
@@ -353,10 +347,8 @@ export class ChangeRequestService {
   }
 
   private async rolesOf(userIds: string[]): Promise<Map<string, string[]>> {
-    const churchId = this.auth.requireChurch();
     const rows = await this.db.client.membershipRole.findMany({
       where: {
-        churchId,
         membership: { userId: { in: [...new Set(userIds)] } },
         role: { deletedAt: null },
       },
@@ -372,11 +364,10 @@ export class ChangeRequestService {
   }
 
   /** Holds the row for the rest of the transaction, so two decisions cannot race. */
-  private async lock(tx: TenantTx, id: string): Promise<ChangeRequest> {
-    const churchId = this.auth.requireChurch();
+  private async lock(tx: Tx, id: string): Promise<ChangeRequest> {
     await tx.$executeRaw`
       -- tenant: church_id is pinned here as well as by row-level security
-      select 1 from change_requests where id = ${id}::uuid and church_id = ${churchId}::uuid for update`;
+      select 1 from change_requests where id = ${id}::uuid for update`;
     const request = await tx.changeRequest.findFirst({ where: { id, churchId } });
     if (!request) throw new AppError(404, ErrorCode.NOT_FOUND, 'No such request.');
     if (request.status !== 'PENDING') {
@@ -390,7 +381,6 @@ export class ChangeRequestService {
    * so telling them would only be noise.
    */
   private async notifyApprovers(
-    churchId: string,
     requesterId: string,
     what: { id: string; label: string; change: string; reason: string },
   ): Promise<void> {
@@ -405,8 +395,7 @@ export class ChangeRequestService {
       join membership_roles mr on mr.membership_id = m.id and mr.church_id = m.church_id
       join roles r             on r.id = mr.role_id and r.church_id = m.church_id and r.deleted_at is null
       join role_permissions rp on rp.role_id = r.id and rp.church_id = r.church_id
-      where m.church_id = ${churchId}::uuid
-        and m.status = 'ACTIVE'
+      where m.status = 'ACTIVE'
         and rp.permission_key = 'admin.requests.decide'
         and m.user_id <> ${requesterId}::uuid`;
 
@@ -414,7 +403,6 @@ export class ChangeRequestService {
       await this.email.enqueueNow({
         to: approver.email,
         template: 'change-request-submitted',
-        churchId,
         payload: {
           requesterName: requester?.fullName ?? 'Someone',
           what: what.label,
@@ -439,7 +427,6 @@ export class ChangeRequestService {
     await this.email.enqueueNow({
       to: requester.email,
       template: 'change-request-decided',
-      churchId: request.churchId,
       payload: {
         personName: requester.fullName,
         what: request.entityLabel,

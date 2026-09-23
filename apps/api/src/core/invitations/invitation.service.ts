@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ClsService } from 'nestjs-cls';
 import { ErrorCode, normalizeEmail } from '@irca/shared';
 import { AppConfig } from '../../config/app-config.js';
-import { PrismaCore } from '../database/prisma-clients.js';
+import { PrismaDb } from '../database/prisma-clients.js';
 import { AppError } from '../http/app-error.js';
 import { RequestAuth } from '../context/request-auth.js';
 import { AuditService } from '../audit/audit.service.js';
@@ -33,7 +33,7 @@ export type InviteInput = { email: string; fullName: string; roleIds: string[] }
 @Injectable()
 export class InvitationService {
   constructor(
-    private readonly db: PrismaCore,
+    private readonly db: PrismaDb,
     private readonly config: AppConfig,
     private readonly auth: RequestAuth,
     private readonly audit: AuditService,
@@ -55,13 +55,13 @@ export class InvitationService {
    */
   async inviteInto(churchId: string, input: InviteInput): Promise<{ userId: string }> {
     const email = normalizeEmail(input.email);
-    const roles = await this.assignableRoles(churchId, input.roleIds);
+    const roles = await this.assignableRoles(input.roleIds);
 
     const church = await this.db.church.findUniqueOrThrow({ where: { id: churchId } });
     const inviter = await this.db.user.findUniqueOrThrow({ where: { id: this.auth.actorUserId! } });
     const existing = await this.db.user.findUnique({
       where: { email },
-      include: { memberships: { where: { churchId } } },
+      include: { memberships: { where: {} } },
     });
 
     const membership = existing?.memberships[0];
@@ -98,16 +98,15 @@ export class InvitationService {
         }));
 
       const created = await tx.churchMembership.create({
-        data: { churchId, userId: user.id, status: 'INVITED', invitedById: inviter.id },
+        data: { userId: user.id, status: 'INVITED', invitedById: inviter.id },
       });
       for (const role of roles) {
         await tx.membershipRole.create({
-          data: { churchId, membershipId: created.id, roleId: role.id, grantedById: inviter.id },
+          data: { membershipId: created.id, roleId: role.id, grantedById: inviter.id },
         });
       }
       await tx.invitation.create({
         data: {
-          churchId,
           membershipId: created.id,
           email,
           tokenHash: tokenHash(token),
@@ -116,7 +115,6 @@ export class InvitationService {
         },
       });
       await this.email.enqueue(tx, {
-        churchId,
         to: email,
         template: 'invitation',
         payload: {
@@ -131,7 +129,6 @@ export class InvitationService {
       });
       await tx.auditEvent.create({
         data: {
-          churchId,
           source: 'feature',
           actorUserId: inviter.id,
           subjectUserId: inviter.id,
@@ -152,8 +149,7 @@ export class InvitationService {
 
   /** A new token and a new email; the old link stops working. */
   async resend(userId: string): Promise<void> {
-    const churchId = this.auth.requireChurch();
-    const { membership, invitation } = await this.pending(churchId, userId);
+    const { membership, invitation } = await this.pending(userId);
 
     const sentToday = await this.db.invitation.count({
       where: { membershipId: membership.id, lastSentAt: { gt: new Date(Date.now() - 86_400_000) } },
@@ -180,7 +176,6 @@ export class InvitationService {
       }
       await tx.invitation.create({
         data: {
-          churchId,
           membershipId: membership.id,
           email: membership.user.email,
           tokenHash: tokenHash(token),
@@ -190,7 +185,6 @@ export class InvitationService {
         },
       });
       await this.email.enqueue(tx, {
-        churchId,
         to: membership.user.email,
         template: 'invitation',
         payload: {
@@ -214,8 +208,7 @@ export class InvitationService {
 
   /** Cancels it: the link stops working and their place is closed. */
   async revoke(userId: string): Promise<void> {
-    const churchId = this.auth.requireChurch();
-    const { membership, invitation } = await this.pending(churchId, userId);
+    const { membership, invitation } = await this.pending(userId);
 
     await this.db.$transaction(async (tx) => {
       if (invitation) {
@@ -315,8 +308,6 @@ export class InvitationService {
       });
       await tx.auditEvent.create({
         data: {
-          churchId: invitation.churchId,
-          source: 'feature',
           actorUserId: membership.userId,
           subjectUserId: membership.userId,
           action: 'admin.invitation.accepted',
@@ -330,7 +321,6 @@ export class InvitationService {
     this.usage.inc('admin.invitations.accepted', 1, invitation.churchId);
     const { token: sessionToken, session } = await this.sessions.create({
       userId: membership.userId,
-      activeChurchId: invitation.churchId,
       ip: context.ip,
       userAgent: context.userAgent,
     });
@@ -344,7 +334,7 @@ export class InvitationService {
     this.cls.set('platformRole', 'NONE');
     this.cls.set(
       'permissions',
-      await this.permissions.forMember(membership.userId, invitation.churchId),
+      await this.permissions.forUser(membership.userId),
     );
     return { sessionToken };
   }
@@ -352,7 +342,7 @@ export class InvitationService {
   /** Roles an administrator may hand out: this church's, of portals that are on. */
   private async assignableRoles(churchId: string, roleIds: string[]) {
     const roles = await this.db.role.findMany({
-      where: { id: { in: roleIds }, churchId, deletedAt: null },
+      where: { id: { in: roleIds }, deletedAt: null },
     });
     if (roles.length !== roleIds.length) {
       throw new AppError(
@@ -362,7 +352,7 @@ export class InvitationService {
       );
     }
     const enabled = new Set(
-      (await this.db.churchModule.findMany({ where: { churchId, enabled: true } })).map(
+      (await this.db.churchModule.findMany({ where: { enabled: true } })).map(
         (m) => m.moduleKey,
       ),
     );
@@ -379,7 +369,7 @@ export class InvitationService {
 
   private async pending(churchId: string, userId: string) {
     const membership = await this.db.churchMembership.findUnique({
-      where: { churchId_userId: { churchId, userId } },
+      where: { userId },
       include: { user: true },
     });
     if (!membership) throw new AppError(404, ErrorCode.NOT_FOUND, 'No such person here.');

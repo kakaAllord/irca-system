@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ClsService } from 'nestjs-cls';
 import { ErrorCode, normalizeEmail } from '@irca/shared';
 import { AppConfig } from '../../config/app-config.js';
-import { PrismaCore } from '../database/prisma-clients.js';
+import { PrismaDb } from '../database/prisma-clients.js';
 import { AppError } from '../http/app-error.js';
 import { AuditService } from '../audit/audit.service.js';
 import { EmailService } from '../email/email.service.js';
@@ -26,7 +26,7 @@ export class PasswordResetService {
   private readonly logger = new Logger('PasswordReset');
 
   constructor(
-    private readonly db: PrismaCore,
+    private readonly db: PrismaDb,
     private readonly config: AppConfig,
     private readonly passwords: PasswordService,
     private readonly sessions: SessionService,
@@ -120,7 +120,6 @@ export class PasswordResetService {
     const churchId = await this.sessions.defaultChurchFor(row.userId);
     const { token: sessionToken, session } = await this.sessions.create({
       userId: row.userId,
-      activeChurchId: churchId,
       ip: context.ip,
       userAgent: context.userAgent,
     });
@@ -132,7 +131,7 @@ export class PasswordResetService {
     this.cls.set('platformRole', user.platformRole);
     this.cls.set(
       'permissions',
-      await this.permissions.forSignedIn(row.userId, user.platformRole, churchId),
+      await this.permissions.forUser(row.userId),
     );
     return { sessionToken };
   }
