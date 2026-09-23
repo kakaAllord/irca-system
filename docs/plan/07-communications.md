@@ -718,7 +718,7 @@ noticed before a Sunday.
    `sms.balance_minor` (gauge, platform), `comms.templates.pending` (gauge),
    `comms.schedules.active` (gauge).
 2. A job reads Beem's balance every hour into `sms.balance_minor`, and the
-   monitoring of 6.9 alerts below a configured floor.
+   monitoring of 10 step 10.4 alerts below a configured floor.
 3. The dev console's church page gains the SMS figures beside the rest; its
    Health page shows the balance and the queue depth. No new pages: the
    catalogue drives the usage tab already.

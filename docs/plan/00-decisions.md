@@ -251,7 +251,7 @@ alone keeps churches apart, and tests prove each one on its own (02, step 2.4a).
 - `audit_events`' policy also hides impersonation rows from church readers
   (D16 enforced by the database).
 - **Cost:** a few extra round trips per standalone query, about 1 ms each in
-  region, measured in 6.6. Interactive transactions and raw SQL must go through
+  region, measured in 10 step 10.1. Interactive transactions and raw SQL must go through
   `db.tx()`, which ESLint enforces.
 
 | Option considered | Why not |
@@ -398,7 +398,7 @@ settings, and shows the total **before** the send button does anything:
 Beside it, two guards the owner's budget depends on: a per-church **daily
 cap** that refuses an over-budget send and names the figure it would have
 been, and an hourly read of Beem's balance into `sms.balance_minor`, which the
-monitoring of 6.9 alerts on before a Sunday rather than after one.
+monitoring of 10 step 10.4 alerts on before a Sunday rather than after one.
 
 ---
 

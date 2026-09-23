@@ -17,10 +17,11 @@ Phase 0 (`00-restructure.md`) comes before everything else.
 | `03-admin-portal.md` | Phase 3 (built) — the church Admin portal: users, email invitations, set-password, roles, portals (modules), impersonation UI, audit viewer, account page. |
 | `04-finance-portal.md` | Phase 4 (built) — the Finance portal: income sources, expense items with suggestions, transactions with `IRCA-EXP-2026-09-000001` codes, corrections and voids only through change requests that an admin approves, reports. This is the RBAC test case. |
 | `05-registration-and-membership.md` | Phase 5 (built; cutover is the owner's) — the registration form moved onto the API, live data migrated, and the Membership portal (Dashboard, Members, Applications, Discipleship, Insights) from the design. |
-| `06-dev-console-hardening-launch.md` | Phase 6 — the dev console with per-church usage, security hardening, deployment, cutover, and the runbook for adding the next department. |
+| `06-dev-console-hardening-launch.md` | Phase 6 — the dev console with per-church usage, security hardening, deployment, cutover, and the runbook for adding the next department. Load testing, backups, per-church moves and monitoring moved to Phase 10. |
 | `07-communications.md` | Phase 7 — the Communication system: SMS through Beem, templates approved once and used weekly, audiences, recurring "beat" messages, opt-out, and what it all costs. Central control, departments sending their own routine messages. |
 | `08-outreach.md` | Phase 8 — the Outreach & Evangelism portal: the team, Saturday sessions, people reached in four fields, follow-up, one timeline per person, Friday training, the dashboard, and the session report as a PDF. |
 | `09-pledges-and-giving-reminders.md` | Phase 9 — pledges: what someone promised, what they have paid, what is left, and reminding them through Communications. |
+| `10-strengthening.md` | Phase 10 — strengthening: performance and load, backups and the restore drill, per-church export/move/offboarding, monitoring and alerts. **Starts only when the owner says so**, after every feature phase is done. |
 | `docs/modules/*-brief.md` | What a department actually does, in its own words, filled in before its module is built (step 6.12). `comms-brief.md` and `outreach-brief.md` exist. |
 | `multi-tenancy.md` | How churches are kept apart everywhere: sign-in, permissions, database (extension + row-level security), endpoints, files, caching, jobs, logs, backups, monitoring, rate limits, testing. Also the path from one shared database to dedicated databases for large churches. |
 | `appendix-database.md` | Every table in one place, with what owns it and why it exists. |
@@ -181,6 +182,14 @@ registration app were only visible that way. Types passing is not a Check.
   `middleware.ts` is now `proxy.ts`, and `cookies()` / `headers()` / `params`
   are async). Before using a Next API, read the matching guide in
   `node_modules/next/dist/docs/`.
+
+### 3.4a Phase 10 is not started on your own initiative
+
+`10-strengthening.md` holds the work that makes the system survive real use:
+load testing, backups, restoring and moving one church, monitoring. None of it
+is started until the owner has been asked, in as many words, whether to begin
+strengthening the project, and has said yes. It comes after every feature
+phase. Finding a reason it should happen sooner is not permission.
 
 ### 3.5 Definition of done for a phase
 

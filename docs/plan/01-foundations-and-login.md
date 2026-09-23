@@ -290,7 +290,7 @@ machine.
 | `irca_core` | The API's **core** code only: sign-in, sessions, permission resolution, audit writes, usage, jobs, the dev console | `SELECT/INSERT/UPDATE/DELETE` like `irca_app` (the same revokes apply) | Sees **every church** through an explicit "core" policy |
 | `irca_app` | The API's **feature modules** (Admin, Finance, Membership…) | `SELECT/INSERT/UPDATE/DELETE` on business tables. Only `SELECT/INSERT` on `audit_events`. No `DELETE` on finance transactions. | Sees **only the church set for the current transaction** |
 | `irca_readonly` | Feature modules during every impersonated request | `SELECT` only | Same as `irca_app` |
-| `irca_backup` | The nightly backup job only (Phase 6, step 6.8) | `SELECT` only | Sees every church (read-only "core" policy) |
+| `irca_backup` | The nightly backup job only (Phase 10, step 10.2) | `SELECT` only | Sees every church (read-only "core" policy) |
 
 **Do**
 

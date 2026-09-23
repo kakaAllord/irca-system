@@ -684,7 +684,7 @@ only core code has that connection (1.9).
 6. **Cost, written in the code comment:** each standalone query becomes
    `BEGIN; select set_config(…); <query>; COMMIT`, which is a few extra round
    trips. The API and Neon sit in the same region, so this is about a
-   millisecond each. Phase 6, step 6.6 measures it. Grouping a page's reads into
+   millisecond each. Phase 10, step 10.1 measures it. Grouping a page's reads into
    one `db.tx` is the remedy if a page ever needs it.
 7. **Tests** (`test/rls.e2e-spec.ts`, against the real test database):
    - **RLS alone:** construct `Db` with the tenant extension switched off (a

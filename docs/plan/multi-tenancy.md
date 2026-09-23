@@ -249,7 +249,7 @@ for B, and B's goes out in the first tick.
   redacted (01 step 1.7), and names or phones are never logged, only ids.
 - **Churches never read logs.** Logs are for devs. The log provider indexes
   `churchCode`, and the dev console's church page links to the log search
-  pre-filtered to that church (06 step 6.9).
+  pre-filtered to that church (10 step 10.4).
 - **Error tracking** (Sentry) gets `church.code` as a tag and ids only, never
   request bodies (06 step 6.7).
 - **Retention:** 30 days for logs. Audit rows are the long-term record, and
@@ -265,16 +265,16 @@ lines with `churchCode: 'IRCA'` and no email addresses.
 **Rules.**
 
 - **Whole-database** point-in-time history (Neon) plus a nightly encrypted
-  dump as `irca_backup` (06 step 6.8).
+  dump as `irca_backup` (10 step 10.2).
 - **Per-church logical export**: `church:export --church IRCA` writes an
   encrypted archive of every tenant-plane row of that church, its control-plane
   rows (memberships, roles, settings, users' names and emails only), and its
   files (when files exist). It runs **weekly per church** (kept 8 weeks), and on
-  demand (06 step 6.8a).
+  demand (10 step 10.3).
 - **Restoring one church without touching the others:** restore the
   point-in-time copy into a scratch branch, run `church:export` there, then
   `church:import --replace` into production while that church is in maintenance
-  (read-only) mode (06 step 6.8a). Other churches are unaffected throughout.
+  (read-only) mode (10 step 10.3). Other churches are unaffected throughout.
 - **The restore drill** (quarterly) includes one per-church restore.
 
 **Tested.** Export then import into an empty database reproduces the church's
@@ -285,7 +285,7 @@ church's rows.
 
 ## 12. Monitoring, limits and fairness
 
-**Monitoring (06 steps 6.1–6.4, 6.9).** Every metric is per church: requests,
+**Monitoring (06 steps 6.1–6.4 and 10 step 10.4).** Every metric is per church: requests,
 errors, latency, active people, database rows and bytes, emails, registrations
 and finance entries. The dev console shows a **noisy-neighbour view**: each
 church's share of requests, of total latency and of database size, over time.
@@ -345,7 +345,7 @@ retrofitting any of these later means touching every module):
    the registry per cluster.
 
 **How a church is moved** (`church:move --church BIGCHURCH --to cluster-b`,
-built in Phase 6, step 6.8a, before it is ever needed):
+built in Phase 10, step 10.3, before it is ever needed):
 
 1. Create the new database with the same five roles, add it to
    `TENANT_CLUSTERS`, and run migrations on it.
@@ -386,11 +386,11 @@ visible in `shared` after the purge step.
 | --- | --- | --- |
 | **Create** | Dev console or CLI: church row, placement `shared`, admin module enabled, system roles, first admin invited | 03 step 3.15, 06 steps 6.3–6.4 |
 | **Configure** | Modules on/off, roles, settings (`church_settings`), limits (dev only) | 03 step 3.11, 02 step 2.11a |
-| **Operate** | Per-church usage, alerts, quotas | 06 steps 6.1–6.4, 6.9 |
+| **Operate** | Per-church usage, alerts, quotas | 06 steps 6.1–6.4 and 10 step 10.4 |
 | **Suspend** | Sessions in the church ended, sign-in refused, registration key refused. Data is untouched | 06 step 6.3 |
-| **Move** | Section 13 | 06 step 6.8a |
-| **Export** | `church:export`, handed to the church on request (data portability) | 06 step 6.8a |
-| **Offboard** | Suspend → final export handed over → after 90 days `church:delete` removes tenant-plane rows, files and memberships (users who belong to other churches are kept), and records a platform audit event | 06 step 6.8a |
+| **Move** | Section 13 | 10 step 10.3 |
+| **Export** | `church:export`, handed to the church on request (data portability) | 10 step 10.3 |
+| **Offboard** | Suspend → final export handed over → after 90 days `church:delete` removes tenant-plane rows, files and memberships (users who belong to other churches are kept), and records a platform audit event | 10 step 10.3 |
 
 ---
 
@@ -429,6 +429,6 @@ Everything above is proven by tests that run in CI:
 | Church-scoped authorization, approvals | 02 steps 2.5–2.7, 03, 04 step 4.6a |
 | Route fuzzer and two-church fixtures | 01 step 1.14, 02 step 2.18 |
 | Per-church usage and dev console | 06 steps 6.1–6.4 |
-| Per-church alerts, log links | 06 step 6.9 |
-| Export, import, move, offboard | 06 step 6.8a |
+| Per-church alerts, log links | 10 step 10.4 |
+| Export, import, move, offboard | 10 step 10.3 |
 | Files | when first needed (section 7) |
