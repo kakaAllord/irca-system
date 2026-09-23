@@ -7,9 +7,23 @@ here does not behave as described, that is a bug worth reporting.
 Built so far: **Phase 1** (sign-in), **Phase 2** (the portal frame, roles and
 viewing as someone), **Phase 3** (the Admin portal), **Phase 4** (the Finance
 portal), **Phase 5** (the registration form on this system, and the
-Membership portal). Still to come: the developer console and going live
-(Phase 6). Switching the live form over is a job for a Sunday evening, with
-the runbook in `docs/plan/05-registration-and-membership.md`, step 5.18.
+Membership portal), and most of **Phase 6** — the developer console, its
+per-church usage, the health page, the logs page and the security hardening.
+Still to come: going live (the rest of Phase 6), then Communications
+(Phase 7), Outreach (Phase 8) and pledges (Phase 9). Switching the live form
+over is a job for a Sunday evening, with the runbook in
+`docs/plan/05-registration-and-membership.md`, step 5.18.
+
+**To see it with data in it**, fill a fresh database with eighteen months of
+plausible history — people, registrations, the books, the class, the activity
+log and the usage charts:
+
+```bash
+npm run db:reset && npm run db:seed && npm run db:demo
+```
+
+It refuses to run twice over the same database, and it never runs outside
+development.
 
 ---
 
