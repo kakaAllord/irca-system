@@ -28,6 +28,7 @@ import { JobRunner } from './jobs/job-runner.service.js';
 import { ApiClientService } from './clients/api-client.service.js';
 import { PublicClientGuard } from './clients/public-client.guard.js';
 import { SequenceService } from './sequences/sequence.service.js';
+import { LogBufferService, logBuffer } from './logging/log-buffer.service.js';
 import { ChangeRequestRegistry } from './change-requests/registry.service.js';
 import { ChangeRequestService } from './change-requests/change-request.service.js';
 import { ScheduledJobs } from './jobs/scheduled-jobs.service.js';
@@ -42,6 +43,9 @@ import { ScheduledJobs } from './jobs/scheduled-jobs.service.js';
 @Module({
   imports: [DiscoveryModule, ScheduleModule.forRoot()],
   providers: [
+    // The logger already writes into this one; the injector hands out the same
+    // object rather than making a second, empty one.
+    { provide: LogBufferService, useValue: logBuffer },
     RequestAuth,
     PlacementService,
     PasswordService,
@@ -74,6 +78,7 @@ import { ScheduledJobs } from './jobs/scheduled-jobs.service.js';
     NoStoreInterceptor,
   ],
   exports: [
+    LogBufferService,
     RequestAuth,
     PlacementService,
     PasswordService,
