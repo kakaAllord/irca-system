@@ -35,7 +35,9 @@ export default async function FinanceOverview({
   if (!can(me, 'finance.overview.read')) return <ForbiddenState what="the finance overview" />;
 
   const { month } = await searchParams;
-  const asked = month ?? new Date().toISOString().slice(0, 7);
+  // A typed-in month beyond today is clamped rather than obeyed: the API refuses
+  // future-dated entries, so those months can only ever be zeros.
+  const asked = month && month < thisMonth() ? month : thisMonth();
   const data = await serverApi<Overview>(`/finance/overview?month=${asked}`);
   const currency = me.church?.currency ?? 'TZS';
 
@@ -47,7 +49,10 @@ export default async function FinanceOverview({
         actions={
           <>
             <MonthSwitcher month={data.month} />
-            <RecordButtons />
+            <RecordButtons
+              currency={me.church?.currency ?? 'TZS'}
+              timezone={me.church?.timezone ?? 'UTC'}
+            />
           </>
         }
       />
@@ -175,6 +180,11 @@ function Trend({
   );
 }
 
+/** The month we are in, as `YYYY-MM`. Months sort correctly as strings in this shape. */
+function thisMonth() {
+  return new Date().toISOString().slice(0, 7);
+}
+
 function MonthSwitcher({ month }: { month: string }) {
   const [year, m] = month.split('-').map(Number);
   const shift = (by: number) => {
@@ -186,15 +196,24 @@ function MonthSwitcher({ month }: { month: string }) {
     year: 'numeric',
     timeZone: 'UTC',
   });
+  // Forward stops at the month we are in. Walking past it can only show zeros,
+  // because a transaction dated in the future is refused when it is recorded.
+  const atToday = month >= thisMonth();
   return (
     <span className="flex items-center gap-1 text-[12.5px] text-fg2">
       <Link href={`/finance?month=${shift(-1)}`} aria-label="Previous month" className="px-1.5">
         ‹
       </Link>
       <span className="min-w-[110px] text-center font-medium text-fg">{shown}</span>
-      <Link href={`/finance?month=${shift(1)}`} aria-label="Next month" className="px-1.5">
-        ›
-      </Link>
+      {atToday ? (
+        <span aria-hidden className="px-1.5 text-border">
+          ›
+        </span>
+      ) : (
+        <Link href={`/finance?month=${shift(1)}`} aria-label="Next month" className="px-1.5">
+          ›
+        </Link>
+      )}
     </span>
   );
 }
