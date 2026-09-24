@@ -44,8 +44,9 @@ reset from it. Never point staging's email at real members: until its
 | `irca_readonly` | feature code while someone is viewed as  | select only, and never the view-as rows                      |
 | `irca_backup`   | the nightly dump (Phase 10)              | select only                                                  |
 
-The grants themselves are in the migrations; the roles have to exist before
-the first migration runs, because the migrations grant to them.
+The grants for `irca_app` and `irca_readonly` are in the migrations, so the
+roles must exist before the first migration runs. `irca_backup` has no grants
+yet: Phase 10, step 10.2, adds them with the nightly backup.
 
 1. In the Neon console, create the project and the database `irca`, owned by
    `irca_owner`. The console makes console-made roles members of
