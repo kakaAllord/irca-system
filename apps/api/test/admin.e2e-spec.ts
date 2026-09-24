@@ -119,6 +119,15 @@ describe('running a church: people, roles and portals', () => {
     await describe().expect(429);
   });
 
+  it('limits how many times one address can try to accept an invitation, twenty a minute', async () => {
+    const accept = () =>
+      portal(app, '10.9.9.13').post('/v1/invitations/not-a-real-token/accept', {
+        password: 'kilimanjaro sunrise tea',
+      });
+    for (let i = 0; i < 20; i++) await accept().expect(410);
+    await accept().expect(429);
+  });
+
   it('will not invite the same person twice, or hand out a role of a portal that is off', async () => {
     const { cookie, systemRole } = await church();
     const role = systemRole('admin.auditor');
