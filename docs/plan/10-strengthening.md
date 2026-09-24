@@ -1,171 +1,226 @@
 # Phase 10 — Strengthening
 
-**This phase does not begin until the owner says so.**
+> **In one sentence:** make what has been built survive real use — fast
+> enough on a busy Sunday, backed up and proven restorable, and watched, so a
+> failure is noticed before a person reports it.
 
-> Before starting any step here, ask the owner plainly: *"Shall I start
-> strengthening the project?"* Wait for a yes. Do not begin because a feature
-> phase finished, because a step looks small, or because something in it would
-> have prevented a problem. The owner decided on 23 September 2026 that all
-> the feature work comes first and that this phase is theirs to open.
+## This phase does not begin until the owner says so
 
-**Goal of the phase.** Make what has been built survive real use: fast enough
-under Sunday load, backed up and proven restorable, movable church by church,
-and watched so a failure is noticed before a person reports it.
+Before starting **any** step here, ask the owner plainly:
 
-Everything here was originally written as part of Phase 6. It was moved out
-because none of it is needed to *build* a feature, and mixing it into the
-build order meant the features kept waiting behind infrastructure. The work
-itself is unchanged.
+> *"Shall I start strengthening the project?"*
 
-**When it happens.** After Phases 7 (Communications), 8 (Outreach) and 9
-(Pledges) are done — and after the owner has confirmed.
+and wait for a yes. Do not begin because a feature phase finished, because a
+step looks small, or because something here would have prevented a problem
+you just saw. The owner decided on 23 September 2026 that the feature work
+comes first and that this phase is theirs to open (`README.md` §3.4a).
 
-| Step | What | Was |
+**Status:** not started. **Comes after:** Phases 7, 8 and 9 — and the owner's
+yes.
+
+---
+
+## Before you start
+
+**1. What must already be true.**
+
+- The system is deployed (`docs/deployment.md`), with a staging copy on a Neon
+  branch. Every step here is tried on **staging**, never first on production.
+- The owner has said yes (above).
+
+**2. Read these first:**
+
+| Read | Why |
+| --- | --- |
+| `00-decisions.md`, D27 | One church, one database. Earlier versions of this phase moved churches between databases; that is gone. |
+| `docs/deployment.md` | Where everything runs, and the database roles. |
+| `docs/runbooks/restore.md` | The restore procedure this phase adds to. |
+| `docs/hardening.md` | What is already checked, so you don't redo it. |
+
+**3. Tools you will install** (each step says when): `k6` for load tests
+(<https://k6.io>), `age` for encrypting backups (<https://age-encryption.org>),
+`pg_dump` and `pg_restore` matching the production Postgres version.
+
+**4. The loop for every step** is the same as every phase (`README.md` §2),
+with one addition: anything you change on staging or production, write down
+in the step's runbook with the date.
+
+---
+
+## What you are building, in plain words
+
+Nothing a church member will see. Four kinds of insurance:
+
+1. **Speed under load** — the registration form stays quick when two hundred
+   visitors fill it in on a Sunday morning.
+2. **Backups you have actually restored** — a backup never restored is a hope,
+   not a backup.
+3. **(Removed)** — moving one church between databases. See 10.3.
+4. **Alarms** — the owner's phone buzzes when the site is down, messages are
+   failing, or the SMS credit is running out.
+
+## The steps at a glance
+
+| Step | What | You are done when |
 | --- | --- | --- |
-| 10.1 | Performance and load | 6.6 |
-| 10.2 | Backups and restore drill | 6.8 |
-| 10.3 | Per-church export, restore, move and offboarding | 6.8a |
-| 10.4 | Monitoring and alerts | 6.9 |
-| 10.5 | Phase check | part of 6.5 and 6.13 |
+| 10.1 | Performance and load | The Sunday load test passes on staging. |
+| 10.2 | Backups and the restore drill | A backup was restored into a scratch copy and checked, and it is written down. |
+| 10.3 | *Removed by D27* | — |
+| 10.4 | Monitoring and alerts | Every alert was triggered on purpose once, and arrived. |
+| 10.5 | Phase check | Every box ticked. |
 
 ---
 
 ## 10.1 — Performance and load
 
-1. **Indexes:** run `EXPLAIN ANALYZE` on the default query of every list page
-   (People, Members, Transactions, Activity, Applications) with 10× today's
-   data (write a seed option `--scale 10`). Anything showing `Seq Scan` on a
-   big table gets an index, in a migration with a comment saying which page needs it.
-2. **Sunday peak:** a `k6` script `load/registration.js` simulating 200
-   visitors going through the form over 10 minutes (create, step saves,
-   drafts, submit) against staging. Target: p95 < 400 ms for step saves and no errors.
-3. **Numbering under load:** 20 clerks × 20 expenses in parallel against
-   staging → 400 consecutive numbers (this repeats 4.4 on real infrastructure).
-4. **Connections:** at runtime the API uses Neon's **pooled** host for
-   `DATABASE_URL` and `DATABASE_URL_READONLY`, with Prisma's
-   `connection_limit` set to 5 each. If Prisma reports prepared-statement
-   errors through the pooler, add `pgbouncer=true` to those URLs (check
-   Neon's and Prisma's current docs when you deploy: this changes between
-   versions). Migrations use the **direct** host (`DIRECT_DATABASE_URL`).
+**Goal.** The busy pages and the Sunday form stay fast with ten times today's
+data and a Sunday's crowd.
 
-**Commit:** "Index the list pages for ten times today's data"; "Add a load
-test for Sunday registrations".
+**Do.**
 
----
+1. **More data to test with.** Add a `--scale <n>` option to
+   `apps/api/prisma/demo.ts` that multiplies the people, registrations and
+   finance entries it writes. On a **local** database:
+   `npm run db:reset && npm run db:seed && npm run db:demo -w @irca/api -- --scale 10`.
+2. **Find the slow queries.** For the default query of each list page —
+   Members, People (Admin), Transactions, Activity, Applications, and Outreach
+   Reached — run it with `explain analyze` in `psql`. Copy the query from the
+   service file, or turn on `LOG_LEVEL=debug` to see it. A `Seq Scan` on a big
+   table means a missing index: add it in a migration, with a comment naming
+   the page that needs it.
+3. **A Sunday, simulated.** Write `load/registration.js` for `k6`: 200 visitors
+   over 10 minutes, each starting a registration, saving each step, and
+   submitting. Run it against **staging** only:
+   `k6 run -e BASE_URL=https://<staging registration> load/registration.js`.
+   Target: 95% of step saves under 400 ms, and no errors.
+4. **Numbers under load.** 20 clerks recording 20 expenses each at the same
+   time on staging must produce 400 consecutive entry numbers with no gaps and
+   no repeats (the Phase 4 test, on real infrastructure).
+5. **Connections.** The API reaches Neon through its **pooled** host with a
+   pool of five per role (`prisma-clients.ts`). If Prisma reports
+   prepared-statement errors through the pooler, add `pgbouncer=true` to the
+   two pooled URLs — check Neon's and Prisma's current documentation first.
+6. **More than one API instance** needs the rate-limit counters out of memory
+   (`core/limits/rate-limit.guard.ts` says so). Only do this if load shows one
+   instance is not enough; otherwise write down that one was enough, and at
+   what load.
 
----
+**Check.** The `k6` summary meets the target; the list pages' `explain analyze`
+shows index scans; the numbering run has 400 consecutive numbers.
 
-## 10.2 — Backups and restore drill
-
-1. Neon keeps point-in-time history. **Check the restore window on the
-   current plan** and write it in `docs/deployment.md`.
-2. In addition, a scheduled GitHub Action runs nightly
-   `pg_dump --format=custom --enable-row-security` as `irca_backup`. That role
-   reads every church through its backup policy (2.4a) and can write nothing.
-   Without `--enable-row-security`, `pg_dump` refuses any table with row-level
-   security on. It then encrypts the dump with
-   `age` using a public key committed to the repository, and uploads it to object
-   storage (e.g. Cloudflare R2 or Backblaze B2) with 30-day retention. The
-   private key is held offline by the owner and one pastor.
-3. **Restore drill** (do it before launch, then every quarter): download last
-   night's dump, decrypt it, restore it into a scratch Neon branch, point a
-   local API at it, sign in, and check that yesterday's finance entries and
-   registrations are there. Write the date and the time it took in `docs/runbooks/restore.md`.
-
-**Commit:** "Back up the database nightly and write down how to restore it".
+**Commit.** "Index the list pages for ten times today's data"; "Add a load test
+for Sunday registrations".
 
 ---
 
----
+## 10.2 — Backups and the restore drill
 
-## 10.3 — Per-church export, restore, move and offboarding
+**Goal.** The church can lose its database and get it back, and someone has
+proven it.
 
-**Goal:** a church's data can be taken out, put back, moved to its own
-database, or removed, **without touching any other church**
-(`multi-tenancy.md`, sections 11, 13 and 14). These are CLI commands run by a
-dev. The same code backs a dev-console button later if wanted.
+**Do.**
 
-**Do**
+1. **Neon's own history.** Look up the restore window on the current Neon plan
+   and write it in `docs/deployment.md` and `docs/runbooks/restore.md`.
+2. **Give the backup role something to read.** Since D27, no migration grants
+   `irca_backup` anything, so a dump as that role fails today. Add a migration:
 
-1. **`church:export --church IRCA [--out dir]`**: for every tenant-plane
-   model (02 step 2.4b), in foreign-key order, stream the church's rows to
-   `<table>.jsonl` (through `registry.coreFor(church)`), plus `audit_events`
-   with `source = 'feature'`, and the church's control-plane rows: the
-   `churches` row, placement, modules, roles, role permissions, memberships and
-   membership roles, and for its users **only** id, name, email and status (never
-   password hashes or sessions). Also a `manifest.json` with row counts and a
-   SHA-256 per file, the schema migration name, and the time. Encrypt the whole
-   thing with `age`. Scheduled weekly per church by `forEachChurch`, uploaded next
-   to the nightly dump, and kept 8 weeks.
-2. **`church:import --church IRCA --from archive [--replace] [--target cluster]`**:
-   verifies the manifest and that the schema migration matches (refuse otherwise).
-   Puts the church in maintenance (`MOVING`). With `--replace`, deletes that
-   church's tenant-plane rows in reverse foreign-key order (as the owner role,
-   inside one transaction), then inserts the archive in foreign-key order,
-   verifies counts and checksums, and returns the church to `ACTIVE`.
-   **Never touches rows of any other church**: every statement is
-   `where church_id = $1`, and a test proves it.
-3. **Restoring one church from a point in time:** restore Neon's history into a
-   scratch branch → `church:export` against it → `church:import --replace` into
-   production. Write this in `docs/runbooks/restore-one-church.md`.
-4. **`church:move --church X --to <cluster>`**: the procedure in
-   `multi-tenancy.md` section 13 (maintenance → copy → verify → flip placement →
-   smoke → purge after 7 days with `church:purge --church X --cluster shared`,
-   which refuses unless the placement points elsewhere and an export from the
-   last 24 hours exists). Build and test it now against the e2e second cluster
-   (`irca_test_c2`), even though no church needs it yet. A tool that has never
-   run is not a migration path.
-5. **`church:offboard --church X`**: suspend, run a final export (handed to the
-   church), then schedule `church:delete` for 90 days later. That removes
-   tenant-plane rows, files, memberships and roles, deletes users who belong to
-   no other church, and records a platform audit event with row counts and no
-   personal data. `church:delete` refuses to run early without `--now` and a
-   typed confirmation of the church code.
+   ```sql
+   grant usage on schema public to irca_backup;
+   grant select on all tables in schema public to irca_backup;
+   alter default privileges for role irca_owner in schema public
+     grant select on tables to irca_backup;
+   -- A restore must know which migrations the dump contains.
+   do $$ begin
+     if to_regclass('public._prisma_migrations') is not null then
+       grant select on table _prisma_migrations to irca_backup;
+     end if;
+   end $$;
+   ```
 
-**Check:** export IRCA, import it into an empty local database, and compare
-counts and checksums. Then `--replace` TEST from its own export: IRCA's
-`updated_at` values are unchanged. Move TEST to `irca_test_c2`, and use the
-portal as TEST's admin (reads and writes work), then as IRCA's (unaffected).
+   The backup role reads everything, including the activity log and the
+   view-as log: that is what a backup is. It can write nothing.
+3. **A nightly dump, encrypted, kept off Neon.** A scheduled GitHub Action
+   (`.github/workflows/backup.yml`, `on: schedule`) that:
+   - runs `pg_dump --format=custom` as `irca_backup` against the direct host
+     (its URL is a GitHub secret, never in the repository);
+   - encrypts the file with `age`, to a public key committed in
+     `ops/backup.pub` (the private key is held offline by the owner and one
+     pastor, never on a server);
+   - uploads it to the object storage from Phase 8 (a separate bucket or
+     prefix, `backups/`) and keeps 30 days.
+4. **The restore drill** — before launch, then every three months:
+   1. download last night's dump and decrypt it with the private key;
+   2. restore it into a **new Neon branch** (never `main`) with `pg_restore`;
+   3. point a local API at that branch, sign in, and check that yesterday's
+      finance entries and registrations are there;
+   4. write the date, who did it, and how long it took in
+      `docs/runbooks/restore.md`, then delete the branch.
 
-**Commits:** "Export one church's data on its own"; "Restore one church
-without touching the others"; "Move a church to its own database"; "Offboard a
-church and delete its data after the grace period".
+**Check.** The Action has run on its schedule at least once; the drill is
+written down with a date; a second person has read `restore.md`.
+
+**Commit.** "Let the backup role read the database"; "Back up the database
+nightly, encrypted, and write down how to restore it".
 
 ---
+
+## 10.3 — Removed by D27
+
+This step used to export, restore, move and delete **one church** inside a
+database shared by many. Since D27 there is one church per deployment, so
+there is nothing to separate: backing up the church *is* backing up the
+database (10.2), and restoring one church *is* the restore drill.
+
+If the church ever wants all its data handed over, or a deployment shut down,
+that is the 10.2 dump plus the object storage bucket, handed over encrypted.
+Write a runbook for it only if it is asked for.
+
+The step number is kept so references to 10.4 stay correct.
 
 ---
 
 ## 10.4 — Monitoring and alerts
 
+**Goal.** The owner hears about a problem from an alert, not from a pastor on
+Sunday.
+
+**Do.** Set up each row, then trigger it on purpose once.
+
 | Watch | How | Alert to |
 | --- | --- | --- |
-| API `/health` every minute | an uptime monitor (UptimeRobot or Better Stack) | owner's phone/email |
-| Portal and registration home pages | same | same |
-| 5xx rate > 2% over 10 minutes | Sentry alert or a job reading `usage_daily` | owner |
-| An email reaching `FAILED` | a job every 15 minutes, which emails the dev (through the outbox itself, with a second provider or plain SMTP as fallback) | owner |
-| A job failing twice in a row (for any one church in a per-church job) | `job_runs` check in the same job | owner |
-| **Per church:** 5xx rate over 5% for 15 min, a church throttled more than 50 times in an hour, its email failures, its database share up more than 10 points in a week | a job reading `usage_daily` per church (`multi-tenancy.md`, section 12) | owner, naming the church |
-| Database above 80% of the plan's storage | the nightly snapshot compares `db.size_bytes` to a configured limit | owner |
+| API `/health` every minute | an uptime monitor (UptimeRobot or Better Stack, free tier) | owner's phone and email |
+| Portal and registration home pages | the same monitor | same |
+| More than 2% of requests failing over 10 minutes | a job reading `usage_daily` (`api.requests`, `api.errors.5xx`) every 10 minutes | owner |
+| An email given up on (`FAILED`) | a job every 15 minutes; it alerts by the outbox itself, with plain SMTP as a fallback in case email is what is broken | owner |
+| Any job failing twice in a row | the same job, reading `job_runs` | owner |
+| SMS credit below a floor | the hourly balance read from Phase 7 (`sms.balance`), against a setting `comms.balanceAlertFloor` | owner and the Communications lead |
+| SMS failing: more than 10% of a day's messages `FAILED` | a job reading `comms_recipients` | owner and the Communications lead |
+| Database over 80% of the plan's storage | the nightly snapshot compares `db.size_bytes` to a setting | owner |
 
-Logs are shipped to one log provider (e.g. Better Stack or Axiom) with
-`churchCode` indexed. The dev console's church page links to the log search
-pre-filtered to that church. Churches never see logs.
+Put the alerting jobs in `apps/api/src/core/jobs/scheduled-jobs.service.ts`,
+through `JobRunner`, and send the alerts as ordinary emails through the email
+outbox (plus SMS through Phase 7 for the credit alarm). Settings for the
+thresholds go in the `settings` table with defaults in code, like Membership's.
 
-**Commit:** "Alert when the system, or any one church, is down, failing,
-throttled, or filling up".
+**Logs.** Ship the API's log to one provider (Better Stack or Axiom) so they
+survive a restart; the dev console's Logs page keeps only the last few
+thousand lines in memory. Add the provider to `docs/deployment.md`.
 
----
+**Check.** Stop the staging API: the uptime alert arrives. Make a staging
+email fail on purpose: the alert arrives. Set the credit floor above the
+current balance: the alert arrives. Write each in the PR with its time.
+
+**Commit.** "Alert when the system is down, failing, or running out of credit";
+"Keep the server log where a restart cannot lose it".
 
 ---
 
 ## 10.5 — Phase check
 
-These were Phase 6's, and moved here with the work that satisfies them.
-
-- [ ] The load test passed on staging.
-- [ ] A restore drill was done and written down, including restoring one church on its own.
-- [ ] Monitors and alerts were triggered on purpose once, and arrived.
-- [ ] A per-church export and `--replace` import was run on staging without touching the other church.
-- [ ] `church:move` was run end to end against a second database.
-- [ ] Rate-limit fairness and per-church quotas behave as specified.
-- [ ] `docs/runbooks/restore.md` and `restore-one-church.md` exist and a second person has read them.
+- [ ] The owner said yes before this phase began.
+- [ ] The load test passed on staging, and the result is written down.
+- [ ] The backup role can read the database, and the nightly dump runs.
+- [ ] A restore drill was done and written down, with a date.
+- [ ] Every alert in 10.4 was triggered on purpose once, and arrived.
+- [ ] `docs/deployment.md` and `docs/runbooks/restore.md` are updated, and a second person has read them.
