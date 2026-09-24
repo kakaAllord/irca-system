@@ -88,13 +88,30 @@ export class MeService {
     return pending ? { '/admin/requests': pending } : {};
   }
 
-  /** "Church administrator · Finance clerk", for the sidebar's user row. */
+  /**
+   * "Church administrator · Chairperson, Praise team", for the sidebar's user
+   * row. A leader may hold no role at all (D28); what they lead is what they are.
+   */
   private async roleLabels(userId: string): Promise<string[]> {
-    const roles = await this.db.userRole.findMany({
-      where: { userId, role: { deletedAt: null } },
-      include: { role: true },
+    const user = await this.db.user.findUnique({
+      where: { id: userId },
+      include: {
+        roles: { where: { role: { deletedAt: null } }, include: { role: true } },
+        person: {
+          include: {
+            leaderships: {
+              where: { endedAt: null, department: { archivedAt: null } },
+              include: { department: true },
+            },
+          },
+        },
+      },
     });
-    return roles.map((r) => r.role.name).sort();
+    if (!user) return [];
+    return [
+      ...user.roles.map((r) => r.role.name).sort(),
+      ...(user.person?.leaderships ?? []).map((l) => `${l.title}, ${l.department.name}`).sort(),
+    ];
   }
 
   /** The church administrators. Names only. */
