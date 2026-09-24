@@ -13,6 +13,8 @@ export type EraseResult = {
   attendance: number;
   /** The departments they led or belonged to, ended or not. */
   departments: number;
+  /** The text messages sent to them, with their number and the words. */
+  messages: number;
   summariesRewritten: number;
   detailsCleared: number;
 };
@@ -29,7 +31,9 @@ export type EraseResult = {
  * What goes: the person, their registration and its answers (prayer requests
  * included), their notes, their moves along the journey, their application to
  * join, their class enrolment and attendance, and the departments they led or
- * belonged to (their account, if they had one, stays and loses its link).
+ * belonged to (their account, if they had one, stays and loses its link), and
+ * the text messages sent to them. A number that asked for no messages stays
+ * blocked, without their name: honouring a STOP outlives the record.
  *
  * What stays: the activity log's shape. Lines are kept, because the log is
  * what proves who did what, but the person's name is replaced with "[erased]"
@@ -95,6 +99,7 @@ export async function erasePerson(options: {
       departments:
         (await count('select 1 from department_leaders where person_id = $1', [person.id])) +
         (await count('select 1 from department_members where person_id = $1', [person.id])),
+      messages: await count('select 1 from comms_recipients where person_id = $1', [person.id]),
     };
 
     // The person goes first; everything that hangs off them follows by cascade.
@@ -102,6 +107,10 @@ export async function erasePerson(options: {
     const registrationErased = person.registrationId
       ? (await count('delete from registrations where id = $1', [person.registrationId])) > 0
       : false;
+
+    await owner.query('update comms_blocked_numbers set person_id = null where person_id = $1', [
+      person.id,
+    ]);
 
     // The log keeps its lines; the name in them does not.
     const summariesRewritten = person.fullName.trim()
@@ -154,6 +163,7 @@ export function reportErasure(result: EraseResult, dryRun: boolean): void {
   console.log(`  class enrolments      ${result.enrollments}`);
   console.log(`  attendance marks      ${result.attendance}`);
   console.log(`  departments           ${result.departments}`);
+  console.log(`  text messages         ${result.messages}`);
   console.log(`  log lines rewritten   ${result.summariesRewritten}`);
   console.log(`  log details cleared   ${result.detailsCleared}`);
   console.log('');

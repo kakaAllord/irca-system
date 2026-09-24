@@ -9,7 +9,7 @@ hand in the migrations, mostly the init migration.
 | Table | Phase | Owner / purpose | Special rules |
 | --- | --- | --- | --- |
 | `church` | 1 | The church's settings: code, name, timezone, currency. | Exactly one row (`check (id = 1)`). `code` frozen once finance entries exist (trigger `church_code_frozen`). Written by `church:setup`, changed in Dev → Settings. |
-| `users` | 1 | People who can sign in: email, name, phone, password hash, status. `person_id` (7) links the account to the person it belongs to. | Email stored normalised. `person_id` unique; set when someone is named a department leader, and what their leadership is found by. |
+| `users` | 1 | People who can sign in: email, name, phone, password hash, status. `person_id` (7) links the account to the person it belongs to. | Email stored normalised. `sms_opt_out` (7) is the Account page's switch. `person_id` unique; set when someone is named a department leader, and what their leadership is found by. |
 | `sessions` | 1 | Signed-in browsers: token hash, address, browser, impersonation link. | Raw token never stored. Revoked, then deleted 90 days later by the nightly job. |
 | `permissions` | 2 | Mirror of the permissions defined in code, with kind. | Written only by the registry sync; retired, not deleted. |
 | `module_state` | 2 | Which portals are turned on. | Turning one off keeps the row, the roles and the data. |
@@ -30,7 +30,7 @@ hand in the migrations, mostly the init migration.
 | `change_requests` | 4 | Requests to change a protected record (first user: finance entries), decided in Admin → Requests. | One pending per record. The decider is never the requester (check constraint). |
 | `finance_transactions` | 4 | Income and expense entries with their codes. | `delete`, `truncate` revoked. **Any** update refused by trigger `finance_txn_guard` unless it applies a newly approved change request. The number never changes, and a void is final. A month move is a void plus a new linked entry. |
 | `registrations` | 5 | Visitors' own answers (moved from the form's first database). | One per phone (partial unique index). Tokens preserved from before. |
-| `people` | 5 | The church's record of a person: stage, confirmed salvation and baptism, member number. | Member number unique. |
+| `people` | 5 | The church's record of a person: stage, confirmed salvation and baptism, member number. `lang`, `sms_opt_out*` (7): the language they are written to in, and whether they want messages. | Member number unique. `lang` backfilled from the registration and copied by the form from then on (D22). |
 | `person_stage_events` | 5 | History of stage moves. | |
 | `person_notes` | 5 | Notes, visits and calls. | Sensitive: only with `membership.people.read_sensitive`. |
 | `membership_applications` | 5 | Applications: review, approve, confirm. | One open per person. Confirmed after the probation period. |
@@ -43,6 +43,15 @@ hand in the migrations, mostly the init migration.
 | `departments` | 7 | The church's departments (D28), and the portal that belongs to each, if any (`module_key`). | Name unique; a portal belongs to one department (unique `module_key`), and a department portal is switched on only for its department. Archived, never deleted (`delete`, `truncate` revoked). |
 | `department_leaders` | 7 | Who leads each department, with their title. Named only by an administrator, and only a confirmed member. | One open leadership per person per department (partial unique index). Ended, never deleted (`delete`, `truncate` revoked); erased with the person. What a leader may do is worked out from these rows by the permission resolver, never from a role. |
 | `department_members` | 7 | Who is in each department, added by its leaders. Anyone in People. | Same as leaders: one open per person per department, ended, never deleted, erased with the person. |
+| `comms_audience_grants` | 7 | Which church-wide audiences a department may send to. Its own department is never a grant. | Given and taken back by Communications (`comms.audiences.manage`), audited. |
+| `comms_templates` | 7 | The words of a message: versions of one `family_id`, each draft → pending → active or rejected, later retired. | Retired, never deleted (`delete`, `truncate` revoked). Nobody approves their own. |
+| `comms_template_bodies` | 7 | One body per language (`en`, `sw`, `fr`), at most six segments. | Trigger `comms_template_body_guard`: only a draft's words can be written; after that a change is a new version. |
+| `comms_messages` | 7 | One send: the department (null for Communications), the audience as it was named, the template, the words, counts, segments and cost. | `delete`, `truncate` and `update` revoked, except `status`, `started_at`, `finished_at`, `cancelled_by_id`. |
+| `comms_recipients` | 7 | The SMS outbox, one row per number, which is also the delivery record: the number, the language, exactly what was sent, its status and Beem's id. | `delete`, `truncate` revoked; only the sending columns may change. Erased with the person. Numbers are masked unless the reader holds `membership.people.read_sensitive`. |
+| `comms_schedules` | 7 | Beats: an audience, two or more templates, days, time, jitter, next run. | Archived, never deleted. Sent through the same code as a manual send. |
+| `comms_blocked_numbers` | 7 | Numbers that replied STOP, or that the carrier says are dead. | Never messaged again. Kept, without the person's name, when the person is erased. |
+| `comms_inbound` | 7 | Every reply Beem passed on, exactly as it came. | Append-only for the application. |
+| `comms_beem_account` | 7 | The Beem key and secret, sealed with `BEEM_SETTINGS_KEY` (D26), the last four characters of the key, and the sender name. | Exactly one row (`check (id = 1)`). `select` revoked from `irca_readonly`. Never sent to a browser. |
 
 **Database roles:** `irca_owner` owns the schema and runs migrations and
 `person:erase`. `irca_app` is everything the API does, with the revokes above.

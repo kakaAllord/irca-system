@@ -64,10 +64,12 @@ model User {
   /// The person in People this account belongs to. Set when they are named a
   /// department's leader, which is what their leadership is looked up by (D28).
   personId          String?    @unique @map("person_id") @db.Uuid
+  /// They turned off the church's text messages on their Account page.
+  smsOptOut         Boolean    @default(false) @map("sms_opt_out")
   createdAt         DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  person      Person?    @relation(fields: [personId], references: [id], onDelete: SetNull)
+  person      Person?              @relation(fields: [personId], references: [id], onDelete: SetNull)
   roles       UserRole[]
   sessions    Session[]
   resetTokens PasswordResetToken[]
@@ -635,6 +637,17 @@ model Person {
   baptisedSetById String?     @map("baptised_set_by_id") @db.Uuid
   baptisedSetAt   DateTime?   @map("baptised_set_at") @db.Timestamptz(6)
 
+  /// The language they answered the registration form in, and are written
+  /// to in (D22). Copied from the form while it is linked; the office may
+  /// change it.
+  lang            String    @default("en") @db.VarChar(2)
+  /// They asked not to be sent messages: by replying STOP, through the office,
+  /// or on the form. Nothing is sent to them while it is set.
+  smsOptOut       Boolean   @default(false) @map("sms_opt_out")
+  smsOptOutAt     DateTime? @map("sms_opt_out_at") @db.Timestamptz(6)
+  /// 'reply' | 'office' | 'form'
+  smsOptOutSource String?   @map("sms_opt_out_source") @db.VarChar(10)
+
   memberNumber Int?      @map("member_number")
   confirmedAt  DateTime? @map("confirmed_at") @db.Timestamptz(6)
   createdById  String?   @map("created_by_id") @db.Uuid
@@ -650,6 +663,7 @@ model Person {
   account      User?
   leaderships  DepartmentLeader[]
   departments  DepartmentMember[]
+  messages     CommsRecipient[]
 
   @@unique([memberNumber])
   @@index([stage])
@@ -805,8 +819,12 @@ model Department {
   /// Kept, never deleted: its history of leaders, members and messages stays.
   archivedAt  DateTime? @map("archived_at") @db.Timestamptz(6)
 
-  leaders DepartmentLeader[]
-  members DepartmentMember[]
+  leaders   DepartmentLeader[]
+  members   DepartmentMember[]
+  grants    CommsAudienceGrant[]
+  templates CommsTemplate[]
+  messages  CommsMessage[]
+  schedules CommsSchedule[]
 
   @@map("departments")
 }
@@ -879,4 +897,250 @@ model ApiClient {
   revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(6)
 
   @@map("api_clients")
+}
+
+// ── Communications (Phase 7) ───────────────────────────────────────────────
+// A message, template, beat or grant names its department by department_id;
+// null means Communications itself (D21, D28). History is added to and never
+// rewritten: the migration takes update and delete away from the application
+// on what was sent, except the columns that move as sending proceeds.
+
+/// A department may use this church-wide audience. Its own department never
+/// needs one: its leaders can always reach it.
+model CommsAudienceGrant {
+  departmentId String   @map("department_id") @db.Uuid
+  /// 'church.people', 'church.members', 'church.staff', 'membership.class'…
+  audienceKey  String   @map("audience_key") @db.VarChar(60)
+  grantedById  String?  @map("granted_by_id") @db.Uuid
+  grantedAt    DateTime @default(now()) @map("granted_at") @db.Timestamptz(6)
+
+  department Department @relation(fields: [departmentId], references: [id])
+
+  @@id([departmentId, audienceKey])
+  @@map("comms_audience_grants")
+}
+
+enum TemplateStatus {
+  DRAFT
+  PENDING
+  ACTIVE
+  REJECTED
+  RETIRED
+}
+
+/// The words of a message, approved once and used many times. Changing an
+/// approved one makes the next version; the old one keeps sending until the
+/// new one is approved. Retired, never deleted.
+model CommsTemplate {
+  id            String         @id @default(uuid(7)) @db.Uuid
+  /// Every version of the same words shares it.
+  familyId      String         @map("family_id") @db.Uuid
+  version       Int            @default(1)
+  departmentId  String?        @map("department_id") @db.Uuid
+  name          String         @db.VarChar(80)
+  status        TemplateStatus @default(DRAFT)
+  /// The blanks its bodies use, worked out from them: ['first_name', 'date'].
+  fields        String[]       @default([])
+  supersedesId  String?        @map("supersedes_id") @db.Uuid
+  createdById   String         @map("created_by_id") @db.Uuid
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  submittedById String?        @map("submitted_by_id") @db.Uuid
+  submittedAt   DateTime?      @map("submitted_at") @db.Timestamptz(6)
+  decidedById   String?        @map("decided_by_id") @db.Uuid
+  decidedAt     DateTime?      @map("decided_at") @db.Timestamptz(6)
+  decisionNote  String?        @map("decision_note") @db.VarChar(500)
+
+  department Department?         @relation(fields: [departmentId], references: [id])
+  bodies     CommsTemplateBody[]
+  messages   CommsMessage[]
+
+  @@unique([familyId, version])
+  @@index([departmentId, status])
+  @@map("comms_templates")
+}
+
+/// One body per language. One approval covers all of them (D22).
+model CommsTemplateBody {
+  templateId String @map("template_id") @db.Uuid
+  /// 'en' | 'sw' | 'fr'
+  lang       String @db.VarChar(2)
+  /// Six segments at most.
+  body       String @db.VarChar(918)
+
+  template CommsTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@id([templateId, lang])
+  @@map("comms_template_bodies")
+}
+
+enum MessageStatus {
+  SCHEDULED
+  SENDING
+  SENT
+  PARTIAL
+  FAILED
+  CANCELLED
+}
+
+/// One send: now, at a set time, or from a beat.
+model CommsMessage {
+  id             String        @id @default(uuid(7)) @db.Uuid
+  departmentId   String?       @map("department_id") @db.Uuid
+  audienceKey    String        @map("audience_key") @db.VarChar(60)
+  audienceParams Json          @default("{}") @map("audience_params")
+  /// What the audience was called when it was sent: 'Everyone in Praise team'.
+  audienceName   String        @map("audience_name") @db.VarChar(200)
+  templateId     String?       @map("template_id") @db.Uuid
+  scheduleId     String?       @map("schedule_id") @db.Uuid
+  /// The words per language, as sent, before each person's blanks.
+  bodies         Json
+  /// What the sender typed into the blanks: event_name, date, time, venue.
+  fields         Json          @default("{}")
+  status         MessageStatus @default(SENDING)
+  scheduledFor   DateTime?     @map("scheduled_for") @db.Timestamptz(6)
+  recipientCount Int           @default(0) @map("recipient_count")
+  skippedCount   Int           @default(0) @map("skipped_count")
+  segments       Int           @default(0)
+  /// Segments × the price per segment when it was sent.
+  cost           Decimal       @default(0) @db.Decimal(14, 2)
+  /// Null when a beat sent it.
+  createdById    String?       @map("created_by_id") @db.Uuid
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  startedAt      DateTime?     @map("started_at") @db.Timestamptz(6)
+  finishedAt     DateTime?     @map("finished_at") @db.Timestamptz(6)
+  cancelledById  String?       @map("cancelled_by_id") @db.Uuid
+
+  department Department?      @relation(fields: [departmentId], references: [id])
+  template   CommsTemplate?   @relation(fields: [templateId], references: [id])
+  schedule   CommsSchedule?   @relation(fields: [scheduleId], references: [id])
+  recipients CommsRecipient[]
+
+  @@index([createdAt(sort: Desc)])
+  @@index([departmentId, createdAt(sort: Desc)])
+  @@index([status])
+  @@map("comms_messages")
+}
+
+enum RecipientStatus {
+  PENDING
+  SENDING
+  SENT
+  DELIVERED
+  FAILED
+  CANCELLED
+  SKIPPED_OPT_OUT
+  SKIPPED_NO_PHONE
+  SKIPPED_DUPLICATE
+}
+
+/// The outbox: one row per number, which is also the delivery record.
+model CommsRecipient {
+  id                String          @id @default(uuid(7)) @db.Uuid
+  messageId         String          @map("message_id") @db.Uuid
+  /// Erasing a person takes their rows with them (person:erase).
+  personId          String?         @map("person_id") @db.Uuid
+  userId            String?         @map("user_id") @db.Uuid
+  /// E.164, '+255712345678'. Empty when they had no usable number.
+  phone             String          @db.VarChar(20)
+  lang              String          @db.VarChar(2)
+  /// Exactly what they were sent, blanks filled and the way to stop added.
+  body              String          @db.VarChar(1200)
+  segments          Int             @default(1)
+  status            RecipientStatus @default(PENDING)
+  attempts          Int             @default(0)
+  nextAttemptAt     DateTime        @default(now()) @map("next_attempt_at") @db.Timestamptz(6)
+  providerMessageId String?         @map("provider_message_id") @db.VarChar(200)
+  lastError         String?         @map("last_error") @db.VarChar(500)
+  sentAt            DateTime?       @map("sent_at") @db.Timestamptz(6)
+  deliveredAt       DateTime?       @map("delivered_at") @db.Timestamptz(6)
+
+  message CommsMessage @relation(fields: [messageId], references: [id])
+  person  Person?      @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextAttemptAt])
+  @@index([messageId])
+  @@index([phone])
+  @@index([providerMessageId])
+  @@map("comms_recipients")
+}
+
+/// A beat: the same message on a rhythm, from one of two or more templates.
+model CommsSchedule {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  departmentId   String?   @map("department_id") @db.Uuid
+  name           String    @db.VarChar(80)
+  audienceKey    String    @map("audience_key") @db.VarChar(60)
+  audienceParams Json      @default("{}") @map("audience_params")
+  audienceName   String    @map("audience_name") @db.VarChar(200)
+  templateIds    String[]  @map("template_ids") @db.Uuid
+  fields         Json      @default("{}")
+  /// 1 = Monday … 7 = Sunday.
+  daysOfWeek     Int[]     @map("days_of_week")
+  /// 'HH:MM', in the church's timezone.
+  timeOfDay      String    @map("time_of_day") @db.VarChar(5)
+  jitterMinutes  Int       @default(0) @map("jitter_minutes")
+  startsOn       DateTime  @map("starts_on") @db.Date
+  endsOn         DateTime? @map("ends_on") @db.Date
+  isActive       Boolean   @default(true) @map("is_active")
+  lastRunAt      DateTime? @map("last_run_at") @db.Timestamptz(6)
+  nextRunAt      DateTime? @map("next_run_at") @db.Timestamptz(6)
+  /// Why the last run did not send, in words, if it did not.
+  lastError      String?   @map("last_error") @db.VarChar(500)
+  createdById    String    @map("created_by_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  /// Kept, never deleted: the messages it sent are what the church said.
+  archivedAt     DateTime? @map("archived_at") @db.Timestamptz(6)
+
+  department Department?    @relation(fields: [departmentId], references: [id])
+  messages   CommsMessage[]
+
+  @@index([isActive, nextRunAt])
+  @@map("comms_schedules")
+}
+
+/// A number that asked to be left alone, or that the carrier says is dead.
+model CommsBlockedNumber {
+  /// E.164.
+  phone     String   @id @db.VarChar(20)
+  /// 'replied STOP', 'invalid number', 'by hand'
+  reason    String   @db.VarChar(60)
+  personId  String?  @map("person_id") @db.Uuid
+  blockedAt DateTime @default(now()) @map("blocked_at") @db.Timestamptz(6)
+  note      String?  @db.VarChar(200)
+
+  @@map("comms_blocked_numbers")
+}
+
+/// Whatever Beem sent us — replies and delivery reports — exactly as it came.
+model CommsInbound {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  /// 'reply' | 'delivery'
+  kind       String   @db.VarChar(10)
+  phone      String   @default("") @db.VarChar(20)
+  body       String   @default("") @db.VarChar(1000)
+  receivedAt DateTime @default(now()) @map("received_at") @db.Timestamptz(6)
+  /// 'opted out', 'delivered', 'failed', 'kept', 'not understood'
+  action     String   @default("") @db.VarChar(40)
+  raw        Json
+
+  @@index([receivedAt(sort: Desc)])
+  @@map("comms_inbound")
+}
+
+/// The Beem account (D26). Exactly one row, a check constraint says so. The
+/// key and secret are sealed with BEEM_SETTINGS_KEY and never leave the API.
+model CommsBeemAccount {
+  id           Int      @id @default(1)
+  apiKeyEnc    Bytes    @map("api_key_enc")
+  secretKeyEnc Bytes    @map("secret_key_enc")
+  /// The last four characters of the key, so a person can tell which one is saved.
+  keyLast4     String   @map("key_last4") @db.VarChar(4)
+  /// The name a message comes from, as Beem registered it. At most 11 characters.
+  senderId     String   @map("sender_id") @db.VarChar(11)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  updatedById  String?  @map("updated_by_id") @db.Uuid
+
+  @@map("comms_beem_account")
 }
