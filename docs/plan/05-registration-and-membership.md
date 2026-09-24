@@ -421,7 +421,7 @@ never reaches a browser.
 
 1. Key format: `irk_` + 32 random bytes base64url. Store the SHA-256 and the
    first 8 characters as `keyPrefix`.
-2. CLI: `npm run cli -w @irca/api -- api-client:create --church IRCA --kind REGISTRATION --name "Registration form (production)"`
+2. CLI: `npm run cli -w @irca/api -- api-client:create --kind REGISTRATION --name "Registration form (production)"`
    prints the key **once**. `api-client:revoke --id …`.
 3. `@PublicClient('REGISTRATION')` decorator + `PublicClientGuard`: reads
    `Authorization: Bearer irk_…`, looks up the hash, and rejects if revoked or
@@ -539,27 +539,26 @@ never loses a row or a token.
 
 ```bash
 npm run cli -w @irca/api -- registrations:import \
-  --from "$OLD_DATABASE_URL" --church IRCA [--dry-run]
+  --from "$OLD_DATABASE_URL" [--dry-run]
 ```
 
 1. Read all rows from the old `registrations` table, in batches of 500 by `id`.
 2. For each, `insert … on conflict (token) do update set <every column> =
    excluded.<column> where registrations.updated_at < excluded.updated_at`,
-   with `church_id` set, `legacy_id = old.id`, and **`token`, `created_at`,
+   with `legacy_id = old.id`, and **`token`, `created_at`,
    `updated_at` and `submitted_at` copied exactly**. Disable the Prisma
-   `@updatedAt` behaviour by using raw SQL for this insert (with a `-- tenant:`
-   comment). This makes the command a **delta sync**: run it again and it
+   `@updatedAt` behaviour by using raw SQL for this insert. This makes the command a **delta sync**: run it again and it
    brings over only new and changed rows.
 3. Create the `Person` for each imported registration that has none (5.8's
    copy function), in the same batch transaction.
 4. At the end print a verification report and **exit non-zero if anything differs**:
-   - row counts by `status`, old vs new (for this church);
+   - row counts by `status`, old vs new;
    - `md5(string_agg(token || updated_at::text, ',' order by token))` old vs new;
    - 20 random tokens compared field by field;
    - the number of people created.
 5. `--dry-run` does everything inside a transaction and rolls it back.
 6. A reverse command, `registrations:export-back --to "$OLD_DATABASE_URL"
-   --church IRCA --since <iso time>`, copies rows **created or changed in the
+   --since <iso time>`, copies rows **created or changed in the
    new database after a moment** back into the old table (the same
    conflict-on-token rule). It is only for rollback (5.18).
 
@@ -878,22 +877,25 @@ is earning its place (see the comments in `insights.ts`).
 
 Do this on a **Sunday evening after the last service** (the lowest traffic of
 the week). Two people: one runs the commands, the other checks. Write the
-actual times into the PR as you go.
+actual times into the PR as you go. The step-by-step version to follow on the
+night is `docs/runbooks/cutover-registration.md`.
 
 **A week before**
 
 1. The API with Membership is deployed to production (Phase 6 deployment
    steps), the migrations applied, IRCA exists, Membership is enabled, and
    pastors have roles.
-2. `api-client:create --church IRCA --kind REGISTRATION --name "Registration form (production)"`.
-   Store the key in Vercel as `REGISTRATION_API_KEY` for **Production only**.
-   Create a second key for a **TEST** church and put it in **Preview**, so
-   preview deployments never write IRCA data.
-3. Set Vercel env `API_INTERNAL_URL` (production and preview), and
+2. `api-client:create --name "Registration form (production)"` (or Dev →
+   Settings → New key). Store the key in Vercel as `REGISTRATION_API_KEY` for
+   **Production only**. Make a second key on the **staging** API and put it,
+   with staging's `API_INTERNAL_URL`, in **Preview**, so preview deployments
+   never write the church's real data. (This used to be a TEST church in the
+   same database; since D27 there is none, and staging is the separate place.)
+3. Set Vercel env `API_INTERNAL_URL` for production, and
    `REGISTRATION_BACKEND=api` in **Preview** only. Open a preview deploy and
-   walk the whole form. The rows land in the TEST church.
+   walk the whole form. The rows land in staging.
 4. Import dry-run against production data, and then a real first import:
-   `registrations:import --from "$OLD_PROD_URL" --church IRCA`. The report
+   `registrations:import --from "$OLD_PROD_URL"`. The report
    must be all equal. Pastors check the Members page against what they know.
 
 **On the evening (T = start)**
@@ -911,7 +913,7 @@ actual times into the PR as you go.
 **Rollback** (only in the first 48 hours, and only for a real breakage):
 
 1. Re-grant writes on the old database.
-2. `registrations:export-back --to "$OLD_PROD_URL" --church IRCA --since <T+2>`.
+2. `registrations:export-back --to "$OLD_PROD_URL" --since <T+2>`.
 3. Set `REGISTRATION_BACKEND=db` and redeploy.
 4. Write down what broke, and fix it before trying again.
 
