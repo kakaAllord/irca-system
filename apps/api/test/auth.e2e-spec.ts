@@ -169,6 +169,17 @@ describe('signing in and out', () => {
     }
   });
 
+  it('answers with the safe headers, says nothing about itself, and allows no other site', async () => {
+    const res = await portal(app)
+      .get('/v1/auth/me')
+      .set('Origin', 'https://elsewhere.example')
+      .expect(401);
+    expect(res.headers['x-powered-by']).toBeUndefined();
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
+    expect(res.headers['strict-transport-security']).toMatch(/max-age=/);
+    expect(res.headers['access-control-allow-origin']).toBeUndefined();
+  });
+
   it('stores only a hash of the session token', async () => {
     const u = await createUser(db);
     const cookie = sessionCookie(await login(u.email, u.password).expect(200));
