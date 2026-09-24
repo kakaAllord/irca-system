@@ -78,9 +78,7 @@ export class DashboardService {
       applications: this.auth.has('membership.applications.read')
         ? await this.openApplications()
         : null,
-      followUp: this.auth.has('membership.discipleship.read')
-        ? await this.newConverts()
-        : null,
+      followUp: this.auth.has('membership.discipleship.read') ? await this.newConverts() : null,
       heard: tally(registrations.flatMap((r) => r.heard)),
       heardOtherCount: registrations.filter((r) => r.heardOtherText.trim()).length,
       incomplete: {
@@ -169,9 +167,7 @@ export class DashboardService {
   }
 
   private async newConverts() {
-    const sessions = await this.db.tx((tx) =>
-      setting(tx, 'membership.foundationSessions'),
-    );
+    const sessions = await this.db.tx((tx) => setting(tx, 'membership.foundationSessions'));
     const people = await this.db.client.person.findMany({
       where: { stage: { in: ['NEW_CONVERT', 'FOUNDATION_CLASS'] } },
       orderBy: { updatedAt: 'desc' },

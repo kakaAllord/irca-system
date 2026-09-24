@@ -82,10 +82,7 @@ export class UsageSnapshot {
   /** The number of each kind of thing there is, as gauges. */
   private async entities(): Promise<void> {
     const counts: [string, Prisma.Sql][] = [
-      [
-        'entities.people',
-        Prisma.sql`select count(*)::bigint as n from people`,
-      ],
+      ['entities.people', Prisma.sql`select count(*)::bigint as n from people`],
       [
         'entities.registrations.in_progress',
         Prisma.sql`select count(*)::bigint as n from registrations where status = 'in_progress'`,

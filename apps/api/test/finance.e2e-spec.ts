@@ -146,7 +146,6 @@ describe('the books: numbers, items and corrections', () => {
       expect(next.body.code).toBe('IRCA-EXP-2026-09-000002');
     });
 
-
     it('returns the first entry when the same submit arrives twice', async () => {
       const { cookie } = await church();
       const item = await newItem(cookie, 'Generator fuel');
@@ -268,9 +267,9 @@ describe('the books: numbers, items and corrections', () => {
       const item = await newItem(cookie, 'Generator fuel');
       await record(cookie, { kind: 'EXPENSE', expenseItemId: item.id }).expect(201);
 
-      await expect(
-        db.query(`update church set code = 'NEW' where id = 1`),
-      ).rejects.toThrow(/cannot change/);
+      await expect(db.query(`update church set code = 'NEW' where id = 1`)).rejects.toThrow(
+        /cannot change/,
+      );
     });
   });
 
@@ -496,9 +495,7 @@ describe('the books: numbers, items and corrections', () => {
       await portal(app)[route[0]](route[1], allowed.cookie).expect(200);
 
       // Someone in the same church holding every other finance permission.
-      const without = await alsoIn(
-        ALL_FINANCE.filter((p) => p !== permission),
-      );
+      const without = await alsoIn(ALL_FINANCE.filter((p) => p !== permission));
       await portal(app)[route[0]](route[1], without.cookie).expect(403);
     });
 
@@ -528,7 +525,6 @@ describe('the books: numbers, items and corrections', () => {
         .patch(`/v1/finance/expense-items/${item.id}`, { name: 'Renamed' }, viewer.cookie)
         .expect(403);
     });
-
   });
 
   describe('totals and downloads', () => {

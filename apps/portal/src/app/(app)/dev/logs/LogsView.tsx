@@ -71,11 +71,7 @@ export function LogsView({ timezone, isDev }: { timezone: string; isDev: boolean
 
   return (
     <>
-      <div
-        role="tablist"
-        aria-label="Which log"
-        className="mb-4 flex gap-1 border-b border-border"
-      >
+      <div role="tablist" aria-label="Which log" className="mb-4 flex gap-1 border-b border-border">
         <Tab id="server" current={tab} onSelect={setTab}>
           Server
         </Tab>
@@ -291,9 +287,7 @@ function ActionLog({ timezone, isDev }: { timezone: string; isDev: boolean }) {
 
       {error && <Alert tone="error">{error}</Alert>}
 
-      {!isDev && (
-        <p className="text-[11.5px] text-fg3">Your church only.</p>
-      )}
+      {!isDev && <p className="text-[11.5px] text-fg3">Your church only.</p>}
 
       {!rows ? (
         <Spinner />
@@ -321,7 +315,9 @@ function ActionLog({ timezone, isDev }: { timezone: string; isDev: boolean }) {
                   <span className="min-w-0 flex-1 text-[12.5px] text-fg">
                     {row.summary ?? row.action}
                   </span>
-                  <span className="shrink-0 text-[11.5px] text-fg2">{row.actor ?? 'The system'}</span>
+                  <span className="shrink-0 text-[11.5px] text-fg2">
+                    {row.actor ?? 'The system'}
+                  </span>
                 </button>
                 {open === row.id && (
                   <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 border-t border-border2 bg-bg px-4 py-2 text-[11.5px]">

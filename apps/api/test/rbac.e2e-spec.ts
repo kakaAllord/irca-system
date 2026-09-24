@@ -76,7 +76,6 @@ describe('what each person may do', () => {
     await portal(app).get('/v1/fixture/read', cookie).expect(200);
   });
 
-
   it('ignores a permission that is no longer in the code', async () => {
     await createChurch(db);
     const person = await createUserWithPermissions(db, ['admin.users.read']);

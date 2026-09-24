@@ -210,9 +210,7 @@ export class ImpersonationLogService {
     });
   }
 
-  private async roleLabels(
-    rows: { actorUserId: string; subjectUserId: string }[],
-  ) {
+  private async roleLabels(rows: { actorUserId: string; subjectUserId: string }[]) {
     const links = await this.db.client.userRole.findMany({
       where: {
         userId: { in: rows.flatMap((r) => [r.actorUserId, r.subjectUserId]) },
@@ -227,7 +225,6 @@ export class ImpersonationLogService {
     }
     return out;
   }
-
 }
 
 /** '24h', '7d', '30d', or a date. */

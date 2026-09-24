@@ -116,24 +116,15 @@ export class ReportsService {
   }
 
   private groupBy(kind: 'INCOME' | 'EXPENSE', year: number, month: number) {
-    return this.groupQuery(
-      kind,
-      sql`and t.period_year = ${year} and t.period_month = ${month}`,
-    );
+    return this.groupQuery(kind, sql`and t.period_year = ${year} and t.period_month = ${month}`);
   }
 
   private groupByRange(kind: 'INCOME' | 'EXPENSE', from: string, to: string) {
-    return this.groupQuery(
-      kind,
-      sql`and t.txn_date between ${from}::date and ${to}::date`,
-    );
+    return this.groupQuery(kind, sql`and t.txn_date between ${from}::date and ${to}::date`);
   }
 
   /** The same grouping for a month or a range; only the dates differ. */
-  private async groupQuery(
-    kind: 'INCOME' | 'EXPENSE',
-    period: Sql,
-  ): Promise<GroupRow[]> {
+  private async groupQuery(kind: 'INCOME' | 'EXPENSE', period: Sql): Promise<GroupRow[]> {
     const table = identifier(
       kind === 'INCOME' ? 'finance_income_sources' : 'finance_expense_items',
     );

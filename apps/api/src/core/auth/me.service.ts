@@ -103,9 +103,7 @@ export class MeService {
       where: { role: { systemKey: 'admin.administrator', deletedAt: null } },
       include: { user: true },
     });
-    return roles
-      .filter((r) => r.user.status === 'ACTIVE')
-      .map((r) => ({ name: r.user.fullName }));
+    return roles.filter((r) => r.user.status === 'ACTIVE').map((r) => ({ name: r.user.fullName }));
   }
 
   private async impersonation(): Promise<MeResponse['impersonation']> {

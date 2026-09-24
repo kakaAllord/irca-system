@@ -210,9 +210,7 @@ async function exportRegistrationsCommand(args: string[]) {
     options: { to: { type: 'string' }, church: { type: 'string' }, since: { type: 'string' } },
   });
   if (!values.to || !values.church || !values.since) {
-    throw new Error(
-      'Usage: registrations:export-back --to <url> --since <iso time>',
-    );
+    throw new Error('Usage: registrations:export-back --to <url> --since <iso time>');
   }
   await withApp((app) =>
     exportRegistrationsBack({

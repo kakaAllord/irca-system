@@ -74,18 +74,15 @@ export async function erasePerson(options: {
     // Counted before they go, so the report says what was actually erased.
     const before = {
       notes: await count('select 1 from person_notes where person_id = $1', [person.id]),
-      stageEvents: await count(
-        'select 1 from person_stage_events where person_id = $1',
-        [person.id],
-      ),
-      applications: await count(
-        'select 1 from membership_applications where person_id = $1',
-        [person.id],
-      ),
-      enrollments: await count(
-        'select 1 from foundation_enrollments where person_id = $1',
-        [person.id],
-      ),
+      stageEvents: await count('select 1 from person_stage_events where person_id = $1', [
+        person.id,
+      ]),
+      applications: await count('select 1 from membership_applications where person_id = $1', [
+        person.id,
+      ]),
+      enrollments: await count('select 1 from foundation_enrollments where person_id = $1', [
+        person.id,
+      ]),
       attendance: await count(
         `select 1 from foundation_attendance a
          join foundation_enrollments e on e.id = a.enrollment_id

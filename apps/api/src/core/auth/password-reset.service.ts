@@ -125,10 +125,7 @@ export class PasswordResetService {
     this.cls.set('sessionId', session.id);
     this.cls.set('userId', row.userId);
     this.cls.set('actorUserId', row.userId);
-    this.cls.set(
-      'permissions',
-      await this.permissions.forUser(row.userId),
-    );
+    this.cls.set('permissions', await this.permissions.forUser(row.userId));
     return { sessionToken };
   }
 }

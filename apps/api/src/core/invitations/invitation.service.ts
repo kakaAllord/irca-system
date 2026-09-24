@@ -227,8 +227,7 @@ export class InvitationService {
       email: invited.email,
       fullName: invited.fullName,
       inviterName: inviter?.fullName ?? 'Your church administrator',
-      roleSummary:
-        invited.roles.map((r) => r.role.name).join(' and ') || 'a member of the office',
+      roleSummary: invited.roles.map((r) => r.role.name).join(' and ') || 'a member of the office',
       needsPassword: !invited.passwordHash,
     };
   }

@@ -172,10 +172,7 @@ export function Terminal({ timezone }: { timezone: string }) {
         case 'follow': {
           follow.current = { since: new Date().toISOString() };
           setFollowing(true);
-          write(
-            [{ text: 'Following. Type stop, or press Escape, to end it.', tone: 'ok' }],
-            typed,
-          );
+          write([{ text: 'Following. Type stop, or press Escape, to end it.', tone: 'ok' }], typed);
           return poll();
         }
       }

@@ -25,7 +25,10 @@ export default async function LogsPage() {
         title="Logs"
         subtitle="What the server wrote, and what people did. Newest first."
       />
-      <LogsView timezone={me.church?.timezone ?? 'UTC'} isDev={can(me, 'dev.impersonations.read')} />
+      <LogsView
+        timezone={me.church?.timezone ?? 'UTC'}
+        isDev={can(me, 'dev.impersonations.read')}
+      />
     </>
   );
 }

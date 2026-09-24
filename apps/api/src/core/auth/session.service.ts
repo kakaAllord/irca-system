@@ -126,5 +126,4 @@ export class SessionService {
       data: { revokedAt: new Date(), revokeReason: reason },
     });
   }
-
 }

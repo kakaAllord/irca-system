@@ -216,11 +216,7 @@ export async function exportRegistrationsBack(options: {
 }
 
 /** Both sides, counted and fingerprinted. Exits non-zero if they differ. */
-async function report(
-  old: pg.Client,
-  db: PrismaDb,
-  code: string,
-): Promise<void> {
+async function report(old: pg.Client, db: PrismaDb, code: string): Promise<void> {
   const oldCounts = await old.query<{ status: string; count: string }>(
     'select status, count(*)::text as count from registrations group by status order by status',
   );

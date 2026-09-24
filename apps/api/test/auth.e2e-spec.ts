@@ -130,7 +130,6 @@ describe('signing in and out', () => {
     await portal(app).get('/v1/auth/me', cookie).expect(401);
   });
 
-
   it('refuses writes without the portal header, or from another origin', async () => {
     const server = request(app.getHttpServer());
     const noHeader = await server.post('/v1/auth/logout').expect(403);

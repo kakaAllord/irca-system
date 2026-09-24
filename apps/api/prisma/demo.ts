@@ -52,7 +52,8 @@ const chance = (p: number) => rand() < p;
 function some<T>(xs: readonly T[], min: number, max: number): T[] {
   const pool = [...xs];
   const out: T[] = [];
-  for (let n = int(min, max); n > 0 && pool.length; n--) out.push(pool.splice(int(0, pool.length - 1), 1)[0]!);
+  for (let n = int(min, max); n > 0 && pool.length; n--)
+    out.push(pool.splice(int(0, pool.length - 1), 1)[0]!);
   return out;
 }
 
@@ -70,7 +71,7 @@ function uuid7(at: Date): string {
   const r = () => Math.floor(rand() * 16).toString(16);
   const seq = counter.toString(16).padStart(3, '0').slice(-3);
   const tail = Array.from({ length: 12 }, r).join('');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-7${seq}-${((8 + Math.floor(rand() * 4)).toString(16) + r() + r() + r())}-${tail}`;
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-7${seq}-${(8 + Math.floor(rand() * 4)).toString(16) + r() + r() + r()}-${tail}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -106,11 +107,120 @@ const sundays = weekdays(0);
 // Arusha-flavoured name and place pools.
 // ---------------------------------------------------------------------------
 
-const FIRST_F = ['Neema', 'Grace', 'Joyce', 'Upendo', 'Happiness', 'Rehema', 'Anna', 'Esther', 'Mary', 'Zawadi', 'Glory', 'Sarah', 'Lucy', 'Editha', 'Prisca', 'Devotha', 'Sophia', 'Jackline', 'Asha', 'Tumaini', 'Hawa', 'Frida', 'Salome', 'Christina', 'Elizabeth', 'Doreen', 'Agnes', 'Beatrice', 'Consolata', 'Gladness'];
-const FIRST_M = ['Emmanuel', 'Daniel', 'Peter', 'John', 'Baraka', 'Elia', 'Joseph', 'Samuel', 'Godfrey', 'Frank', 'Nelson', 'Isaya', 'Amani', 'Nathan', 'Thomas', 'Method', 'Erick', 'Gideon', 'Julius', 'Wilson', 'Moses', 'Alfred', 'Bariki', 'Deogratias', 'Ibrahim', 'Michael', 'Hosea', 'Philemon', 'Lazaro', 'Onesmo'];
-const SURNAMES = ['Mollel', 'Laizer', 'Kimaro', 'Massawe', 'Shirima', 'Mushi', 'Urassa', 'Nnko', 'Swai', 'Temba', 'Lyimo', 'Meena', 'Sanka', 'Ndosi', 'Kileo', 'Mbise', 'Munisi', 'Saitoti', 'Olotu', 'Kivuyo', 'Marealle', 'Macha', 'Mtei', 'Nkya', 'Ngowi', 'Kessy', 'Chuwa', 'Minja', 'Moshi', 'Pallangyo'];
+const FIRST_F = [
+  'Neema',
+  'Grace',
+  'Joyce',
+  'Upendo',
+  'Happiness',
+  'Rehema',
+  'Anna',
+  'Esther',
+  'Mary',
+  'Zawadi',
+  'Glory',
+  'Sarah',
+  'Lucy',
+  'Editha',
+  'Prisca',
+  'Devotha',
+  'Sophia',
+  'Jackline',
+  'Asha',
+  'Tumaini',
+  'Hawa',
+  'Frida',
+  'Salome',
+  'Christina',
+  'Elizabeth',
+  'Doreen',
+  'Agnes',
+  'Beatrice',
+  'Consolata',
+  'Gladness',
+];
+const FIRST_M = [
+  'Emmanuel',
+  'Daniel',
+  'Peter',
+  'John',
+  'Baraka',
+  'Elia',
+  'Joseph',
+  'Samuel',
+  'Godfrey',
+  'Frank',
+  'Nelson',
+  'Isaya',
+  'Amani',
+  'Nathan',
+  'Thomas',
+  'Method',
+  'Erick',
+  'Gideon',
+  'Julius',
+  'Wilson',
+  'Moses',
+  'Alfred',
+  'Bariki',
+  'Deogratias',
+  'Ibrahim',
+  'Michael',
+  'Hosea',
+  'Philemon',
+  'Lazaro',
+  'Onesmo',
+];
+const SURNAMES = [
+  'Mollel',
+  'Laizer',
+  'Kimaro',
+  'Massawe',
+  'Shirima',
+  'Mushi',
+  'Urassa',
+  'Nnko',
+  'Swai',
+  'Temba',
+  'Lyimo',
+  'Meena',
+  'Sanka',
+  'Ndosi',
+  'Kileo',
+  'Mbise',
+  'Munisi',
+  'Saitoti',
+  'Olotu',
+  'Kivuyo',
+  'Marealle',
+  'Macha',
+  'Mtei',
+  'Nkya',
+  'Ngowi',
+  'Kessy',
+  'Chuwa',
+  'Minja',
+  'Moshi',
+  'Pallangyo',
+];
 
-const WARDS = ['Sombetini', 'Kaloleni', 'Levolosi', 'Sekei', 'Themi', 'Unga Limited', 'Ngarenaro', 'Daraja Mbili', 'Elerai', 'Moshono', 'Olasiti', 'Kimandolu', 'Lemara', 'Terrat', 'Sanawari'];
+const WARDS = [
+  'Sombetini',
+  'Kaloleni',
+  'Levolosi',
+  'Sekei',
+  'Themi',
+  'Unga Limited',
+  'Ngarenaro',
+  'Daraja Mbili',
+  'Elerai',
+  'Moshono',
+  'Olasiti',
+  'Kimandolu',
+  'Lemara',
+  'Terrat',
+  'Sanawari',
+];
 const AGE_GROUPS = ['under_18', '18_24', '25_34', '35_44', '45_54', '55_plus'];
 const HEARD = ['friend', 'social_media', 'radio', 'walked_past', 'crusade', 'family'];
 const VISIT = ['worship', 'prayer', 'first_time', 'invited', 'visiting_arusha'];
@@ -153,7 +263,14 @@ const audit: Record<string, unknown>[] = [];
 const usage = new Map<string, bigint>();
 
 /** One line in the activity log. */
-function logged(at: Date, actorUserId: string, action: string, entityType: string, entityId: string, summary: string) {
+function logged(
+  at: Date,
+  actorUserId: string,
+  action: string,
+  entityType: string,
+  entityId: string,
+  summary: string,
+) {
   audit.push({
     id: uuid7(at),
     source: 'feature',
@@ -192,7 +309,14 @@ async function writeHistory(staff: Staff) {
   const peopleRows: unknown[] = [];
   const stageEvents: unknown[] = [];
 
-  const STAGES = ['VISITOR', 'NEW_CONVERT', 'FOUNDATION_CLASS', 'AWAITING_BAPTISM', 'MEMBERSHIP_REVIEW', 'CONFIRMED_MEMBER'] as const;
+  const STAGES = [
+    'VISITOR',
+    'NEW_CONVERT',
+    'FOUNDATION_CLASS',
+    'AWAITING_BAPTISM',
+    'MEMBERSHIP_REVIEW',
+    'CONFIRMED_MEMBER',
+  ] as const;
 
   for (const sunday of sundays) {
     // Attendance grows slowly over the window, and Easter-ish months spike.
@@ -212,7 +336,9 @@ async function writeHistory(staff: Staff) {
         token: uuid7(at).replace(/-/g, '').slice(0, 32),
         lang,
         status: submitted ? 'submitted' : 'in_progress',
-        currentStep: submitted ? null : pick(['about-you', 'where-you-live', 'contact', 'walk-with-god']),
+        currentStep: submitted
+          ? null
+          : pick(['about-you', 'where-you-live', 'contact', 'walk-with-god']),
         furthestStep: submitted ? 'done' : pick(['about-you', 'where-you-live', 'contact']),
         heard: some(HEARD, 1, 2),
         fullname: name,
@@ -235,9 +361,23 @@ async function writeHistory(staff: Staff) {
         bapt: membershipPath ? chance(0.6) : null,
         marital: membershipPath ? pick(['single', 'married', 'widowed']) : '',
         ministries: membershipPath ? some(MINISTRIES, 0, 2) : [],
-        liked: chance(0.3) ? pick(['The worship was wonderful.', 'I felt at home.', 'The preaching was clear.', 'Everyone was welcoming.']) : '',
+        liked: chance(0.3)
+          ? pick([
+              'The worship was wonderful.',
+              'I felt at home.',
+              'The preaching was clear.',
+              'Everyone was welcoming.',
+            ])
+          : '',
         wantMore: membershipPath ? true : submitted ? false : null,
-        prayer: chance(0.25) ? pick(['Please pray for my family.', 'Pray for my studies.', 'Pray for healing for my mother.', 'Pray for work.']) : '',
+        prayer: chance(0.25)
+          ? pick([
+              'Please pray for my family.',
+              'Pray for my studies.',
+              'Pray for healing for my mother.',
+              'Pray for work.',
+            ])
+          : '',
         createdAt: at,
         updatedAt: at,
         submittedAt: submitted ? new Date(at.getTime() + int(4, 40) * 60_000) : null,
@@ -305,11 +445,28 @@ async function writeHistory(staff: Staff) {
         id: uuid7(at),
         personId: p.id,
         kind,
-        body: pick({
-          CALL: ['Called. Said she will come on Sunday.', 'Phone off, will try again.', 'Spoke briefly, asked for prayer.', 'Happy to hear from the church.'],
-          VISIT: ['Visited at home, met her husband.', 'Not at home, left a message with a neighbour.', 'Prayed with the family.', 'Home visit, shared about the foundation class.'],
-          NOTE: ['Asked about the choir.', 'Works night shifts, Sundays are hard.', 'Moving to Moshi next month.', 'Interested in baptism.'],
-        }[kind]),
+        body: pick(
+          {
+            CALL: [
+              'Called. Said she will come on Sunday.',
+              'Phone off, will try again.',
+              'Spoke briefly, asked for prayer.',
+              'Happy to hear from the church.',
+            ],
+            VISIT: [
+              'Visited at home, met her husband.',
+              'Not at home, left a message with a neighbour.',
+              'Prayed with the family.',
+              'Home visit, shared about the foundation class.',
+            ],
+            NOTE: [
+              'Asked about the choir.',
+              'Works night shifts, Sundays are hard.',
+              'Moving to Moshi next month.',
+              'Interested in baptism.',
+            ],
+          }[kind],
+        ),
         authorId: pick([staff.followup, staff.office]),
         createdAt: at,
       });
@@ -344,7 +501,10 @@ async function writeHistory(staff: Staff) {
       submittedById: chance(0.7) ? null : staff.office,
       decidedById: status === 'UNDER_REVIEW' ? null : staff.pastor,
       decidedAt: status === 'UNDER_REVIEW' ? null : decidedAt,
-      rejectReason: status === 'REJECTED' ? pick(['Still attending elsewhere.', 'Asked to wait until after the class.']) : null,
+      rejectReason:
+        status === 'REJECTED'
+          ? pick(['Still attending elsewhere.', 'Asked to wait until after the class.'])
+          : null,
       confirmedById: confirmedAt && confirmedAt <= today ? staff.pastor : null,
       confirmedAt: confirmedAt && confirmedAt <= today ? confirmedAt : null,
     });
@@ -352,7 +512,14 @@ async function writeHistory(staff: Staff) {
     if (confirmedAt && confirmedAt <= today) {
       confirmed.push({ id: p.id, at: confirmedAt });
       count(confirmedAt, 'membership.members.confirmed');
-      logged(confirmedAt, staff.pastor, 'membership.application.confirmed', 'person', p.id, `Confirmed ${p.name} as a member`);
+      logged(
+        confirmedAt,
+        staff.pastor,
+        'membership.application.confirmed',
+        'person',
+        p.id,
+        `Confirmed ${p.name} as a member`,
+      );
     }
   }
   await db.membershipApplication.createMany({ data: applications as never });
@@ -375,7 +542,9 @@ async function writeHistory(staff: Staff) {
       create: { key: 'membership:member_number', lastValue: memberNumber },
     });
   }
-  console.log(`  ${code}: ${applications.length} applications, ${confirmed.length} confirmed members`);
+  console.log(
+    `  ${code}: ${applications.length} applications, ${confirmed.length} confirmed members`,
+  );
 
   // -- the foundation class -------------------------------------------------
 
@@ -464,7 +633,14 @@ async function writeHistory(staff: Staff) {
     const row = await db.financeIncomeSource.upsert({
       where: { nameKey: key(name) },
       update: {},
-      create: { id: uuid7(start), name, nameKey: key(name), description, createdById: staff.mhazini, createdAt: start },
+      create: {
+        id: uuid7(start),
+        name,
+        nameKey: key(name),
+        description,
+        createdById: staff.mhazini,
+        createdAt: start,
+      },
     });
     incomeIds[name] = row.id;
   }
@@ -472,7 +648,14 @@ async function writeHistory(staff: Staff) {
     const row = await db.financeExpenseItem.upsert({
       where: { nameKey: key(name) },
       update: {},
-      create: { id: uuid7(start), name, nameKey: key(name), description, createdById: staff.mhazini, createdAt: start },
+      create: {
+        id: uuid7(start),
+        name,
+        nameKey: key(name),
+        description,
+        createdById: staff.mhazini,
+        createdAt: start,
+      },
     });
     expenseIds[name] = row.id;
   }
@@ -494,7 +677,19 @@ async function writeHistory(staff: Staff) {
   const txns: unknown[] = [];
   const posted: { id: string; code: string; at: Date; amount: string; label: string }[] = [];
 
-  function entry(kind: FinanceKind, date: Date, amount: number, opts: { source?: string; item?: string; method?: string; counterparty?: string; notes?: string; reference?: string }) {
+  function entry(
+    kind: FinanceKind,
+    date: Date,
+    amount: number,
+    opts: {
+      source?: string;
+      item?: string;
+      method?: string;
+      counterparty?: string;
+      notes?: string;
+      reference?: string;
+    },
+  ) {
     const year = date.getUTCFullYear();
     const month = date.getUTCMonth() + 1;
     const sk = sequenceKey(kind, year, month);
@@ -518,8 +713,12 @@ async function writeHistory(staff: Staff) {
       currency,
       incomeSourceId: opts.source ? incomeIds[opts.source] : null,
       expenseItemId: opts.item ? expenseIds[opts.item] : null,
-      method: opts.method ?? pick(['CASH', 'CASH', 'MOBILE_MONEY', 'MOBILE_MONEY', 'BANK_TRANSFER', 'CHEQUE']),
-      reference: opts.reference ?? (chance(0.5) ? `${pick(['MP', 'RC', 'CH'])}${int(10_000_000, 99_999_999)}` : null),
+      method:
+        opts.method ??
+        pick(['CASH', 'CASH', 'MOBILE_MONEY', 'MOBILE_MONEY', 'BANK_TRANSFER', 'CHEQUE']),
+      reference:
+        opts.reference ??
+        (chance(0.5) ? `${pick(['MP', 'RC', 'CH'])}${int(10_000_000, 99_999_999)}` : null),
       counterparty: opts.counterparty ?? null,
       notes: opts.notes ?? null,
       clientRequestId: uuid7(at),
@@ -532,19 +731,41 @@ async function writeHistory(staff: Staff) {
     return { id, code: txCode, at };
   }
 
-
   // Sunday collections, week after week.
   for (const sunday of sundays) {
     const age = (sunday.getTime() - start.getTime()) / (today.getTime() - start.getTime());
     const growth = 1 + age * 0.45;
-    entry('INCOME', sunday, Math.round((int(380_000, 760_000) * growth) / 1000) * 1000, { source: 'Sunday offering', method: 'CASH', counterparty: 'Sunday service' });
+    entry('INCOME', sunday, Math.round((int(380_000, 760_000) * growth) / 1000) * 1000, {
+      source: 'Sunday offering',
+      method: 'CASH',
+      counterparty: 'Sunday service',
+    });
     for (let t = int(3, 9) * (scale > 0.5 ? 1 : 0) + 1; t > 0; t--) {
-      entry('INCOME', sunday, Math.round((int(20_000, 300_000) * growth) / 1000) * 1000, { source: 'Tithe', counterparty: fullName(chance(0.5) ? 'female' : 'male') });
+      entry('INCOME', sunday, Math.round((int(20_000, 300_000) * growth) / 1000) * 1000, {
+        source: 'Tithe',
+        counterparty: fullName(chance(0.5) ? 'female' : 'male'),
+      });
     }
-    if (chance(0.45)) entry('INCOME', sunday, int(15_000, 120_000), { source: 'Thanksgiving', counterparty: fullName(chance(0.6) ? 'female' : 'male') });
-    if (chance(0.2)) entry('INCOME', sunday, int(50_000, 600_000), { source: 'Building fund', counterparty: 'Building committee' });
-    if (chance(0.12)) entry('INCOME', sunday, int(40_000, 250_000), { source: 'Missions offering', counterparty: 'Missions Sunday' });
-    if (chance(0.08)) entry('INCOME', sunday, int(200_000, 1_400_000), { source: 'Harambee', counterparty: pick(['Roofing harambee', 'Youth camp harambee', 'Chairs harambee']) });
+    if (chance(0.45))
+      entry('INCOME', sunday, int(15_000, 120_000), {
+        source: 'Thanksgiving',
+        counterparty: fullName(chance(0.6) ? 'female' : 'male'),
+      });
+    if (chance(0.2))
+      entry('INCOME', sunday, int(50_000, 600_000), {
+        source: 'Building fund',
+        counterparty: 'Building committee',
+      });
+    if (chance(0.12))
+      entry('INCOME', sunday, int(40_000, 250_000), {
+        source: 'Missions offering',
+        counterparty: 'Missions Sunday',
+      });
+    if (chance(0.08))
+      entry('INCOME', sunday, int(200_000, 1_400_000), {
+        source: 'Harambee',
+        counterparty: pick(['Roofing harambee', 'Youth camp harambee', 'Chairs harambee']),
+      });
   }
 
   // The bills, once a month, and the odd repair.
@@ -564,12 +785,26 @@ async function writeHistory(staff: Staff) {
     ];
     for (const [item, day, lo, hi] of fixed) {
       const on = billDay(day);
-      if (on) entry('EXPENSE', on, int(lo, hi), { item, method: pick(['BANK_TRANSFER', 'MOBILE_MONEY', 'CASH']), counterparty: item === 'Rent' ? 'Kilombero Properties' : undefined });
+      if (on)
+        entry('EXPENSE', on, int(lo, hi), {
+          item,
+          method: pick(['BANK_TRANSFER', 'MOBILE_MONEY', 'CASH']),
+          counterparty: item === 'Rent' ? 'Kilombero Properties' : undefined,
+        });
     }
     for (let n = int(2, 7); n > 0; n--) {
       const on = billDay(int(1, 28));
       if (!on) continue;
-      const item = pick(['Generator fuel', 'Sound equipment', 'Transport', 'Guest hospitality', 'Stationery', 'Repairs and maintenance', 'Children’s ministry', 'Charity and benevolence']);
+      const item = pick([
+        'Generator fuel',
+        'Sound equipment',
+        'Transport',
+        'Guest hospitality',
+        'Stationery',
+        'Repairs and maintenance',
+        'Children’s ministry',
+        'Charity and benevolence',
+      ]);
       entry('EXPENSE', on, int(25_000, 480_000), { item });
     }
   }
@@ -602,7 +837,12 @@ async function writeHistory(staff: Staff) {
       action: chance(0.35) ? 'VOID' : 'UPDATE',
       before: { amount: t.amount },
       proposed: { amount: (Number(t.amount) + int(-40_000, 40_000)).toFixed(2) },
-      reason: pick(['The receipt says a different figure.', 'Recorded against the wrong item.', 'Entered twice by mistake.', 'The date was keyed wrongly.']),
+      reason: pick([
+        'The receipt says a different figure.',
+        'Recorded against the wrong item.',
+        'Entered twice by mistake.',
+        'The date was keyed wrongly.',
+      ]),
       status: !settled ? 'PENDING' : approved ? 'APPROVED' : 'REJECTED',
       requestedById: staff.clerk,
       requestedAt: askedAt,
@@ -612,18 +852,33 @@ async function writeHistory(staff: Staff) {
       appliedAt: approved ? decidedAt : null,
     });
     count(askedAt, 'change_requests.created');
-    if (settled) count(decidedAt, approved ? 'change_requests.applied' : 'change_requests.rejected');
+    if (settled)
+      count(decidedAt, approved ? 'change_requests.applied' : 'change_requests.rejected');
   }
   await db.changeRequest.createMany({ data: requests as never });
 
   // -- the activity log, and the numbers the dev console draws --------------
 
   for (const t of some(posted, 200, 260)) {
-    logged(t.at, staff.clerk, 'finance.transaction.created', 'finance_transaction', t.id, `Recorded ${t.code} for ${t.amount}`);
+    logged(
+      t.at,
+      staff.clerk,
+      'finance.transaction.created',
+      'finance_transaction',
+      t.id,
+      `Recorded ${t.code} for ${t.amount}`,
+    );
   }
 
   const activity: unknown[] = [];
-  const signInUsers = [staff.admin, staff.pastor, staff.office, staff.followup, staff.clerk, staff.mhazini];
+  const signInUsers = [
+    staff.admin,
+    staff.pastor,
+    staff.office,
+    staff.followup,
+    staff.clerk,
+    staff.mhazini,
+  ];
   for (const day of allDays) {
     const dow = day.getUTCDay();
     const busy = dow === 0 ? 1.8 : dow === 6 ? 0.5 : 1;
@@ -649,7 +904,11 @@ async function writeHistory(staff: Staff) {
     gauge(day, 'auth.sessions.active', signedIn.length + int(0, 3));
 
     for (const userId of signedIn) {
-      activity.push({ userId, day: new Date(`${ymd(day)}T00:00:00Z`), requests: Math.round(requestsToday / signedIn.length) });
+      activity.push({
+        userId,
+        day: new Date(`${ymd(day)}T00:00:00Z`),
+        requests: Math.round(requestsToday / signedIn.length),
+      });
     }
 
     if (chance(0.15)) count(day, 'admin.invitations.sent', 1);
@@ -677,7 +936,11 @@ async function writeHistory(staff: Staff) {
     gauge(day, 'entities.modules.enabled', code === 'IRCA' ? 2 : 1);
     gauge(day, 'db.bytes.total', 4_000_000 + peopleSoFar * 5_400 + txnsSoFar * 2_900);
     gauge(day, 'db.share_pct', code === 'IRCA' ? int(6400, 7200) : int(400, 900));
-    gauge(day, 'change_requests.pending', requests.filter((r) => (r as { status: string }).status === 'PENDING').length);
+    gauge(
+      day,
+      'change_requests.pending',
+      requests.filter((r) => (r as { status: string }).status === 'PENDING').length,
+    );
   }
   await db.userActivityDaily.createMany({ data: activity as never, skipDuplicates: true });
 }
@@ -739,5 +1002,7 @@ await db.setting.upsert({
   create: { key: 'demo.generatedAt', value: { at: new Date().toISOString() } },
 });
 
-console.log(`done: ${usageRows.length} usage rows, ${audit.length} activity lines, ${jobs.length} job runs.`);
+console.log(
+  `done: ${usageRows.length} usage rows, ${audit.length} activity lines, ${jobs.length} job runs.`,
+);
 await db.$disconnect();

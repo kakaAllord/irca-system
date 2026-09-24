@@ -65,8 +65,7 @@ export default tseslint.config(
           patterns: [
             {
               group: ['**/core/database/prisma-clients*'],
-              message:
-                'Inject Db instead. Only core code uses the Prisma clients directly.',
+              message: 'Inject Db instead. Only core code uses the Prisma clients directly.',
             },
             {
               // Types (models, Prisma.*Input) are fine; a client instance is not.

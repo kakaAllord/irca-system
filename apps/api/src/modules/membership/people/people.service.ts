@@ -92,9 +92,9 @@ export class PeopleService {
 
     const counts = await this.query<Record<Tab, number>>(
       sql`       select ${join(
-         TABS.map((key) => sql`count(*) filter (where ${TAB_SQL[key]})::int as ${identifier(key)}`),
-         ', ',
-       )}
+        TABS.map((key) => sql`count(*) filter (where ${TAB_SQL[key]})::int as ${identifier(key)}`),
+        ', ',
+      )}
        from people p
        left join registrations r on r.id = p.registration_id
        where ${where}`,

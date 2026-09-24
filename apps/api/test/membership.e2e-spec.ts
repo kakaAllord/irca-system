@@ -270,9 +270,7 @@ describe('the Membership portal', () => {
     it('are the pastors’ to decide, and confirm only after the probation month', async () => {
       const { form, cookie } = await church();
       const { personId } = await registered(form);
-      const office = await also(
-        ALL.filter((p) => p !== 'membership.applications.decide'),
-      );
+      const office = await also(ALL.filter((p) => p !== 'membership.applications.decide'));
 
       const created = await portal(app)
         .post('/v1/membership/applications', { personId }, office)
@@ -338,7 +336,6 @@ describe('the Membership portal', () => {
       expect(person.body.stage).toBe('NEW_CONVERT');
     });
   });
-
 
   describe('sending someone their link', () => {
     it('gives the link and a WhatsApp message in their own language', async () => {

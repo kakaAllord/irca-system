@@ -317,5 +317,4 @@ describe('running a church: people, roles and portals', () => {
       .expect(410);
     await signIn(person.email, 'new long password here');
   });
-
 });

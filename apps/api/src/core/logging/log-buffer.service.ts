@@ -29,7 +29,14 @@ const LEVELS: Record<number, string> = {
   60: 'fatal',
 };
 
-const RANK: Record<string, number> = { trace: 10, debug: 20, info: 30, warn: 40, error: 50, fatal: 60 };
+const RANK: Record<string, number> = {
+  trace: 10,
+  debug: 20,
+  info: 30,
+  warn: 40,
+  error: 50,
+  fatal: 60,
+};
 
 /**
  * The last few thousand log lines, in memory, so the dev console can show what

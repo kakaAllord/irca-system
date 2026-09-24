@@ -150,7 +150,6 @@ describe('the registration form, served by the API', () => {
     expect((await form.get(`/v1/public/registrations/${token}`)).body.lang).toBe('fr');
   });
 
-
   it('refuses a request with no key, a made-up key, or a revoked one', async () => {
     const { form } = await church();
     const { token } = await start(form);
@@ -187,9 +186,7 @@ describe('the registration form, served by the API', () => {
 
     // One line in the log for the whole form, and nobody is the actor: the
     // visitor is not a user of this system.
-    const { rows } = await db.query(
-      `select action, actor_user_id from audit_events`,
-    );
+    const { rows } = await db.query(`select action, actor_user_id from audit_events`);
     expect(rows).toHaveLength(1);
     expect(rows[0].action).toBe('membership.registration.submitted');
     expect(rows[0].actor_user_id).toBeNull();

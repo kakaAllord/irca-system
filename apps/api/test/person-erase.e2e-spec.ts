@@ -50,10 +50,9 @@ describe('erasing one person, at their request', () => {
       [personId],
     );
     const groupId = randomUUID();
-    await db.query(
-      `insert into foundation_groups (id, name) values ($1, 'Thursday group')`,
-      [groupId],
-    );
+    await db.query(`insert into foundation_groups (id, name) values ($1, 'Thursday group')`, [
+      groupId,
+    ]);
     const enrollmentId = randomUUID();
     await db.query(
       `insert into foundation_enrollments (id, person_id, group_id) values ($1, $2, $3)`,
@@ -139,7 +138,6 @@ describe('erasing one person, at their request', () => {
     expect(await rows('select 1 from registrations')).toHaveLength(1);
     expect(await rows(`select 1 from audit_events where action = 'person.erased'`)).toHaveLength(0);
   });
-
 
   it('will not take a confirmation that is not the person id', async () => {
     await createChurch(db, 'IRCA', ['admin', 'membership']);

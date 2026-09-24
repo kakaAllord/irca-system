@@ -38,7 +38,6 @@ export class PermissionsGuard implements CanActivate {
       throw new AppError(403, ErrorCode.FORBIDDEN, 'You do not have access to this.', { required });
     }
 
-
     return true;
   }
 }

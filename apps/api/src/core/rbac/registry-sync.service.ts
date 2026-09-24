@@ -117,7 +117,5 @@ export class RegistrySync implements OnApplicationBootstrap {
 
 /** What Prisma hands a transaction callback on the core client. */
 type TxLike = Parameters<
-  Parameters<PrismaDb['$transaction']>[0] extends (tx: infer T) => unknown
-    ? (tx: T) => void
-    : never
+  Parameters<PrismaDb['$transaction']>[0] extends (tx: infer T) => unknown ? (tx: T) => void : never
 >[0];

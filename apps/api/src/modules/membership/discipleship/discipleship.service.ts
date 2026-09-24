@@ -182,9 +182,7 @@ export class DiscipleshipService {
 
   /** The class register: every open sign-up in a group, and each session's mark. */
   async register(groupId: string) {
-    const sessions = await this.db.tx((tx) =>
-      setting(tx, 'membership.foundationSessions'),
-    );
+    const sessions = await this.db.tx((tx) => setting(tx, 'membership.foundationSessions'));
     const rows = await this.db.client.foundationEnrollment.findMany({
       where: { groupId, droppedAt: null },
       include: { person: true, attendance: true },
@@ -213,9 +211,7 @@ export class DiscipleshipService {
 
   /** The five columns, each with its count and the first cards. */
   async board(groupId?: string) {
-    const sessions = await this.db.tx((tx) =>
-      setting(tx, 'membership.foundationSessions'),
-    );
+    const sessions = await this.db.tx((tx) => setting(tx, 'membership.foundationSessions'));
 
     const columns = await Promise.all(
       BOARD.map(async (stage) => {
@@ -303,11 +299,7 @@ export class DiscipleshipService {
    * Every session attended finishes the class. Someone not yet baptised moves
    * on to awaiting baptism; someone already baptised is ready to apply.
    */
-  private async finishIfDone(
-    tx: Tx,
-    enrollmentId: string,
-    sessions: number,
-  ) {
+  private async finishIfDone(tx: Tx, enrollmentId: string, sessions: number) {
     const enrollment = await tx.foundationEnrollment.findFirst({
       where: { id: enrollmentId },
       include: { attendance: true, person: { include: { registration: true } } },

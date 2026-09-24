@@ -74,10 +74,7 @@ export async function moveStage(
 }
 
 /** The stage someone was at before the latest move, for undoing a rejection. */
-export async function previousStage(
-  tx: Tx,
-  personId: string,
-): Promise<PersonStage | null> {
+export async function previousStage(tx: Tx, personId: string): Promise<PersonStage | null> {
   const last = await tx.personStageEvent.findFirst({
     where: { personId },
     orderBy: { at: 'desc' },

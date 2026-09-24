@@ -51,16 +51,11 @@ export class SessionGuard implements CanActivate {
         // Viewing as a clerk is being a clerk, with reading only.
         this.cls.set(
           'permissions',
-          this.permissions.readOnly(
-            await this.permissions.forUser(impersonation.subjectUserId),
-          ),
+          this.permissions.readOnly(await this.permissions.forUser(impersonation.subjectUserId)),
         );
       } else {
         this.cls.set('userId', user.id);
-        this.cls.set(
-          'permissions',
-          await this.permissions.forUser(user.id),
-        );
+        this.cls.set('permissions', await this.permissions.forUser(user.id));
       }
     }
 

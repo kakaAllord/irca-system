@@ -17,7 +17,10 @@ export class HealthService {
     const tables = await this.db.client.$queryRaw<{ table: string; bytes: bigint }[]>`
       select relname as table, pg_total_relation_size(relid) as bytes
       from pg_catalog.pg_statio_user_tables order by 2 desc limit 20`;
-    const outbox = await this.db.client.emailOutbox.groupBy({ by: ['status'], _count: { _all: true } });
+    const outbox = await this.db.client.emailOutbox.groupBy({
+      by: ['status'],
+      _count: { _all: true },
+    });
     const jobs = await this.db.client.$queryRaw<
       {
         job: string;
@@ -29,7 +32,9 @@ export class HealthService {
     >`
       select distinct on (job) job, started_at, finished_at, ok, error
       from job_runs order by job, started_at desc`;
-    const errors = await this.db.client.$queryRaw<{ day: Date; requests: bigint; errors: bigint }[]>`
+    const errors = await this.db.client.$queryRaw<
+      { day: Date; requests: bigint; errors: bigint }[]
+    >`
       select day,
              sum(value) filter (where metric = 'api.requests')::bigint as requests,
              sum(value) filter (where metric = 'api.errors.5xx')::bigint as errors

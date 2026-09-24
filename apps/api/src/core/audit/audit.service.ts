@@ -64,10 +64,7 @@ function toJsonb(value: unknown): string | null {
  * API, see the init migration). So every write to this table, including this
  * class's own, goes through here: a plain insert with nothing returned.
  */
-export async function insertAuditEvent(
-  tx: Pick<Tx, '$executeRaw'>,
-  row: AuditRow,
-): Promise<void> {
+export async function insertAuditEvent(tx: Pick<Tx, '$executeRaw'>, row: AuditRow): Promise<void> {
   await tx.$executeRaw`
     insert into audit_events
       (id, source, actor_user_id, subject_user_id, impersonation_id, action,

@@ -36,9 +36,7 @@ export class ApplicationsService {
   ) {}
 
   async list(status?: ApplicationStatus) {
-    const probationDays = await this.db.tx((tx) =>
-      setting(tx, 'membership.probationDays'),
-    );
+    const probationDays = await this.db.tx((tx) => setting(tx, 'membership.probationDays'));
     const [rows, grouped] = await Promise.all([
       this.db.client.membershipApplication.findMany({
         where: { ...(status ? { status } : { status: 'UNDER_REVIEW' }) },

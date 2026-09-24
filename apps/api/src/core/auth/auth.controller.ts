@@ -117,5 +117,4 @@ export class AuthController {
   admins(): Promise<{ name: string }[]> {
     return this.meService.administrators();
   }
-
 }

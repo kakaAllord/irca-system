@@ -62,8 +62,6 @@ describe('viewing as someone else', () => {
     expect(me.body.permissions.some((p: string) => p.endsWith('.manage'))).toBe(false);
   });
 
-
-
   it('will not view as yourself, or someone disabled or not yet signed up', async () => {
     const { admin, clerk } = await church();
     const invited = await createUser(db, { status: 'INVITED' });
@@ -85,7 +83,6 @@ describe('viewing as someone else', () => {
     await portal(app).post('/v1/impersonation', { subjectUserId: clerk.id }, cookie).expect(200);
     await portal(app).post('/v1/impersonation', { subjectUserId: clerk.id }, cookie).expect(403);
   });
-
 
   it('ends by itself, and on sign-out, and says which in the log', async () => {
     const { admin, clerk } = await church();
