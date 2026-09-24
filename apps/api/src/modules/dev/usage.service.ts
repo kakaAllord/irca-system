@@ -29,6 +29,17 @@ export class DevUsageService {
       where metric in (${join(metrics)})
         and day between ${from}::date and ${to}::date
       order by day`;
+    // Who was active is already one row per person per day; counting them is
+    // the figure, with nothing to keep in step.
+    if (metrics.includes('users.active')) {
+      rows.push(
+        ...(await this.db.client.$queryRaw<{ metric: string; day: Date; value: bigint }[]>`
+          select 'users.active' as metric, day, count(*)::bigint as value
+          from user_activity_daily
+          where day between ${from}::date and ${to}::date
+          group by day`),
+      );
+    }
     return metrics.map((metric) =>
       this.fill(
         metric,
@@ -79,6 +90,59 @@ export class DevUsageService {
     };
   }
 
+  /**
+   * The routes that are busiest and the ones that are slowest, over the last
+   * `days`. Both come from the same two counters per route, so a route that
+   * is slow but rarely called is not buried under one that is merely busy.
+   */
+  async routes(days: number) {
+    const rows = await this.db.client.$queryRaw<{ metric: string; value: bigint }[]>`
+      select metric, sum(value)::bigint as value from usage_daily
+      where (metric like 'api.route.%' or metric like 'api.route_ms.%')
+        and day > current_date - ${days}::int
+      group by metric`;
+    const calls = new Map<string, number>();
+    const time = new Map<string, number>();
+    for (const row of rows) {
+      if (row.metric.startsWith('api.route_ms.')) {
+        time.set(row.metric.slice('api.route_ms.'.length), Number(row.value));
+      } else {
+        calls.set(row.metric.slice('api.route.'.length), Number(row.value));
+      }
+    }
+    return [...calls.entries()]
+      .map(([route, n]) => ({
+        route,
+        calls: n,
+        // Routes counted before their time was, show no average rather than a wrong one.
+        averageMs: time.has(route) && n ? Math.round(time.get(route)! / n) : null,
+      }))
+      .sort((a, b) => b.calls - a.calls);
+  }
+
+  /**
+   * The last emails, for "did it go?". The address is cut down here, before
+   * it leaves the server: the console needs to tell two people apart, not to
+   * collect the church's address book.
+   */
+  async emails() {
+    const rows = await this.db.client.emailOutbox.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      select: {
+        id: true,
+        toEmail: true,
+        template: true,
+        status: true,
+        attempts: true,
+        lastError: true,
+        createdAt: true,
+        sentAt: true,
+      },
+    });
+    return rows.map(({ toEmail, ...row }) => ({ ...row, to: maskEmail(toEmail) }));
+  }
+
   private fill(metric: string, days: string[], rows: { day: Date; value: bigint }[]): Series {
     const byDay = new Map(rows.map((r) => [r.day.toISOString().slice(0, 10), Number(r.value)]));
     const gauge = metricDef(metric)?.type === 'gauge';
@@ -111,4 +175,11 @@ export class DevUsageService {
       new Date(start + i * 86_400_000).toISOString().slice(0, 10),
     );
   }
+}
+
+/** ne***@gmail.com: enough to tell two people apart, not enough to write to. */
+export function maskEmail(email: string): string {
+  const at = email.lastIndexOf('@');
+  if (at < 1) return '***';
+  return `${email.slice(0, Math.min(2, at))}***${email.slice(at)}`;
 }

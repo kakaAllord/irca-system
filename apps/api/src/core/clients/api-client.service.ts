@@ -12,7 +12,8 @@ const TOUCH_EVERY_MS = 60_000;
 export const hashKey = (key: string) => createHash('sha256').update(key).digest('hex');
 
 /**
- * The keys a church's own app uses to reach the API.
+ * The keys the church's own apps use to reach the API: today, the
+ * registration form.
  *
  * Only the hash is stored, as with sessions and invitations: a leak of the
  * table is not a leak of the keys. The first characters are kept in the clear
@@ -65,10 +66,7 @@ export class ApiClientService {
     return count > 0;
   }
 
-  list(churchId?: string) {
-    return this.db.apiClient.findMany({
-      where: churchId ? {} : {},
-      orderBy: { createdAt: 'desc' },
-    });
+  list() {
+    return this.db.apiClient.findMany({ orderBy: { createdAt: 'desc' } });
   }
 }
