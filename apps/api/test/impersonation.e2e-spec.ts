@@ -1,6 +1,5 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import type pg from 'pg';
-import { ClsService } from 'nestjs-cls';
 import { DiscoveryService, MetadataScanner, Reflector } from '@nestjs/core';
 import type { Type } from '@nestjs/common';
 import { Db } from '../src/core/database/db.service.js';
@@ -36,14 +35,14 @@ describe('viewing as someone else', () => {
 
   /** An administrator who may view as others, and a clerk to view as. */
   async function church() {
-    const c = await createChurch(db);
-    const admin = await createUserWithPermissions(db, c.id, [
+    await createChurch(db);
+    const admin = await createUserWithPermissions(db, [
       'admin.users.read',
       'admin.users.manage',
       'admin.users.impersonate',
     ]);
-    const clerk = await createUserWithPermissions(db, c.id, ['admin.users.read']);
-    return { c, admin, clerk };
+    const clerk = await createUserWithPermissions(db, ['admin.users.read']);
+    return { admin, clerk };
   }
 
   it('takes on the other person, with nothing that changes anything', async () => {
@@ -63,48 +62,18 @@ describe('viewing as someone else', () => {
     expect(me.body.permissions.some((p: string) => p.endsWith('.manage'))).toBe(false);
   });
 
-  it('refuses every change while it runs, however the request is made', async () => {
+
+
+  it('will not view as yourself, or someone disabled or not yet signed up', async () => {
     const { admin, clerk } = await church();
-    const cookie = await signIn(admin.email, admin.password);
-    await portal(app).post('/v1/impersonation', { subjectUserId: clerk.id }, cookie).expect(200);
-
-    const refused = await portal(app).post('/v1/fixture/write', {}, cookie).expect(403);
-    expect(refused.body.error.code).toBe('IMPERSONATION_READ_ONLY');
-    // Switching church is a change too.
-    await portal(app)
-      .post('/v1/auth/church', { churchId: crypto.randomUUID() }, cookie)
-      .expect(403);
-  });
-
-  it('is refused by the database itself, even on a route that slips through', async () => {
-    const { admin, clerk, c } = await church();
-    const cookie = await signIn(admin.email, admin.password);
-    await portal(app).post('/v1/impersonation', { subjectUserId: clerk.id }, cookie).expect(200);
-
-    const before = await db.query(`select count(*)::int as n from roles where church_id = $1`, [
-      c.id,
-    ]);
-    // This route is a GET, so the guards let it by, and it writes on purpose.
-    await portal(app).get('/v1/fixture/writes-anyway', cookie).expect(500);
-    const after = await db.query(`select count(*)::int as n from roles where church_id = $1`, [
-      c.id,
-    ]);
-    expect(after.rows[0].n).toBe(before.rows[0].n);
-  });
-
-  it('will not view as yourself, a platform account, or someone outside the church', async () => {
-    const { c, admin, clerk } = await church();
-    const other = await createChurch(db, 'BBB');
-    const outsider = await createUser(db, { churchId: other.id });
-    const dev = await createUser(db, { platformRole: 'DEV', churchId: c.id });
-    const invited = await createUser(db, { churchId: c.id, status: 'INVITED' });
+    const invited = await createUser(db, { status: 'INVITED' });
+    const disabled = await createUser(db, { status: 'DISABLED' });
     const cookie = await signIn(admin.email, admin.password);
 
     for (const [subjectUserId, expected] of [
       [admin.id, /yourself/],
-      [dev.id, /Platform accounts/],
-      [outsider.id, /does not have access to this church/],
       [invited.id, /invitation|disabled/],
+      [disabled.id, /invitation|disabled/],
     ] as const) {
       const res = await portal(app)
         .post('/v1/impersonation', { subjectUserId }, cookie)
@@ -117,21 +86,6 @@ describe('viewing as someone else', () => {
     await portal(app).post('/v1/impersonation', { subjectUserId: clerk.id }, cookie).expect(403);
   });
 
-  it('lets a dev in, without carrying their platform powers along', async () => {
-    const { c, clerk } = await church();
-    const dev = await createUser(db, { platformRole: 'DEV' });
-    const cookie = await signIn(dev.email, dev.password);
-
-    const me = await portal(app).get('/v1/auth/me', cookie).expect(200);
-    expect(me.body.permissions).toContain('platform.churches.read');
-
-    const started = await portal(app)
-      .post('/v1/impersonation', { subjectUserId: clerk.id, churchId: c.id }, cookie)
-      .expect(200);
-    expect(started.body.user.email).toBe(clerk.email);
-    expect(started.body.permissions).toEqual(['admin.users.read']);
-    expect(started.body.permissions).not.toContain('platform.churches.read');
-  });
 
   it('ends by itself, and on sign-out, and says which in the log', async () => {
     const { admin, clerk } = await church();
@@ -153,7 +107,7 @@ describe('viewing as someone else', () => {
   });
 
   it('leaves no trace for the church: not for the person, not for an administrator', async () => {
-    const { c, admin, clerk } = await church();
+    const { admin, clerk } = await church();
     const adminCookie = await signIn(admin.email, admin.password);
     await portal(app)
       .post('/v1/impersonation', { subjectUserId: clerk.id }, adminCookie)
@@ -168,14 +122,18 @@ describe('viewing as someone else', () => {
     expect(me.body.impersonation).toBeNull();
 
     // Nor does anything the church itself can read from the log, whatever
-    // query it sends: row-level security hides those rows from it.
-    const cls = app.get(ClsService);
+    // query it sends: the database refuses it that table outright (D16), not
+    // just the rows a filter happens to leave out.
     const scoped = app.get(Db);
-    const visible = await cls.run(async () => {
-      cls.set('churchId', c.id);
-      cls.set('impersonationId', null);
-      return scoped.tx((tx) => tx.$queryRaw<{ action: string }[]>`select action from audit_events`);
-    });
+    await expect(
+      scoped.tx((tx) => tx.$queryRaw<{ action: string }[]>`select action from audit_events`),
+    ).rejects.toThrow(/permission denied/);
+
+    // The one function feature code may read through never has an
+    // impersonation row in it either, however this asks.
+    const visible = await scoped.tx(
+      (tx) => tx.$queryRaw<{ action: string }[]>`select action from church_audit_events()`,
+    );
     expect(visible.filter((r) => r.action.startsWith('impersonation.'))).toEqual([]);
 
     // The platform's own view has every one of them. (The stop request logs

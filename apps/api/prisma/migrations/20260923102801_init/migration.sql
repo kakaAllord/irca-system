@@ -1,3 +1,7 @@
+-- Fuzzy name matching for the finance catalogue's "did you mean one of these?"
+-- refusal, which is what stops one thing having five spellings.
+create extension if not exists pg_trgm;
+
 -- CreateEnum
 CREATE TYPE "UserStatus" AS ENUM ('INVITED', 'ACTIVE', 'DISABLED');
 
@@ -792,9 +796,139 @@ alter default privileges for role irca_owner in schema public
 -- The activity log is append-only. Nobody rewrites what happened.
 revoke update, delete, truncate on table audit_events from irca_app;
 
+-- Only devs may ever read who viewed the portal as whom (D16). That used to
+-- be one more thing row-level security did while it was scoping every table
+-- by church; now that there is one church, the table itself carries the one
+-- distinction that still matters, and the app's own SELECT goes entirely, so
+-- a raw query run as irca_app cannot see those rows by accident or on
+-- purpose. Reads go through two functions instead, owned by irca_owner and
+-- run with its privileges (security definer) regardless of who calls them —
+-- the same shape as pg_stat_statements in 6.3. `church_audit_events` can
+-- never return an impersonation row; `impersonation_audit_events` can only
+-- ever return one. Which of the two a request may call is still an ordinary
+-- permission check in the API (`dev.impersonations.read`), exactly as it was
+-- before — this only makes the boundary hold even when that check is missing
+-- or wrong.
+revoke select on table audit_events from irca_app;
+
+create function church_audit_events()
+returns table (
+  id uuid, source varchar, "actorUserId" uuid, "subjectUserId" uuid,
+  "impersonationId" uuid, action varchar, "entityType" varchar, "entityId" varchar,
+  summary varchar, before jsonb, after jsonb, meta jsonb, ip varchar,
+  "userAgent" varchar, "requestId" varchar, "createdAt" timestamptz
+)
+language sql security definer set search_path = public as $$
+  select id, source, actor_user_id, subject_user_id, impersonation_id, action,
+         entity_type, entity_id, summary, before, after, meta, ip, user_agent,
+         request_id, created_at
+  from audit_events
+  where action not like 'impersonation.%';
+$$;
+
+create function impersonation_audit_events()
+returns table (
+  id uuid, source varchar, "actorUserId" uuid, "subjectUserId" uuid,
+  "impersonationId" uuid, action varchar, "entityType" varchar, "entityId" varchar,
+  summary varchar, before jsonb, after jsonb, meta jsonb, ip varchar,
+  "userAgent" varchar, "requestId" varchar, "createdAt" timestamptz
+)
+language sql security definer set search_path = public as $$
+  select id, source, actor_user_id, subject_user_id, impersonation_id, action,
+         entity_type, entity_id, summary, before, after, meta, ip, user_agent,
+         request_id, created_at
+  from audit_events
+  where action like 'impersonation.%';
+$$;
+
+grant execute on function church_audit_events() to irca_app;
+grant execute on function impersonation_audit_events() to irca_app;
+
+-- The nightly usage snapshot (6.2) counts every table's rows, including this
+-- one, but only for a size on a graph — never a row's content, so it does not
+-- need the split above, only a way to count without SELECT.
+create function audit_events_count() returns bigint
+  language sql security definer set search_path = public as $$
+  select count(*) from audit_events;
+$$;
+
+grant execute on function audit_events_count() to irca_app;
+
 -- Finance entries are never deleted. They are voided or superseded, and the
 -- columns that may move are named one by one.
 revoke delete, truncate on table finance_transactions from irca_app;
+
+-- ---------------------------------------------------------------------------
+-- The rules the database keeps for itself.
+--
+-- None of these is about tenancy. They are the things the code must never be
+-- the only guard for: a number registered twice, an entry with no item, a
+-- request somebody decides for themselves.
+-- ---------------------------------------------------------------------------
+
+-- Registration is meant to happen once per phone. Partial, so the many
+-- in-progress rows with an empty phone do not collide with each other.
+create unique index registrations_phone_idx on registrations (dial, phone)
+  where phone <> '';
+
+alter table registrations
+  add constraint registrations_lang check (lang in ('en', 'sw', 'fr')),
+  add constraint registrations_status check (status in ('in_progress', 'submitted'));
+
+-- One open application per person, and one open foundation class sign-up.
+create unique index membership_applications_open_idx on membership_applications (person_id)
+  where status in ('UNDER_REVIEW', 'APPROVED');
+create unique index foundation_enrollments_open_idx on foundation_enrollments (person_id)
+  where completed_at is null and dropped_at is null;
+
+-- One open request per record, and nobody decides their own (D17).
+create unique index change_requests_one_open on change_requests (entity_type, entity_id)
+  where status = 'PENDING';
+alter table change_requests add constraint change_requests_not_self
+  check (decided_by_id is null or decided_by_id <> requested_by_id);
+
+alter table finance_transactions
+  add constraint finance_txn_amount_positive check (amount > 0),
+  add constraint finance_txn_one_target check (
+    (kind = 'INCOME'  and income_source_id is not null and expense_item_id  is null) or
+    (kind = 'EXPENSE' and expense_item_id  is not null and income_source_id is null)),
+  add constraint finance_txn_period_matches_date check (
+    period_year = extract(year from txn_date) and period_month = extract(month from txn_date)),
+  add constraint finance_txn_void_consistent check ((status = 'VOIDED') = (voided_at is not null));
+
+-- A posted entry changes only through a change request an administrator has
+-- approved (D17). Some things never change at all, and a void is final. The
+-- code's shape is checked here too, so a number can never be typed by hand.
+alter table finance_transactions
+  add constraint finance_txn_code_shape
+  check (code ~ '^[A-Z][A-Z0-9]{1,9}-(INC|EXP)-[0-9]{4}-[0-9]{2}-[0-9]{6,}$');
+
+create function finance_txn_guard() returns trigger as $$
+begin
+  if new.code <> old.code or new.kind <> old.kind or new.seq <> old.seq
+     or new.period_year <> old.period_year or new.period_month <> old.period_month
+     or new.currency <> old.currency
+     or new.created_by_id <> old.created_by_id or new.client_request_id <> old.client_request_id then
+    raise exception 'finance_transactions: the number and kind of % never change', old.code;
+  end if;
+  if old.status = 'VOIDED' then
+    raise exception 'finance_transactions: % was voided and cannot change', old.code;
+  end if;
+  if new.applied_request_id is not distinct from old.applied_request_id
+     or not exists (select 1 from change_requests r
+                    where r.id = new.applied_request_id
+                      and r.entity_type = 'finance_transaction' and r.entity_id = old.id::text
+                      and r.status = 'APPROVED' and r.applied_at is null) then
+    raise exception 'finance_transactions: % can only change through an approved change request', old.code;
+  end if;
+  if new.revision <> old.revision + 1 then
+    raise exception 'finance_transactions: revision of % must go up by one', old.code;
+  end if;
+  return new;
+end $$ language plpgsql;
+
+create trigger finance_txn_guard before update on finance_transactions
+  for each row execute function finance_txn_guard();
 
 -- The migration log is nothing the app needs.
 do $$

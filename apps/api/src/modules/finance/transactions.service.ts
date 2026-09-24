@@ -216,17 +216,25 @@ export class TransactionService {
       where: { entityType: 'finance_transaction', entityId: row.id },
       select: { id: true },
     });
-    const events = await this.db.client.auditEvent.findMany({
-      where: {
-        source: 'feature',
-        OR: [
-          { entityType: 'finance_transaction', entityId: code },
-          { entityType: 'change_request', entityId: { in: requests.map((r) => r.id) } },
-        ],
-      },
-      orderBy: { createdAt: 'asc' },
-      take: 100,
-    });
+    const events = await this.db.client.$queryRaw<
+      {
+        id: string;
+        actorUserId: string | null;
+        action: string;
+        summary: string | null;
+        createdAt: Date;
+      }[]
+    >`
+      select id, "actorUserId", action, summary, "createdAt"
+      from church_audit_events()
+      where source = 'feature'
+        and (
+          ("entityType" = 'finance_transaction' and "entityId" = ${code})
+          or ("entityType" = 'change_request' and "entityId" = any(${requests.map((r) => r.id)}::text[]))
+        )
+      order by "createdAt" asc
+      limit 100
+    `;
     const actors = await this.db.client.user.findMany({
       where: {
         id: { in: [...new Set(events.map((e) => e.actorUserId).filter(Boolean))] as string[] },
@@ -245,7 +253,7 @@ export class TransactionService {
 
   /** The entry a change request is about, inside the caller's transaction. */
   async rowById(tx: Tx, id: string): Promise<FinanceTransaction | null> {
-    return tx.financeTransaction.findFirst({ where: { id, churchId } });
+    return tx.financeTransaction.findFirst({ where: { id } });
   }
 
   private async rowByCode(code: string): Promise<FinanceTransaction> {
@@ -318,7 +326,7 @@ export class TransactionService {
   }
 
   private async church() {
-    const church = await this.db.client.church.findFirst({ where: { id: churchId } });
+    const church = await this.db.client.church.findFirst();
     if (!church) throw new AppError(404, ErrorCode.NOT_FOUND, 'No such church.');
     return church;
   }

@@ -63,11 +63,10 @@ export class PeopleService {
         : {}),
     };
 
-    const [memberships, total] = await Promise.all([
-      this.db.client.churchMembership.findMany({
+    const [people, total] = await Promise.all([
+      this.db.client.user.findMany({
         where,
         include: {
-          user: true,
           roles: { include: { role: true }, where: { role: { deletedAt: null } } },
           invitations: {
             where: { acceptedAt: null, revokedAt: null },
@@ -75,31 +74,29 @@ export class PeopleService {
             take: 1,
           },
         },
-        orderBy: { user: { fullName: 'asc' } },
+        orderBy: { fullName: 'asc' },
         skip: (query.page - 1) * query.pageSize,
         take: query.pageSize,
       }),
-      this.db.client.churchMembership.count({ where }),
+      this.db.client.user.count({ where }),
     ]);
 
-    const lastSeen = await this.sessions.lastSeenInChurch(
-      memberships.map((m) => m.userId),
-    );
+    const lastSeen = await this.sessions.lastSeen(people.map((m) => m.id));
     return {
       total,
       rows: await Promise.all(
-        memberships.map(async (m) => ({
-          userId: m.userId,
-          fullName: m.user.fullName,
-          email: m.user.email,
-          initials: initialsOf(m.user.fullName),
+        people.map(async (m) => ({
+          userId: m.id,
+          fullName: m.fullName,
+          email: m.email,
+          initials: initialsOf(m.fullName),
           status: m.status,
           roles: m.roles.map((r) => ({
             id: r.role.id,
             name: r.role.name,
             moduleKey: r.role.moduleKey,
           })),
-          lastActiveAt: lastSeen.get(m.userId)?.toISOString() ?? null,
+          lastActiveAt: lastSeen.get(m.id)?.toISOString() ?? null,
           invitation: m.invitations[0]
             ? {
                 expiresAt: m.invitations[0].expiresAt.toISOString(),
@@ -107,54 +104,54 @@ export class PeopleService {
                 sentCount: m.invitations[0].sentCount,
               }
             : null,
-          isYou: m.userId === this.auth.actorUserId,
-          canImpersonate: await this.canImpersonate(m.userId),
+          isYou: m.id === this.auth.actorUserId,
+          canImpersonate: await this.canImpersonate(m.id),
         })),
       ),
     };
   }
 
   async get(userId: string) {
-    const membership = await this.db.client.churchMembership.findUnique({
-      where: { userId },
+    const person = await this.db.client.user.findUnique({
+      where: { id: userId },
       include: {
-        user: true,
         roles: { include: { role: true }, where: { role: { deletedAt: null } } },
         invitations: { orderBy: { createdAt: 'desc' }, take: 1 },
       },
     });
-    if (!membership) throw new AppError(404, ErrorCode.NOT_FOUND, 'No such person here.');
-
-    const invitedBy = membership.invitedById
-      ? await this.db.client.user.findUnique({ where: { id: membership.invitedById } })
-      : null;
-    const recent = await this.db.client.auditEvent.findMany({
-      where: { actorUserId: userId, impersonationId: null },
-      orderBy: { createdAt: 'desc' },
-      take: 10,
-    });
+    if (!person) throw new AppError(404, ErrorCode.NOT_FOUND, 'No such person here.');
+    // Never impersonation (D16): church_audit_events() cannot return one of
+    // those rows however this is filtered.
+    const recent = await this.db.client.$queryRaw<
+      { createdAt: Date; action: string; summary: string | null }[]
+    >`
+      select "createdAt", action, summary
+      from church_audit_events()
+      where "actorUserId" = ${userId}
+      order by "createdAt" desc
+      limit 10
+    `;
 
     return {
       userId,
-      fullName: membership.user.fullName,
-      email: membership.user.email,
-      phone: membership.user.phone,
-      initials: initialsOf(membership.user.fullName),
-      status: membership.status,
-      joinedAt: membership.joinedAt?.toISOString() ?? null,
-      invitedBy: invitedBy?.fullName ?? null,
-      lastLoginAt: membership.user.lastLoginAt?.toISOString() ?? null,
-      roles: membership.roles.map((r) => ({
+      fullName: person.fullName,
+      email: person.email,
+      phone: person.phone,
+      initials: initialsOf(person.fullName),
+      status: person.status,
+      joinedAt: person.createdAt.toISOString(),
+      lastLoginAt: person.lastLoginAt?.toISOString() ?? null,
+      roles: person.roles.map((r) => ({
         id: r.role.id,
         name: r.role.name,
         moduleKey: r.role.moduleKey,
       })),
-      invitation: membership.invitations[0]
+      invitation: person.invitations[0]
         ? {
-            expiresAt: membership.invitations[0].expiresAt.toISOString(),
-            expired: membership.invitations[0].expiresAt.getTime() < Date.now(),
-            sentCount: membership.invitations[0].sentCount,
-            accepted: membership.invitations[0].acceptedAt !== null,
+            expiresAt: person.invitations[0].expiresAt.toISOString(),
+            expired: person.invitations[0].expiresAt.getTime() < Date.now(),
+            sentCount: person.invitations[0].sentCount,
+            accepted: person.invitations[0].acceptedAt !== null,
           }
         : null,
       isYou: userId === this.auth.actorUserId,
@@ -171,11 +168,11 @@ export class PeopleService {
 
   /** The roles someone holds, set to exactly this list. */
   async setRoles(userId: string, roleIds: string[]): Promise<void> {
-    const membership = await this.db.client.churchMembership.findUnique({
-      where: { userId },
-      include: { roles: { include: { role: true } }, user: true },
+    const person = await this.db.client.user.findUnique({
+      where: { id: userId },
+      include: { roles: { include: { role: true } } },
     });
-    if (!membership) throw new AppError(404, ErrorCode.NOT_FOUND, 'No such person here.');
+    if (!person) throw new AppError(404, ErrorCode.NOT_FOUND, 'No such person here.');
 
     const roles = await this.db.client.role.findMany({
       where: { id: { in: roleIds }, deletedAt: null },
@@ -188,7 +185,7 @@ export class PeopleService {
       );
     }
     const enabled = new Set(
-      (await this.db.client.churchModule.findMany({ where: { enabled: true } })).map(
+      (await this.db.client.moduleState.findMany({ where: { enabled: true } })).map(
         (m) => m.moduleKey,
       ),
     );
@@ -201,9 +198,9 @@ export class PeopleService {
       );
     }
 
-    const had = new Set(membership.roles.map((r) => r.roleId));
+    const had = new Set(person.roles.map((r) => r.roleId));
     const want = new Set(roleIds);
-    const removing = membership.roles.filter((r) => !want.has(r.roleId));
+    const removing = person.roles.filter((r) => !want.has(r.roleId));
     const adding = roles.filter((r) => !had.has(r.id)).length;
     if (adding + removing.length) this.usage.inc('admin.role_changes', adding + removing.length);
     if (removing.some((r) => r.role.systemKey === 'admin.administrator')) {
@@ -212,9 +209,9 @@ export class PeopleService {
 
     await this.db.tx(async (tx) => {
       for (const role of roles.filter((r) => !had.has(r.id))) {
-        await tx.membershipRole.create({
+        await tx.userRole.create({
           data: {
-            membershipId: membership.id,
+            userId: person.id,
             roleId: role.id,
             grantedById: this.auth.actorUserId,
           },
@@ -223,18 +220,18 @@ export class PeopleService {
           action: 'admin.role.granted',
           entityType: 'user',
           entityId: userId,
-          summary: `Gave ${membership.user.fullName} the ${role.name} role`,
+          summary: `Gave ${person.fullName} the ${role.name} role`,
         });
       }
       for (const link of removing) {
-        await tx.membershipRole.delete({
-          where: { membershipId_roleId: { membershipId: membership.id, roleId: link.roleId } },
+        await tx.userRole.delete({
+          where: { userId_roleId: { userId: person.id, roleId: link.roleId } },
         });
         await this.audit.recordIn(tx, {
           action: 'admin.role.revoked',
           entityType: 'user',
           entityId: userId,
-          summary: `Took the ${link.role.name} role from ${membership.user.fullName}`,
+          summary: `Took the ${link.role.name} role from ${person.fullName}`,
         });
       }
     });
@@ -244,43 +241,36 @@ export class PeopleService {
     if (userId === this.auth.actorUserId && !enabled) {
       throw new AppError(409, ErrorCode.CONFLICT, "You can't disable your own access.");
     }
-    const membership = await this.db.client.churchMembership.findUnique({
-      where: { userId },
-      include: { user: true },
-    });
-    if (!membership) throw new AppError(404, ErrorCode.NOT_FOUND, 'No such person here.');
+    const person = await this.db.client.user.findUnique({ where: { id: userId } });
+    if (!person) throw new AppError(404, ErrorCode.NOT_FOUND, 'No such person here.');
     if (!enabled) await this.guardLastAdministrator(userId);
 
     await this.db.tx(async (tx) => {
-      await tx.churchMembership.update({
-        where: { id: membership.id },
+      await tx.user.update({
+        where: { id: person.id },
         data: { status: enabled ? 'ACTIVE' : 'DISABLED' },
       });
       await this.audit.recordIn(tx, {
         action: enabled ? 'admin.user.enabled' : 'admin.user.disabled',
         entityType: 'user',
         entityId: userId,
-        summary: `${enabled ? 'Restored' : 'Disabled'} access for ${membership.user.fullName}`,
+        summary: `${enabled ? 'Restored' : 'Disabled'} access for ${person.fullName}`,
       });
     });
 
     if (!enabled) {
-      // Out of this church at once, and out of any view-as of them.
-      await this.sessions.revokeForChurch(userId, 'access-disabled');
+      // Signed out at once, and out of any view-as of them.
+      await this.sessions.revokeAllFor(userId, 'disabled');
     }
   }
 
-  /** A church must always keep someone who can give access to others. */
-  private async guardLastAdministrator(churchId: string, userId: string): Promise<void> {
-    const admins = await this.db.client.membershipRole.findMany({
-      where: {
-        role: { systemKey: 'admin.administrator', deletedAt: null },
-        membership: { status: 'ACTIVE' },
-      },
-      include: { membership: true },
+  private async guardLastAdministrator(userId: string): Promise<void> {
+    const admins = await this.db.client.userRole.findMany({
+      where: { role: { systemKey: 'admin.administrator', deletedAt: null } },
+      include: { user: true },
     });
-    const others = admins.filter((a) => a.membership.userId !== userId);
-    if (admins.some((a) => a.membership.userId === userId) && others.length === 0) {
+    const others = admins.filter((a) => a.userId !== userId && a.user.status === 'ACTIVE');
+    if (admins.some((a) => a.userId === userId) && others.length === 0) {
       throw new AppError(
         409,
         ErrorCode.LAST_ADMIN,
@@ -289,7 +279,7 @@ export class PeopleService {
     }
   }
 
-  private canImpersonate(churchId: string, subjectUserId: string): Promise<boolean> {
+  private canImpersonate(subjectUserId: string): Promise<boolean> {
     return this.impersonation.canImpersonate(subjectUserId);
   }
 }

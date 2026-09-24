@@ -52,21 +52,19 @@ describe('copying the live registrations across', () => {
   const run = (dryRun = false) =>
     importRegistrations({
       from: oldUrl,
-      churchCode: 'IRCA',
       dryRun,
       db: app.get(PrismaDb),
     });
 
   it('copies every row with its token and exact times, and a person for each', async () => {
-    const church = await createChurch(db, 'IRCA', ['admin', 'membership']);
+    await createChurch(db, 'IRCA', ['admin', 'membership']);
     await seedOld();
     await run();
 
     const { rows } = await db.query(
       `select token, lang, status, fullname, legacy_id,
               created_at::text as created, updated_at::text as updated, submitted_at::text as submitted
-       from registrations where church_id = $1 order by token`,
-      [church.id],
+       from registrations order by token`,
     );
     expect(rows).toHaveLength(2);
     expect(rows[0]).toMatchObject({
@@ -81,25 +79,23 @@ describe('copying the live registrations across', () => {
     expect(rows[0].updated).toBe('2026-06-01 09:20:00.654321+00');
     expect(rows[1].created).toBe('2026-06-02 10:00:00.000001+00');
 
-    const people = await db.query(`select count(*)::int as n from people where church_id = $1`, [
-      church.id,
-    ]);
+    const people = await db.query(`select count(*)::int as n from people`);
     expect(people.rows[0].n).toBe(2);
   });
 
   it('changes nothing when run again, and brings across only what changed', async () => {
-    const church = await createChurch(db, 'IRCA', ['admin', 'membership']);
+    await createChurch(db, 'IRCA', ['admin', 'membership']);
     await seedOld();
     await run();
     const before = await db.query(
-      `select token, updated_at::text as updated from registrations where church_id = $1 order by token`,
-      [church.id],
+      `select token, updated_at::text as updated
+       from registrations order by token`,
     );
 
     await run();
     const again = await db.query(
-      `select token, updated_at::text as updated from registrations where church_id = $1 order by token`,
-      [church.id],
+      `select token, updated_at::text as updated
+       from registrations order by token`,
     );
     expect(again.rows).toEqual(before.rows);
     const people = await db.query(`select count(*)::int as n from people`);

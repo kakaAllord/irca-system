@@ -69,8 +69,8 @@ export class PasswordResetService {
         },
       });
     });
-    this.usage.inc('auth.password_resets', 1, null);
-    await this.audit.recordNow({ action: 'auth.password_reset.requested', churchId: null });
+    this.usage.inc('auth.password_resets', 1);
+    await this.audit.recordNow({ action: 'auth.password_reset.requested' });
   }
 
   async reset(
@@ -115,20 +115,16 @@ export class PasswordResetService {
       });
     });
     // Everything signed in before now is signed out: passwordChangedAt does it.
-    await this.audit.recordNow({ action: 'auth.password_reset.completed', churchId: null });
+    await this.audit.recordNow({ action: 'auth.password_reset.completed' });
 
-    const churchId = await this.sessions.defaultChurchFor(row.userId);
     const { token: sessionToken, session } = await this.sessions.create({
       userId: row.userId,
       ip: context.ip,
       userAgent: context.userAgent,
     });
-    const user = await this.db.user.findUniqueOrThrow({ where: { id: row.userId } });
     this.cls.set('sessionId', session.id);
     this.cls.set('userId', row.userId);
     this.cls.set('actorUserId', row.userId);
-    this.cls.set('churchId', churchId);
-    this.cls.set('platformRole', user.platformRole);
     this.cls.set(
       'permissions',
       await this.permissions.forUser(row.userId),
