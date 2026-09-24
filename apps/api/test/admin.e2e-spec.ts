@@ -113,6 +113,12 @@ describe('running a church: people, roles and portals', () => {
       .expect(410);
   });
 
+  it('limits how many invitation links one address can look up, twenty a minute', async () => {
+    const describe = () => portal(app, '10.9.9.12').get('/v1/invitations/not-a-real-token');
+    for (let i = 0; i < 20; i++) await describe().expect(410);
+    await describe().expect(429);
+  });
+
   it('will not invite the same person twice, or hand out a role of a portal that is off', async () => {
     const { cookie, systemRole } = await church();
     const role = systemRole('admin.auditor');

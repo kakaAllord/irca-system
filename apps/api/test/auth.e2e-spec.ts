@@ -82,6 +82,25 @@ describe('signing in and out', () => {
     expect(res.body.error.code).toBe('RATE_LIMITED');
   });
 
+  it('limits forgot-password requests from one address, five per fifteen minutes', async () => {
+    const forgot = () =>
+      portal(app, '10.9.9.10').post('/v1/auth/forgot-password', { email: 'nobody@example.com' });
+    for (let i = 0; i < 5; i++) await forgot().expect(202);
+    await forgot().expect(429);
+  });
+
+  it('limits reset-password attempts from one address, ten per fifteen minutes', async () => {
+    const reset = () =>
+      portal(app, '10.9.9.11').post('/v1/auth/reset-password', {
+        token: 'not-a-real-token',
+        password: 'kilimanjaro sunrise tea',
+      });
+    // The token is wrong every time, so each call fails on its own before the
+    // eleventh ever reaches the handler.
+    for (let i = 0; i < 10; i++) await reset().expect(410);
+    await reset().expect(429);
+  });
+
   it('knows who is signed in, and forgets them after sign-out', async () => {
     const u = await createUser(db);
     await portal(app).get('/v1/auth/me').expect(401);
