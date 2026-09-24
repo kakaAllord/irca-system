@@ -4,10 +4,11 @@ A "portal" (a **module** in code) is a department's part of the system:
 Finance, Membership, and later Media, Outreach or Comms. This is the recipe.
 Finance (Phase 4) was built with it, and Membership (Phase 5) too.
 
-Before writing anything, fill in the brief in `docs/plan/06-dev-console-hardening-launch.md`,
-step 6.12: who is in the department, what they do weekly, what they may
-change, what they must never see, and what leaves the system. **Do not build a
-module from guesses.**
+Before writing anything, fill in `docs/modules/<key>-brief.md` with the
+questions in `docs/plan/06-dev-console-hardening-launch.md`, step 6.12: who
+is in the department, what they do weekly, what they may change, what they
+must never see, and what leaves the system. **Do not build a module from
+guesses.**
 
 ## 1. Describe it (`packages/shared/src/modules/<key>.ts`)
 
@@ -47,26 +48,20 @@ line puts it in the Portals page, the role editor and the sidebar.
 
 ## 2. Give it tables (`apps/api/prisma/schema.prisma`)
 
-- Every table has `churchId` and `@@map`/`@map` to snake_case names.
-- Add each model to `TENANT_MODELS` **and** `TENANT_PLANE_MODELS`, and each
-  table name to `TENANT_TABLES` and `TENANT_PLANE_TABLES`
-  (`apps/api/src/core/database/planes.ts`). A test fails if you forget.
-- References to people are plain `@db.Uuid` columns with **no relation**: a
-  church's records may not point at shared tables (see `multi-tenancy.md`,
-  section 13). References within the module are ordinary relations.
-- Create the migration with `--create-only`, then add by hand:
-
-  ```sql
-  alter table <table> enable row level security;
-  create policy <table>_tenant on <table> for all to irca_app, irca_readonly
-    using (church_id = app_church_id()) with check (church_id = app_church_id());
-  create policy <table>_core on <table> for all to irca_core using (true) with check (true);
-  create policy <table>_backup on <table> for select to irca_backup using (true);
-  ```
-
-  Add `revoke delete, truncate ... from irca_app` for anything that must never
-  be deleted, and a trigger for anything that must never change after the fact
-  (see `finance_txn_guard`). Then `npx prisma migrate dev`.
+- `@@map`/`@map` every model and column to snake_case names.
+- No `church_id`: this deployment serves one church (D27), and a second church
+  gets a database of its own. References to people and to other modules'
+  records are ordinary relations.
+- The application role and the read-only role get their grants on new tables
+  automatically (the default privileges in the migrations). What they must not
+  do is written into the migration by hand: create it with `--create-only`,
+  then add a `revoke delete, truncate ... from irca_app` for anything that
+  must never be deleted, and a trigger for anything that must never change
+  after the fact (see `finance_txn_guard`). Then `npx prisma migrate dev`.
+- A table that holds something a church must never read through a raw query
+  (as `audit_events` holds the view-as log) loses `select` for both runtime
+  roles and is read through a `security definer` function instead; see the
+  init migration's `church_audit_events()`.
 
 ## 3. Build the API (`apps/api/src/modules/<key>/`)
 
@@ -74,13 +69,12 @@ line puts it in the Portals page, the role editor and the sidebar.
 - **Every route** carries `@RequirePermission(...)` (or `@RequireAnyPermission`).
   The API refuses to start otherwise, and a `POST` guarded only by read
   permissions is refused too.
-- Services take `Db` and never a Prisma client. Single queries use
-  `db.client`; anything with several statements, and **all raw SQL**, uses
-  `db.tx`. Never pass a church id: the church comes from the request.
-  Raw SQL through `db.client` returns nothing and inserts nothing: the tenant
-  extension cannot see inside a raw query, and only the transaction tells
-  Postgres which church this is. Filter `church_id` in the SQL as well, with a
-  `-- tenant:` comment saying so.
+- Services take `Db` and never a Prisma client (lint refuses the import).
+  Single queries use `db.client`; anything with several statements uses
+  `db.tx`. Either way, `Db` hands out the read-only connection while someone
+  is being viewed as, so a GET that writes by mistake fails in the database.
+  Raw SQL is written with the `sql` tag from `core/database/sql.ts`, which
+  binds every value; the `Unsafe` variants are banned by lint.
 - Let Prisma create rows unless there is a reason not to: ids are UUID v7,
   which sort by creation time. A raw `insert` with `gen_random_uuid()` quietly
   breaks that.
@@ -115,11 +109,14 @@ line puts it in the Portals page, the role editor and the sidebar.
 
 ## 5. Prove it
 
-- A permission matrix test: each system role against every route, 2xx or 403
-  from a table in the test file, so a new route without a row fails.
-- A cross-church test: another church cannot read, search, export or change
-  any of it.
-- An impersonation test: every write route answers `IMPERSONATION_READ_ONLY`.
+- The permission matrix is generated: `apps/api/test/permission-matrix.e2e-spec.ts`
+  reads every route's declared permission and checks that holding everything
+  else is refused and holding only that is let through. A new module is in it
+  the moment its controller exists; its own tests say what the routes do.
+- Viewing as someone is covered the same way: `impersonation.e2e-spec.ts`
+  opens every GET route in the API on the read-only connection, so a page that
+  writes on read fails there. Write routes are refused with
+  `IMPERSONATION_READ_ONLY` by the guard, whatever the module.
 - One Playwright journey through the main task. Journeys run against a built
   portal, not `next dev`: in development the portal compiles routes on demand
   and Fast Refresh reloads the page, which cancels a navigation a journey has
@@ -128,6 +125,7 @@ line puts it in the Portals page, the role editor and the sidebar.
 
 ## 6. Write it down
 
-Update `docs/plan/appendix-database.md`, the metric labels in
-`docs/plan/06-dev-console-hardening-launch.md` (step 6.1), and
-`docs/what-works-now.md`.
+Update `docs/plan/appendix-database.md` and `docs/what-works-now.md`. Every
+metric the module counts goes into `packages/shared/src/usage-metrics.ts`
+with its label and unit; a test fails if the code counts one that is not
+listed, and the dev console's Usage pages draw from that list.
