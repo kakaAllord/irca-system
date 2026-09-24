@@ -51,15 +51,20 @@ test.describe('recording money', () => {
     await signIn(page, CLERK);
 
     await page.getByRole('link', { name: 'Transactions' }).click();
-    await page.getByRole('button', { name: '+ Record expense' }).click();
     // The form is the right-hand drawer, as every other form in the portal is.
-    await expect(page.getByRole('dialog')).toContainText('Record an expense');
+    // A click that lands before the page has hydrated opens nothing, so it is
+    // tried again the way a person would, until the drawer is there.
+    await expect(async () => {
+      await page.getByRole('button', { name: '+ Record expense' }).click();
+      await expect(page.getByRole('dialog')).toContainText('Record an expense', { timeout: 1_000 });
+    }).toPass();
 
     // Typing a name nothing matches offers to create it, without leaving the form.
     await createItem(page, 'Expense item', item);
 
     await page.getByLabel(/^Amount/).fill('150000');
-    await page.getByText('Cash', { exact: true }).click();
+    // Inside the drawer: the list behind it shows "Cash" too, once any entry exists.
+    await page.getByRole('dialog').getByText('Cash', { exact: true }).click();
     await page.getByLabel('Paid to').fill('Total Energies Njiro');
     await page.getByRole('button', { name: 'Save expense' }).click();
 
