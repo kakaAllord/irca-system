@@ -30,7 +30,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * One JSON line per request in production, readable lines in development.
  *
  * Every line carries the request id and, once the session guard has run, who
- * the request was for and which church. That is what lets one request be
+ * the request was for. That is what lets one request be
  * followed through the logs, including who was really behind an impersonation.
  * Credentials never reach a log line: cookies, authorisation headers,
  * Set-Cookie and any password field are redacted before writing.

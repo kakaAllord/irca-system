@@ -31,7 +31,7 @@ export class JobRunner {
 
     const run = await this.db.jobRun.create({ data: { job } });
     try {
-      const stats = await this.inContext(null, fn);
+      const stats = await this.inContext(fn);
       await this.db.jobRun.update({
         where: { id: run.id },
         data: {
@@ -51,7 +51,7 @@ export class JobRunner {
     }
   }
 
-  private inContext<T>(churchId: string | null, fn: () => Promise<T>): Promise<T> {
+  private inContext<T>(fn: () => Promise<T>): Promise<T> {
     return this.cls.run(async () => {
       this.cls.set('ip', null);
       this.cls.set('userAgent', null);

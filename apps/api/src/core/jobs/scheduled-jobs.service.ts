@@ -20,7 +20,7 @@ export class ScheduledJobs {
     private readonly snapshot: UsageSnapshot,
   ) {}
 
-  /** How much of the database each church uses, before anyone is awake. */
+  /** How big each table is, and what there is, measured before anyone is awake. */
   @Cron('0 2 * * *', { name: 'usage-snapshot', timeZone: 'Africa/Dar_es_Salaam' })
   snapshotUsage() {
     return this.jobs.run('usage-snapshot', () => this.snapshot.run());

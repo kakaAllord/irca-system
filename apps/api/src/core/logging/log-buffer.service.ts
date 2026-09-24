@@ -11,7 +11,6 @@ export type LogLine = {
   reqId?: string;
   userId?: string;
   actorUserId?: string;
-  churchId?: string;
   method?: string;
   url?: string;
   status?: number;
@@ -112,26 +111,19 @@ export class LogBufferService {
   /**
    * Newest first, narrowed. `since` returns only what arrived after a line
    * already seen, which is what lets the page poll without re-reading
-   * everything. `churchId` keeps that church's lines and the ones belonging to
-   * no church at all.
+   * everything.
    */
-  list(query: {
-    level?: string;
-    search?: string;
-    churchId?: string;
-    since?: number;
-    limit?: number;
-  }): { lines: LogLine[]; newest: number; dropped: boolean } {
+  list(query: { level?: string; search?: string; since?: number; limit?: number }): {
+    lines: LogLine[];
+    newest: number;
+    dropped: boolean;
+  } {
     const floor = query.level ? (RANK[query.level] ?? 0) : 0;
     const needle = query.search?.toLowerCase();
 
     const matched = this.lines.filter((line) => {
       if (floor && (RANK[line.level] ?? 0) < floor) return false;
       if (query.since && line.n <= query.since) return false;
-      // A line with no church is the system's own — boot, jobs, a failure
-      // before the guard ran — and is the most useful line there is when
-      // something is broken, so it is not filtered away.
-      if (query.churchId && line.churchId && line.churchId !== query.churchId) return false;
       if (needle) {
         const haystack = `${line.msg} ${line.url ?? ''} ${line.reqId ?? ''}`.toLowerCase();
         if (!haystack.includes(needle)) return false;

@@ -16,7 +16,6 @@ type ServerLine = {
   reqId?: string;
   userId?: string;
   actorUserId?: string;
-  churchId?: string;
   method?: string;
   url?: string;
   status?: number;
@@ -29,13 +28,11 @@ type ServerLogs = {
   newest: number;
   dropped: boolean;
   held: number;
-  scope: 'all' | 'church';
 };
 
 type ActionRow = {
   id: string;
   at: string;
-  churchCode: string | null;
   source: string;
   action: string;
   entityType: string | null;
@@ -46,7 +43,7 @@ type ActionRow = {
   requestId: string | null;
 };
 
-type ActionLogs = { rows: ActionRow[]; nextBefore: string | null; scope: 'all' | 'church' };
+type ActionLogs = { rows: ActionRow[]; nextBefore: string | null };
 
 const LEVELS = [
   { value: '', label: 'Every level' },
@@ -66,7 +63,7 @@ const TONE: Record<string, string> = {
 };
 
 /** The two logs, side by side in one page, because they answer each other. */
-export function LogsView({ timezone, isDev }: { timezone: string; isDev: boolean }) {
+export function LogsView({ timezone }: { timezone: string }) {
   const [tab, setTab] = useState<'server' | 'actions'>('server');
 
   return (
@@ -80,11 +77,7 @@ export function LogsView({ timezone, isDev }: { timezone: string; isDev: boolean
         </Tab>
       </div>
 
-      {tab === 'server' ? (
-        <ServerLog timezone={timezone} isDev={isDev} />
-      ) : (
-        <ActionLog timezone={timezone} isDev={isDev} />
-      )}
+      {tab === 'server' ? <ServerLog timezone={timezone} /> : <ActionLog timezone={timezone} />}
     </>
   );
 }
@@ -118,7 +111,7 @@ function Tab({
 
 // ---------------------------------------------------------------------------
 
-function ServerLog({ timezone, isDev }: { timezone: string; isDev: boolean }) {
+function ServerLog({ timezone }: { timezone: string }) {
   const [level, setLevel] = useState('');
   const [search, setSearch] = useState('');
   const [live, setLive] = useState(true);
@@ -178,7 +171,6 @@ function ServerLog({ timezone, isDev }: { timezone: string; isDev: boolean }) {
 
       <p className="text-[11.5px] text-fg3">
         {data ? `${data.held} lines held in memory` : 'Reading…'}
-        {data?.scope === 'church' && !isDev && ' · your church, and the system’s own lines'}
         {' · '}
         the log starts empty after the server restarts, and holds only the most recent lines
       </p>
@@ -231,7 +223,7 @@ function ServerLog({ timezone, isDev }: { timezone: string; isDev: boolean }) {
 
 // ---------------------------------------------------------------------------
 
-function ActionLog({ timezone, isDev }: { timezone: string; isDev: boolean }) {
+function ActionLog({ timezone }: { timezone: string }) {
   const [search, setSearch] = useState('');
   const [action, setAction] = useState('');
   const [rows, setRows] = useState<ActionRow[] | null>(null);
@@ -287,8 +279,6 @@ function ActionLog({ timezone, isDev }: { timezone: string; isDev: boolean }) {
 
       {error && <Alert tone="error">{error}</Alert>}
 
-      {!isDev && <p className="text-[11.5px] text-fg3">Your church only.</p>}
-
       {!rows ? (
         <Spinner />
       ) : rows.length === 0 ? (
@@ -309,9 +299,6 @@ function ActionLog({ timezone, isDev }: { timezone: string; isDev: boolean }) {
                   <span className="w-[130px] shrink-0 text-[11.5px] text-fg3">
                     {when(row.at, timezone)}
                   </span>
-                  {isDev && row.churchCode && (
-                    <span className="shrink-0 text-[11px] text-fg3">{row.churchCode}</span>
-                  )}
                   <span className="min-w-0 flex-1 text-[12.5px] text-fg">
                     {row.summary ?? row.action}
                   </span>

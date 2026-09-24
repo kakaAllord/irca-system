@@ -55,8 +55,8 @@ export class CatalogService {
   ) {}
 
   /**
-   * Raw SQL through a transaction, because the tenant extension cannot see
-   * inside raw queries: db.tx() is what tells Postgres which church this is.
+   * Raw SQL through db.tx(), where Db keeps it: on the read-only connection
+   * while someone is being viewed as, like every other query here.
    */
   private query<T>(query: Sql): Promise<T[]> {
     return this.db.tx((tx) => tx.$queryRaw<T[]>(query));

@@ -11,9 +11,8 @@ export const metadata: Metadata = { title: 'Logs' };
 /**
  * What the server wrote, and what people did, without opening a terminal.
  *
- * A dev sees every church. A church administrator lent this page
- * (`ADMIN_DEV_CONSOLE`) sees their own church's lines and the system's own,
- * which the API decides — this page only says which it got.
+ * Anyone holding dev.logs.read sees every line: there is one church, so there
+ * is nothing to narrow them to.
  */
 export default async function LogsPage() {
   const me = await serverApi<MeResponse>('/auth/me');
@@ -25,10 +24,7 @@ export default async function LogsPage() {
         title="Logs"
         subtitle="What the server wrote, and what people did. Newest first."
       />
-      <LogsView
-        timezone={me.church?.timezone ?? 'UTC'}
-        isDev={can(me, 'dev.impersonations.read')}
-      />
+      <LogsView timezone={me.church?.timezone ?? 'UTC'} />
     </>
   );
 }

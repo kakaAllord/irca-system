@@ -7,14 +7,13 @@ import { TEMPLATES, type TemplateName } from './templates/index.js';
 /** Grows with each try: a provider having a bad minute should not lose a message. */
 const BACKOFF_MINUTES = [1, 5, 30, 120, 360];
 const MAX_ATTEMPTS = 6;
-/** At most this many per church per round, so one church's bulk sending waits its turn. */
+/** At most this many a round, so a long queue is sent in steps rather than all at once. */
 const BATCH = 20;
 
 type Enqueue = {
   to: string;
   template: TemplateName;
   payload: Record<string, unknown>;
-  churchId?: string | null;
 };
 
 /** The parts of a transaction this service needs, so callers can pass theirs. */
@@ -54,10 +53,7 @@ export class EmailService {
     await this.enqueue(this.db as unknown as TxLike, email);
   }
 
-  /**
-   * Sends what is due. Claims at most five per church, so three hundred
-   * reminders for one church never delay another church's password reset.
-   */
+  /** Sends what is due, oldest first, a batch at a time. */
   async sendDue(): Promise<{ sent: number; failed: number }> {
     // Anything left mid-send by a crash is due again.
     await this.db.$executeRaw`

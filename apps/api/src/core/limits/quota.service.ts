@@ -13,7 +13,7 @@ export const QUOTAS = {
 export type QuotaKey = keyof typeof QUOTAS;
 
 /**
- * Daily limits per church, counted from the same usage rows the dev console
+ * Daily limits, counted from the same usage rows the dev console
  * shows. Reaching one refuses the action with a clear message rather than
  * dropping it quietly.
  */
