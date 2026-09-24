@@ -1,12 +1,49 @@
 # IRCA Administration — build plan
 
-This folder is the plan for turning the IRCA registration app into a
-multi-church, multi-department administration system. It is written so that a
-developer who joined this week can pick up any step, do it, check it, and commit
-it without having to ask what was meant.
+This folder is the plan for turning the IRCA registration app into an
+administration system for the church's departments. It serves **one church**
+(D27). It is written so that a developer who joined this week can pick up the
+next step, do it, check it, and commit it without having to ask what was meant.
 
-Read this file first, then `00-decisions.md`, then the phase you are working on.
-Phase 0 (`00-restructure.md`) comes before everything else.
+**New here? Start with "What to do next", just below.** Then read this whole
+file, then `00-decisions.md`, then the phase you are working on.
+
+---
+
+## What to do next
+
+**Where the build is (24 September 2026).**
+
+| Phase | State |
+| --- | --- |
+| 0–6 | **Built.** What is left of Phase 6 is going live, which is the owner's (`06`, step 6.13). |
+| 7 — Communications | **Next.** Start at step 7.1. |
+| 8 — Outreach | After 7. |
+| 9 — Pledges | After 8, and only once the leadership has answered step 9.0. |
+| 10 — Strengthening | Only when the owner says yes (§3.4a). |
+
+**How to find the very next step.** Open the lowest-numbered phase that is not
+built. Its "steps at a glance" table lists the steps in order; the next step is
+the first one whose **Check** does not pass yet. `git log --oneline` on
+`dev-allord` shows the commit titles already made, and each step lists the
+commit titles it ends in, so you can match them.
+
+**Your first hour, if you have never touched this code:**
+
+1. Set up your machine: `apps/api/README.md`, "First run". Then
+   `npm run dev` and sign in at <http://localhost:3000> as `admin@irca.local` /
+   `admin-password-123`.
+2. Read `docs/what-works-now.md` and click through what it describes. You
+   cannot extend a system you have not used.
+3. Run every test once, so you know what "green" looks like:
+   `npm run typecheck && npm run lint && npm test && npm run test:e2e -w @irca/api && npm run e2e`.
+4. Read `docs/adding-a-module.md`. Phases 7–9 each add a module, and follow it.
+5. Open the next phase document and read its "Before you start".
+
+**When you are stuck.** The phase document names the file to copy for almost
+every step — the code that already does the same thing somewhere else. Read
+that file first. If the plan is wrong about the code, the code is right: fix
+the plan in the same commit and say why (§2).
 
 | File | What it covers |
 | --- | --- |
@@ -18,10 +55,10 @@ Phase 0 (`00-restructure.md`) comes before everything else.
 | `04-finance-portal.md` | Phase 4 (built) — the Finance portal: income sources, expense items with suggestions, transactions with `IRCA-EXP-2026-09-000001` codes, corrections and voids only through change requests that an admin approves, reports. This is the RBAC test case. |
 | `05-registration-and-membership.md` | Phase 5 (built; cutover is the owner's) — the registration form moved onto the API, live data migrated, and the Membership portal (Dashboard, Members, Applications, Discipleship, Insights) from the design. |
 | `06-dev-console-hardening-launch.md` | Phase 6 (built; launch is the owner's) — the dev console (health, usage, logs, the view-as log, settings and keys), security hardening, the setup and recovery commands, deployment, runbooks and the training guides. Rewritten for D27. Load testing, backups and monitoring are Phase 10. |
-| `07-communications.md` | Phase 7 — the Communication system: SMS through Beem, templates approved once and used weekly, audiences, recurring "beat" messages, opt-out, and what it all costs. Central control, departments sending their own routine messages. |
+| `07-communications.md` | Phase 7 (next) — the Communication system: SMS through Beem, templates approved once and used weekly, audiences, recurring "beat" messages, opt-out, and what it all costs. Central control, departments sending their own routine messages. |
 | `08-outreach.md` | Phase 8 — the Outreach & Evangelism portal: the team, Saturday sessions, people reached in four fields, follow-up, one timeline per person, Friday training, the dashboard, and the session report as a PDF. |
-| `09-pledges-and-giving-reminders.md` | Phase 9 — pledges: what someone promised, what they have paid, what is left, and reminding them through Communications. |
-| `10-strengthening.md` | Phase 10 — strengthening: performance and load, backups and the restore drill, per-church export/move/offboarding, monitoring and alerts. **Starts only when the owner says so**, after every feature phase is done. |
+| `09-pledges-and-giving-reminders.md` | Phase 9 — pledges: what someone promised, what they have paid, what is left, and reminding them through Communications. Waits for three decisions by the leadership. |
+| `10-strengthening.md` | Phase 10 — strengthening: performance and load, backups and the restore drill, monitoring and alerts. **Starts only when the owner says so**, after every feature phase is done. |
 | `docs/modules/*-brief.md` | What a department actually does, in its own words, filled in before its module is built (step 6.12). `comms-brief.md` and `outreach-brief.md` exist. |
 | `multi-tenancy.md` | Retired by D27 (one church, one deployment). Says where each guarantee that outlived it is enforced now. |
 | `appendix-database.md` | Every table in one place, with what owns it and why it exists. |
@@ -84,24 +121,50 @@ and conversation. Do not invent synonyms.
 
 ## 2. How to use a phase document
 
-Every phase is a list of **steps**. Every step has the same shape:
+Phases 7–10 all open the same way, so you always know where to look:
+
+- **In one sentence** — what the phase gives the church.
+- **Before you start** — what must already be true, what to read (and why),
+  the commands to get your machine ready.
+- **What you are building, in plain words** — the idea, before any code.
+- **Words used in this phase** — every new term, defined once.
+- **The steps at a glance** — a table: step, what, *you are done when*.
+
+Then the steps. Every step has the same shape:
 
 - **Goal** — one sentence.
-- **Do** — numbered instructions, with the exact commands and file paths.
-  Code blocks marked `// sketch` show shape and names, not a finished file.
-  Complete them. Code blocks with no such mark are meant to be typed as
-  shown.
-- **Check** — how you prove it works. This is always something you can run or
-  click, never "it should work".
-- **Commit** — the commit that step ends in. One step is one or more commits.
-  Never more than one step per commit.
+- **Why** — when the reason is not obvious. Read it: it is what lets you make
+  a sensible choice when the plan did not foresee something.
+- **Do** — numbered instructions with the exact files and commands. Code
+  blocks marked `// sketch` show the shape and the names, not a finished file:
+  complete them, keeping the names. Blocks with no such mark are typed as shown.
+- **Check** — how you prove it works. Always something you can run or click,
+  never "it should work".
+- **Commit** — the commit title(s) the step ends in. One step is one or more
+  commits; never more than one step in a commit.
+- **If it goes wrong** — the known traps, where there are some.
+
+**The loop for every step:**
+
+```bash
+git checkout dev-allord && git pull          # always start up to date
+# … read the step, do it …
+# … run the step's own Check …
+npm run typecheck && npm run lint && npm test
+npm run test:e2e -w @irca/api                # the API against a real database
+npm run e2e                                  # when the step changed a page
+git add <the files of this step>
+GIT_COMMITTER_NAME="kakaAllord" GIT_COMMITTER_EMAIL="allordcodes@gmail.com" \
+  git commit --author="kakaAllord <allordcodes@gmail.com>"   # title from the step
+git push origin dev-allord
+```
 
 Do the steps in order. A step never depends on a later one. If a step says
 "see 02 step 2.4", read that section before you start.
 
-When something in the plan turns out to be wrong, fix the plan in the same pull
-request as the code, and say why in the commit message. A stale plan is worse
-than none.
+When something in the plan turns out to be wrong, fix the plan in the same
+commit series as the code, and say why in the commit message. A stale plan is
+worse than none.
 
 ---
 
@@ -116,10 +179,13 @@ today. Phase 5 has a written cutover. Nothing before it touches the live data.
 
 ### 3.2 Git
 
-- Work on a branch per step or per group of small steps: `phase-1/login-api`,
-  `phase-4/expense-items`. Open a pull request into `main`, even if you review
-  it yourself. The PR is where the Check evidence goes (screenshots, test
-  output).
+- **There are exactly two branches: `main` and `dev-allord`.** All work is
+  committed on `dev-allord`. It reaches `main` through a pull request from
+  `dev-allord`, opened when a phase (or a useful part of one) is done and its
+  Checks pass; the PR is where the Check evidence goes (screenshots, test
+  output). **Never create another branch** — not per phase, per step or per
+  fix — even if a tool suggests one. (The Dependabot branches on GitHub are
+  GitHub's own, for its update PRs.)
 - Commit as the repository owner, without touching global git config:
 
   ```bash
@@ -186,7 +252,7 @@ registration app were only visible that way. Types passing is not a Check.
 ### 3.4a Phase 10 is not started on your own initiative
 
 `10-strengthening.md` holds the work that makes the system survive real use:
-load testing, backups, restoring and moving one church, monitoring. None of it
+load testing, backups and the restore drill, monitoring. None of it
 is started until the owner has been asked, in as many words, whether to begin
 strengthening the project, and has said yes. It comes after every feature
 phase. Finding a reason it should happen sooner is not permission.
