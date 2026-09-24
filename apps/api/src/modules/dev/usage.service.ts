@@ -22,31 +22,13 @@ export class DevUsageService {
 
   async series(metrics: string[], from: string, to: string): Promise<Series[]> {
     const days = this.days(from, to);
+    // Asking for nothing is a question with an empty answer, not a bad query.
+    if (!metrics.length) return [];
     const rows = await this.db.client.$queryRaw<{ metric: string; day: Date; value: bigint }[]>`
       select metric, day, value from usage_daily
       where metric in (${join(metrics)})
         and day between ${from}::date and ${to}::date
       order by day`;
-    return metrics.map((metric) =>
-      this.fill(
-        metric,
-        days,
-        rows.filter((r) => r.metric === metric),
-      ),
-    );
-  }
-
-  /** Everything summed across churches, plus what belongs to no church. */
-  async platform(metrics: string[], from: string, to: string): Promise<Series[]> {
-    const days = this.days(from, to);
-    const rows = await this.db.client.$queryRaw<{ metric: string; day: Date; value: bigint }[]>`
-      select metric, day, sum(value)::bigint as value from (
-        select metric, day, value from usage_daily
-        union all
-        select metric, day, value from platform_usage_daily
-      ) u
-      where metric in (${join(metrics)}) and day between ${from}::date and ${to}::date
-      group by metric, day order by day`;
     return metrics.map((metric) =>
       this.fill(
         metric,
