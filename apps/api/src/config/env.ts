@@ -26,6 +26,30 @@ export const EnvSchema = z
     EMAIL_PROVIDER: z.enum(['log', 'memory', 'resend']).default('log'),
     EMAIL_FROM: z.string().default('IRCA Admin <no-reply@example.invalid>'),
     RESEND_API_KEY: z.string().optional(),
+
+    /**
+     * Seals the Beem key and secret in the database (D26): 32 bytes, base64.
+     * Without it, a Beem account cannot be saved, and messages go to the log.
+     * Never the Beem key itself, which lives only in the database.
+     */
+    BEEM_SETTINGS_KEY: z
+      .string()
+      .optional()
+      .transform((v) => v || undefined)
+      .refine((v) => v === undefined || Buffer.from(v, 'base64').length === 32, {
+        message: 'must be 32 bytes, base64 (see .env.example for how to make one)',
+      }),
+    /**
+     * The password Beem uses when it calls us with a reply: part of the
+     * callback URL given to Beem, since Beem sends no signature of its own.
+     */
+    BEEM_INBOUND_SECRET: z
+      .string()
+      .optional()
+      .transform((v) => v || undefined)
+      .refine((v) => v === undefined || v.length >= 24, {
+        message: 'must be at least 24 characters',
+      }),
   })
   .refine((env) => env.EMAIL_PROVIDER !== 'resend' || !!env.RESEND_API_KEY, {
     message: 'RESEND_API_KEY is required when EMAIL_PROVIDER is resend',
