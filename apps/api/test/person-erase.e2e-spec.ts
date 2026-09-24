@@ -63,6 +63,14 @@ describe('erasing one person, at their request', () => {
        values ($1, 1, 'ATTENDED', $2, now())`,
       [enrollmentId, staff.id],
     );
+    const departmentId = randomUUID();
+    await db.query(`insert into departments (id, name, updated_at) values ($1, 'Choir', now())`, [
+      departmentId,
+    ]);
+    await db.query(
+      `insert into department_members (id, department_id, person_id) values ($1, $2, $3)`,
+      [randomUUID(), departmentId, personId],
+    );
     await db.query(
       `insert into audit_events (id, source, action, entity_type, entity_id, summary, after)
        values (gen_random_uuid(), 'feature', 'membership.person.added', 'person', $1,
@@ -95,6 +103,7 @@ describe('erasing one person, at their request', () => {
       applications: 1,
       enrollments: 1,
       attendance: 1,
+      departments: 1,
     });
     for (const table of [
       'people',
@@ -103,6 +112,7 @@ describe('erasing one person, at their request', () => {
       'membership_applications',
       'foundation_enrollments',
       'foundation_attendance',
+      'department_members',
     ]) {
       expect(await rows(`select 1 from ${table}`)).toHaveLength(0);
     }

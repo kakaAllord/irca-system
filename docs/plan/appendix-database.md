@@ -9,7 +9,7 @@ hand in the migrations, mostly the init migration.
 | Table | Phase | Owner / purpose | Special rules |
 | --- | --- | --- | --- |
 | `church` | 1 | The church's settings: code, name, timezone, currency. | Exactly one row (`check (id = 1)`). `code` frozen once finance entries exist (trigger `church_code_frozen`). Written by `church:setup`, changed in Dev → Settings. |
-| `users` | 1 | People who can sign in: email, name, phone, password hash, status. | Email stored normalised. |
+| `users` | 1 | People who can sign in: email, name, phone, password hash, status. `person_id` (7) links the account to the person it belongs to. | Email stored normalised. `person_id` unique; set when someone is named a department leader, and what their leadership is found by. |
 | `sessions` | 1 | Signed-in browsers: token hash, address, browser, impersonation link. | Raw token never stored. Revoked, then deleted 90 days later by the nightly job. |
 | `permissions` | 2 | Mirror of the permissions defined in code, with kind. | Written only by the registry sync; retired, not deleted. |
 | `module_state` | 2 | Which portals are turned on. | Turning one off keeps the row, the roles and the data. |
@@ -40,6 +40,9 @@ hand in the migrations, mostly the init migration.
 | `registration_reminders` | 5 | When someone was sent their link, and how. | |
 | `settings` | 5 | Key–value settings (probation days, sessions, the demo marker). | Defaults in code. |
 | `api_clients` | 5 | Keys for the church's own apps (the registration form). | Hash stored, shown once. Revoked, never deleted. |
+| `departments` | 7 | The church's departments (D28), and the portal that belongs to each, if any (`module_key`). | Name unique; a portal belongs to one department (unique `module_key`), and a department portal is switched on only for its department. Archived, never deleted (`delete`, `truncate` revoked). |
+| `department_leaders` | 7 | Who leads each department, with their title. Named only by an administrator, and only a confirmed member. | One open leadership per person per department (partial unique index). Ended, never deleted (`delete`, `truncate` revoked); erased with the person. What a leader may do is worked out from these rows by the permission resolver, never from a role. |
+| `department_members` | 7 | Who is in each department, added by its leaders. Anyone in People. | Same as leaders: one open per person per department, ended, never deleted, erased with the person. |
 
 **Database roles:** `irca_owner` owns the schema and runs migrations and
 `person:erase`. `irca_app` is everything the API does, with the revokes above.

@@ -11,6 +11,8 @@ export type EraseResult = {
   applications: number;
   enrollments: number;
   attendance: number;
+  /** The departments they led or belonged to, ended or not. */
+  departments: number;
   summariesRewritten: number;
   detailsCleared: number;
 };
@@ -26,7 +28,8 @@ export type EraseResult = {
  *
  * What goes: the person, their registration and its answers (prayer requests
  * included), their notes, their moves along the journey, their application to
- * join, their class enrolment and attendance.
+ * join, their class enrolment and attendance, and the departments they led or
+ * belonged to (their account, if they had one, stays and loses its link).
  *
  * What stays: the activity log's shape. Lines are kept, because the log is
  * what proves who did what, but the person's name is replaced with "[erased]"
@@ -89,6 +92,9 @@ export async function erasePerson(options: {
          where e.person_id = $1`,
         [person.id],
       ),
+      departments:
+        (await count('select 1 from department_leaders where person_id = $1', [person.id])) +
+        (await count('select 1 from department_members where person_id = $1', [person.id])),
     };
 
     // The person goes first; everything that hangs off them follows by cascade.
@@ -147,6 +153,7 @@ export function reportErasure(result: EraseResult, dryRun: boolean): void {
   console.log(`  applications          ${result.applications}`);
   console.log(`  class enrolments      ${result.enrollments}`);
   console.log(`  attendance marks      ${result.attendance}`);
+  console.log(`  departments           ${result.departments}`);
   console.log(`  log lines rewritten   ${result.summariesRewritten}`);
   console.log(`  log details cleared   ${result.detailsCleared}`);
   console.log('');

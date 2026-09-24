@@ -127,6 +127,64 @@ export async function createUser(
   return { id, email, password };
 }
 
+/** Someone in People, as the office would have them, at this stage. */
+export async function createPerson(
+  db: pg.Client,
+  opts: {
+    fullName?: string;
+    stage?: string;
+    phone?: string;
+    dial?: string;
+    email?: string;
+    lang?: string;
+  } = {},
+) {
+  const id = randomUUID();
+  await db.query(
+    `insert into people (id, full_name, dial, phone, email, stage, updated_at)
+     values ($1, $2, $3, $4, $5, $6, now())`,
+    [
+      id,
+      opts.fullName ?? 'Baraka Laizer',
+      opts.dial ?? '+255',
+      opts.phone ?? `7${String(Math.floor(Math.random() * 1e8)).padStart(8, '0')}`,
+      opts.email ?? '',
+      opts.stage ?? 'VISITOR',
+    ],
+  );
+  if (opts.lang) await db.query(`update people set lang = $2 where id = $1`, [id, opts.lang]);
+  return { id };
+}
+
+/** A department, as an administrator would have made it. */
+export async function createDepartment(
+  db: pg.Client,
+  opts: { name?: string; moduleKey?: string | null } = {},
+) {
+  const id = randomUUID();
+  await db.query(
+    `insert into departments (id, name, module_key, updated_at) values ($1, $2, $3, now())`,
+    [id, opts.name ?? `Department ${id.slice(0, 6)}`, opts.moduleKey ?? null],
+  );
+  return { id };
+}
+
+/**
+ * A leader of a department who can sign in: a confirmed member, linked to an
+ * account holding no role at all, which is exactly what naming one makes.
+ */
+export async function createLeader(db: pg.Client, departmentId: string, title = 'Chairperson') {
+  const person = await createPerson(db, { stage: 'CONFIRMED_MEMBER', fullName: 'Rehema Leader' });
+  const user = await createUser(db);
+  await db.query(`update users set person_id = $2 where id = $1`, [user.id, person.id]);
+  const leader = randomUUID();
+  await db.query(
+    `insert into department_leaders (id, department_id, person_id, title) values ($1, $2, $3, $4)`,
+    [leader, departmentId, person.id, title],
+  );
+  return { ...user, personId: person.id, leaderId: leader };
+}
+
 /** A key the registration form can call the public API with. */
 export async function createApiClient(db: pg.Client, kind = 'REGISTRATION') {
   const key = `irk_${randomUUID().replaceAll('-', '')}`;

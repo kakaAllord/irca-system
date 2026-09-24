@@ -61,9 +61,13 @@ model User {
   failedLoginCount  Int        @default(0) @map("failed_login_count")
   lockedUntil       DateTime?  @map("locked_until") @db.Timestamptz(6)
   lastLoginAt       DateTime?  @map("last_login_at") @db.Timestamptz(6)
+  /// The person in People this account belongs to. Set when they are named a
+  /// department's leader, which is what their leadership is looked up by (D28).
+  personId          String?    @unique @map("person_id") @db.Uuid
   createdAt         DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
 
+  person      Person?    @relation(fields: [personId], references: [id], onDelete: SetNull)
   roles       UserRole[]
   sessions    Session[]
   resetTokens PasswordResetToken[]
@@ -643,6 +647,9 @@ model Person {
   notes        PersonNote[]
   applications MembershipApplication[]
   enrollments  FoundationEnrollment[]
+  account      User?
+  leaderships  DepartmentLeader[]
+  departments  DepartmentMember[]
 
   @@unique([memberNumber])
   @@index([stage])
@@ -781,6 +788,69 @@ model RegistrationReminder {
 
   @@index([registrationId])
   @@map("registration_reminders")
+}
+
+/// A part of the church's life: the praise team, the choir, Outreach (D28).
+/// Kept by the administrators. A portal, where there is one, belongs to one.
+model Department {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  name        String    @unique @db.VarChar(80)
+  description String    @default("") @db.VarChar(300)
+  /// The portal this department has, if it has one. Switching a department
+  /// portal on needs the department that owns it.
+  moduleKey   String?   @unique @map("module_key") @db.VarChar(40)
+  createdById String?   @map("created_by_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  /// Kept, never deleted: its history of leaders, members and messages stays.
+  archivedAt  DateTime? @map("archived_at") @db.Timestamptz(6)
+
+  leaders DepartmentLeader[]
+  members DepartmentMember[]
+
+  @@map("departments")
+}
+
+/// Someone who leads a department. Named and ended only by an administrator,
+/// and only a confirmed member can be named. Ended, never deleted, so who led
+/// the choir in 2027 keeps an answer.
+model DepartmentLeader {
+  id           String    @id @default(uuid(7)) @db.Uuid
+  departmentId String    @map("department_id") @db.Uuid
+  personId     String    @map("person_id") @db.Uuid
+  /// What the department calls them: 'Chairperson', 'Secretary'.
+  title        String    @db.VarChar(60)
+  addedById    String?   @map("added_by_id") @db.Uuid
+  addedAt      DateTime  @default(now()) @map("added_at") @db.Timestamptz(6)
+  endedAt      DateTime? @map("ended_at") @db.Timestamptz(6)
+  endedById    String?   @map("ended_by_id") @db.Uuid
+
+  department Department @relation(fields: [departmentId], references: [id])
+  /// Erasing a person (the person:erase command) takes this with them.
+  person     Person     @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([personId])
+  @@index([departmentId])
+  @@map("department_leaders")
+}
+
+/// Someone in a department, added by its leaders. Anyone in People can be one.
+model DepartmentMember {
+  id           String    @id @default(uuid(7)) @db.Uuid
+  departmentId String    @map("department_id") @db.Uuid
+  personId     String    @map("person_id") @db.Uuid
+  addedById    String?   @map("added_by_id") @db.Uuid
+  addedAt      DateTime  @default(now()) @map("added_at") @db.Timestamptz(6)
+  endedAt      DateTime? @map("ended_at") @db.Timestamptz(6)
+  endedById    String?   @map("ended_by_id") @db.Uuid
+
+  department Department @relation(fields: [departmentId], references: [id])
+  /// Erasing a person (the person:erase command) takes this with them.
+  person     Person     @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([personId])
+  @@index([departmentId])
+  @@map("department_members")
 }
 
 /// Settings the office can change, with the defaults in code (probation days,
