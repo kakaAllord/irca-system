@@ -280,6 +280,64 @@ of its sections names the phase step that builds it.
 database passes about 30%, it dominates latency, or a contract or data-residency
 requirement asks. The owner decides, on the dev console's evidence.
 
+**Superseded 23 Sept 2026 — see D27.** The owner decided against multi-tenancy
+altogether, not just against building it now: a second church gets its own
+deployment and its own database from day one, so there is never a shared
+database whose share to watch or move away from.
+
+---
+
+## D27. One church, one deployment: multi-tenancy removed (owner, 23 Sept 2026)
+
+D20 chose a shared database with the door left open to dedicated ones later.
+The owner closed that door instead: **a second church is a second
+deployment**, with its own database, its own environment variables and its
+own domain, not a row in a shared one. Reasoning, in the owner's terms: IRCA
+is the only church for the foreseeable future, and the machinery D20 asked
+for — the Prisma tenant extension, row-level security scoped by
+`church_id`, a placement table and cluster registry, a platform role sitting
+above every church, per-church rate-limit fairness, a move tool for a church
+that outgrows the shared database — all of it guarded a boundary that would
+never be crossed, while making every query, every test and every new
+module's first slice harder to write than it needed to be. The 17 September
+notes and the module briefs never asked for one church to see or affect
+another; they asked for the church's own work to go well.
+
+**What this undoes.** Every business table loses its `church_id` and the
+composite keys built on it. Roles hang off the user directly instead of a
+church membership, since a user now belongs to exactly one church — this
+deployment's. The `churches` table becomes `church`, one row of settings
+(name, timezone, currency, the code entry numbers are built from) held to
+exactly one row by a check constraint, not a table of tenants. The platform
+role, the platform-wide usage table, memberships and placements are gone. The
+dev console (Phase 6) stops being a view onto every church and becomes an
+ordinary portal — `dev` — with an ordinary role, because there is no longer
+an "above the church" for anyone to stand on. `multi-tenancy.md` is retired;
+its still-true rules that were never about tenancy (the activity log cannot
+be rewritten, a finance entry changes only through an approved request) live
+on as database grants and triggers, unchanged.
+
+**What replaces it, if IRCA is ever not the only church.** A second church is
+stood up the way 6.7 already describes standing up an environment: its own
+Neon database, migrated the same way, its own copy of every app, its own
+domain. Nothing shared, nothing to keep apart, because nothing is together.
+The cost is a second everything to deploy and pay for from day one, which the
+owner judged cheaper than carrying multi-tenancy's weight through every phase
+for a church that may never arrive.
+
+**Impact on the rest of the plan.** `06-dev-console-hardening-launch.md`,
+`multi-tenancy.md` and `appendix-database.md` are rewritten to match. Phases 7,
+8 and 9 were drafted before this decision and still give every one of their
+new tables a `church_id` column and `[churchId, …]` unique constraints; those
+need the same treatment the schema itself already got — the column dropped,
+the constraint narrowed to what it was really protecting. Phase 10's per-church
+export, import, move and purge tooling (its whole reason for existing was
+moving one church out of a shared database) has nothing left to do in a
+world where a second church is a second deployment, and needs rewriting to
+keep only what is still real: backups of the one database, the restore
+drill, load testing and monitoring. None of this is done yet — it is listed
+here so it is not lost, not because it has been carried out.
+
 ---
 
 ## D21. Communications is central control with decentralised sending (owner, 22 Sept 2026)
