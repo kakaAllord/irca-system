@@ -9,6 +9,24 @@ import type { RequestContext } from '../context/request-context.js';
 import { logBuffer } from './log-buffer.service.js';
 
 /**
+ * Invitation and password-reset tokens travel in the URL or the body; the
+ * body is never logged, but `req.url` is, and an invitation's token
+ * (`GET /invitations/:token`) sits right there in the path. Any segment that
+ * is long and random-looking — 20 or more letters, digits, `-` or `_`, the
+ * shape every token and api key here takes, and not a uuid — is redacted
+ * before the line is ever written, rather than trying to name every route
+ * that carries one.
+ */
+export function redactUrl(url: string): string {
+  return url.replace(/\/([A-Za-z0-9_-]{20,})(?=\/|\?|$)/g, (segment, value: string) =>
+    UUID.test(value) ? segment : '/[redacted]',
+  );
+}
+
+/** A record's id is not a secret, and is the first thing a log is searched for. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
  * One JSON line per request in production, readable lines in development.
  *
  * Every line carries the request id and, once the session guard has run, who
@@ -34,7 +52,11 @@ import { logBuffer } from './log-buffer.service.js';
             level: config.get('LOG_LEVEL'),
             stream: multistream([
               // Readable lines only in development; JSON everywhere else, tests included.
-              { stream: readable ? pretty({ singleLine: true, translateTime: 'SYS:HH:MM:ss' }) : process.stdout },
+              {
+                stream: readable
+                  ? pretty({ singleLine: true, translateTime: 'SYS:HH:MM:ss' })
+                  : process.stdout,
+              },
               { stream: logBuffer.stream() },
             ]),
             genReqId: () => cls.getId(),
@@ -43,7 +65,7 @@ import { logBuffer } from './log-buffer.service.js';
               req: (req: { id: string; method: string; url: string }) => ({
                 id: req.id,
                 method: req.method,
-                url: req.url,
+                url: redactUrl(req.url),
               }),
               res: (res: { statusCode: number }) => ({ statusCode: res.statusCode }),
             },
