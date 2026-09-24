@@ -5,3 +5,4 @@ export * from './modules/index';
 export * from './finance/index';
 export * from './usage-metrics';
 export * from './web-security';
+export * from './sms';
