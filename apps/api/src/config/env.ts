@@ -31,6 +31,12 @@ export const EnvSchema = z
     message: 'RESEND_API_KEY is required when EMAIL_PROVIDER is resend',
     path: ['RESEND_API_KEY'],
   })
+  // Browsers accept a __Host- cookie only from this exact host, over HTTPS,
+  // for every path, so a neighbouring subdomain cannot plant a session.
+  .refine((env) => env.NODE_ENV !== 'production' || env.SESSION_COOKIE_NAME.startsWith('__Host-'), {
+    message: 'SESSION_COOKIE_NAME must start with __Host- in production',
+    path: ['SESSION_COOKIE_NAME'],
+  })
   .refine((env) => env.EMAIL_PROVIDER !== 'memory' || env.NODE_ENV === 'test', {
     message: 'EMAIL_PROVIDER=memory is only for tests',
     path: ['EMAIL_PROVIDER'],

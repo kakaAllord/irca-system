@@ -28,4 +28,11 @@ describe('validateEnv', () => {
       /SESSION_IDLE_HOURS/,
     );
   });
+
+  it('refuses a production session cookie without the __Host- prefix', () => {
+    expect(() => validateEnv({ ...valid, NODE_ENV: 'production' })).toThrow(/__Host-/);
+    expect(() =>
+      validateEnv({ ...valid, NODE_ENV: 'production', SESSION_COOKIE_NAME: '__Host-irca_session' }),
+    ).not.toThrow();
+  });
 });
