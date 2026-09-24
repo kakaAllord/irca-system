@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaDb } from '../../core/database/prisma-clients.js';
+import { Db } from '../../core/database/db.service.js';
 
 /**
  * How the platform itself is doing: the database, the slowest queries, the
@@ -7,18 +7,18 @@ import { PrismaDb } from '../../core/database/prisma-clients.js';
  */
 @Injectable()
 export class HealthService {
-  constructor(private readonly db: PrismaDb) {}
+  constructor(private readonly db: Db) {}
 
   async report() {
-    const [size] = await this.db.$queryRaw<{ bytes: bigint; connections: number }[]>`
+    const [size] = await this.db.client.$queryRaw<{ bytes: bigint; connections: number }[]>`
       select pg_database_size(current_database()) as bytes,
              (select coalesce(sum(numbackends), 0)::int from pg_stat_database
               where datname = current_database()) as connections`;
-    const tables = await this.db.$queryRaw<{ table: string; bytes: bigint }[]>`
+    const tables = await this.db.client.$queryRaw<{ table: string; bytes: bigint }[]>`
       select relname as table, pg_total_relation_size(relid) as bytes
       from pg_catalog.pg_statio_user_tables order by 2 desc limit 20`;
-    const outbox = await this.db.emailOutbox.groupBy({ by: ['status'], _count: { _all: true } });
-    const jobs = await this.db.$queryRaw<
+    const outbox = await this.db.client.emailOutbox.groupBy({ by: ['status'], _count: { _all: true } });
+    const jobs = await this.db.client.$queryRaw<
       {
         job: string;
         started_at: Date;
@@ -29,7 +29,7 @@ export class HealthService {
     >`
       select distinct on (job) job, started_at, finished_at, ok, error
       from job_runs order by job, started_at desc`;
-    const errors = await this.db.$queryRaw<{ day: Date; requests: bigint; errors: bigint }[]>`
+    const errors = await this.db.client.$queryRaw<{ day: Date; requests: bigint; errors: bigint }[]>`
       select day,
              sum(value) filter (where metric = 'api.requests')::bigint as requests,
              sum(value) filter (where metric = 'api.errors.5xx')::bigint as errors
@@ -65,11 +65,11 @@ export class HealthService {
    * pg_stat_statements is installed, which on Neon is one statement.
    */
   private async slowQueries() {
-    const installed = await this.db.$queryRaw<{ ok: boolean }[]>`
+    const installed = await this.db.client.$queryRaw<{ ok: boolean }[]>`
       select exists (select 1 from pg_extension where extname = 'pg_stat_statements') as ok`;
     if (!installed[0]?.ok) return null;
     try {
-      const rows = await this.db.$queryRaw<
+      const rows = await this.db.client.$queryRaw<
         { query: string; calls: bigint; mean_ms: number; total_ms: number }[]
       >`
         select left(query, 400) as query, calls, mean_exec_time as mean_ms, total_exec_time as total_ms

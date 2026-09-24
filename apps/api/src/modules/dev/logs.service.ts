@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaDb } from '../../core/database/prisma-clients.js';
+import { Db } from '../../core/database/db.service.js';
 import { RequestAuth } from '../../core/context/request-auth.js';
 import { LogBufferService } from '../../core/logging/log-buffer.service.js';
 import { sql, join, type Sql } from '../../core/database/sql.js';
@@ -42,7 +42,7 @@ export type ActionLogQuery = {
 @Injectable()
 export class DevLogsService {
   constructor(
-    private readonly db: PrismaDb,
+    private readonly db: Db,
     private readonly auth: RequestAuth,
     private readonly buffer: LogBufferService,
   ) {}
@@ -69,7 +69,7 @@ export class DevLogsService {
     if (query.search) conditions.push(sql`summary ilike ${`%${query.search}%`}`);
     if (query.before) conditions.push(sql`"createdAt" < ${new Date(query.before)}`);
 
-    const rows = await this.db.$queryRaw<ActionLogRow[]>`
+    const rows = await this.db.client.$queryRaw<ActionLogRow[]>`
       select id, "createdAt", source, action, "entityType", "entityId", summary,
              "actorUserId", "subjectUserId", "requestId"
       from ${source} t
@@ -82,7 +82,7 @@ export class DevLogsService {
     const ids = [...new Set(page.flatMap((r) => [r.actorUserId, r.subjectUserId]))].filter(
       (id): id is string => Boolean(id),
     );
-    const users = await this.db.user.findMany({
+    const users = await this.db.client.user.findMany({
       where: { id: { in: ids } },
       select: { id: true, fullName: true },
     });

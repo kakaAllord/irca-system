@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { ErrorCode, metricDef } from '@irca/shared';
-import { Prisma } from '../../generated/prisma/client.js';
-import { PrismaDb } from '../../core/database/prisma-clients.js';
+import { Db } from '../../core/database/db.service.js';
 import { AppError } from '../../core/http/app-error.js';
+import { join } from '../../core/database/sql.js';
 
 type Series = { metric: string; points: { day: string; value: number }[] };
 
@@ -18,13 +18,13 @@ const MAX_DAYS = 400;
  */
 @Injectable()
 export class DevUsageService {
-  constructor(private readonly db: PrismaDb) {}
+  constructor(private readonly db: Db) {}
 
   async series(metrics: string[], from: string, to: string): Promise<Series[]> {
     const days = this.days(from, to);
-    const rows = await this.db.$queryRaw<{ metric: string; day: Date; value: bigint }[]>`
+    const rows = await this.db.client.$queryRaw<{ metric: string; day: Date; value: bigint }[]>`
       select metric, day, value from usage_daily
-      where metric in (${Prisma.join(metrics)})
+      where metric in (${join(metrics)})
         and day between ${from}::date and ${to}::date
       order by day`;
     return metrics.map((metric) =>
@@ -39,13 +39,13 @@ export class DevUsageService {
   /** Everything summed across churches, plus what belongs to no church. */
   async platform(metrics: string[], from: string, to: string): Promise<Series[]> {
     const days = this.days(from, to);
-    const rows = await this.db.$queryRaw<{ metric: string; day: Date; value: bigint }[]>`
+    const rows = await this.db.client.$queryRaw<{ metric: string; day: Date; value: bigint }[]>`
       select metric, day, sum(value)::bigint as value from (
         select metric, day, value from usage_daily
         union all
         select metric, day, value from platform_usage_daily
       ) u
-      where metric in (${Prisma.join(metrics)}) and day between ${from}::date and ${to}::date
+      where metric in (${join(metrics)}) and day between ${from}::date and ${to}::date
       group by metric, day order by day`;
     return metrics.map((metric) =>
       this.fill(
@@ -61,7 +61,7 @@ export class DevUsageService {
    * against a week and a month before.
    */
   async database() {
-    const rows = await this.db.$queryRaw<{ metric: string; day: Date; value: bigint }[]>`
+    const rows = await this.db.client.$queryRaw<{ metric: string; day: Date; value: bigint }[]>`
       select metric, day, value from usage_daily
       where (metric like 'db.rows.%' or metric like 'db.bytes.%')
         and day >= current_date - 31

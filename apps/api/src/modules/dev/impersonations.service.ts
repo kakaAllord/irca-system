@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ErrorCode } from '@irca/shared';
 import type { Prisma } from '../../generated/prisma/client.js';
-import { PrismaDb } from '../../core/database/prisma-clients.js';
+import { Db } from '../../core/database/db.service.js';
 import { AppError } from '../../core/http/app-error.js';
 
 export type LogQuery = {
@@ -20,7 +20,7 @@ export type LogQuery = {
  */
 @Injectable()
 export class ImpersonationLogService {
-  constructor(private readonly db: PrismaDb) {}
+  constructor(private readonly db: Db) {}
 
   async sessions(query: LogQuery) {
     const limit = Math.min(Math.max(query.limit ?? 100, 1), 500);
@@ -28,7 +28,7 @@ export class ImpersonationLogService {
     const people = async (text?: string) =>
       text
         ? (
-            await this.db.user.findMany({
+            await this.db.client.user.findMany({
               where: {
                 OR: [
                   { email: { contains: text, mode: 'insensitive' } },
@@ -50,7 +50,7 @@ export class ImpersonationLogService {
         ...(query.before ? { lt: new Date(query.before) } : {}),
       },
     };
-    const rows = await this.db.impersonationSession.findMany({
+    const rows = await this.db.client.impersonationSession.findMany({
       where,
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
@@ -67,7 +67,7 @@ export class ImpersonationLogService {
     if (!/^[0-9a-f-]{4,36}$/i.test(idOrPrefix)) {
       throw new AppError(404, ErrorCode.NOT_FOUND, 'No session like that.');
     }
-    const matches = await this.db.$queryRaw<{ id: string }[]>`
+    const matches = await this.db.client.$queryRaw<{ id: string }[]>`
       select id from impersonation_sessions where id::text like ${`${idOrPrefix.toLowerCase()}%`} limit 2`;
     if (matches.length !== 1) {
       throw new AppError(
@@ -78,11 +78,11 @@ export class ImpersonationLogService {
           : 'No session like that.',
       );
     }
-    const found = await this.db.impersonationSession.findUniqueOrThrow({
+    const found = await this.db.client.impersonationSession.findUniqueOrThrow({
       where: { id: matches[0]!.id },
     });
     const [session] = await this.describe([found]);
-    const views = await this.db.$queryRaw<{ createdAt: Date; meta: unknown }[]>`
+    const views = await this.db.client.$queryRaw<{ createdAt: Date; meta: unknown }[]>`
       select "createdAt", meta from impersonation_audit_events()
       where "impersonationId" = ${found.id} and action = 'impersonation.view'
       order by "createdAt" asc
@@ -114,7 +114,7 @@ export class ImpersonationLogService {
     if (Number.isNaN(since.getTime())) {
       throw new AppError(400, ErrorCode.VALIDATION_FAILED, 'after must be a moment in time.');
     }
-    const rows = await this.db.$queryRaw<
+    const rows = await this.db.client.$queryRaw<
       {
         actorUserId: string | null;
         subjectUserId: string | null;
@@ -132,7 +132,7 @@ export class ImpersonationLogService {
       order by "createdAt" asc
       limit 200
     `;
-    const users = await this.db.user.findMany({
+    const users = await this.db.client.user.findMany({
       where: {
         id: {
           in: [
@@ -172,12 +172,12 @@ export class ImpersonationLogService {
 
   /** Sessions as lines of the log: who, as whom, where, for how long, how much. */
   private async describe(rows: Prisma.ImpersonationSessionGetPayload<object>[]) {
-    const users = await this.db.user.findMany({
+    const users = await this.db.client.user.findMany({
       where: { id: { in: [...new Set(rows.flatMap((r) => [r.actorUserId, r.subjectUserId]))] } },
       select: { id: true, fullName: true, email: true },
     });
     const byId = new Map(users.map((u) => [u.id, u]));
-    const views = await this.db.$queryRaw<{ impersonationId: string; count: bigint }[]>`
+    const views = await this.db.client.$queryRaw<{ impersonationId: string; count: bigint }[]>`
       select "impersonationId", count(*) as count
       from impersonation_audit_events()
       where "impersonationId" = any(${rows.map((r) => r.id)}::uuid[]) and action = 'impersonation.view'
@@ -213,7 +213,7 @@ export class ImpersonationLogService {
   private async roleLabels(
     rows: { actorUserId: string; subjectUserId: string }[],
   ) {
-    const links = await this.db.userRole.findMany({
+    const links = await this.db.client.userRole.findMany({
       where: {
         userId: { in: rows.flatMap((r) => [r.actorUserId, r.subjectUserId]) },
         role: { deletedAt: null },
