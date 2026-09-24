@@ -44,7 +44,7 @@ Roles that follow: **Outreach leader** (team, Saturdays, training, messages),
 | Search the church's people, to add to the team | `membership.people.read` | Membership |
 | Phone numbers, to call and to message | `membership.people.read_sensitive` (leader) | Membership |
 | Whether someone attended a service | `membership.people.read` + the shared timeline | Membership |
-| Send training reminders | `outreach.comms.send` + a granted audience | Comms |
+| Send training reminders | being an Outreach department leader (D28) | Comms |
 
 ## 5. What must they never see?
 

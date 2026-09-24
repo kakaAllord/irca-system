@@ -9,6 +9,19 @@
 sent through Communications). **Comes before:** Phase 9, which uses the
 person timeline this phase builds.
 
+> **Changed by D28 (24 Sept 2026) — rewrite before starting.** Outreach is a
+> department (Admin → Departments), and its portal belongs to it. So its
+> **team is the Outreach department's members** and its leader is a
+> department leader named by an administrator: step 8.4's own team table and
+> routes, `outreach.team.manage` and the `outreach.team` audience provider are
+> replaced by the department's members and the `departments.everyone`
+> audience. Messages go from **My departments → Outreach → Messages** with the
+> leadership permissions of 07 step 7.3: there is no `outreach.comms.send`,
+> no `outreach.comms.send_adhoc` and no `SEND_PERMISSIONS`. Partner groups,
+> sessions, contacts, training and the `outreach.reached` audience (granted,
+> never automatic) stand as written. Correct 8.2, 8.4 and 8.7 to this before
+> the first Phase 8 commit.
+
 ---
 
 ## Before you start

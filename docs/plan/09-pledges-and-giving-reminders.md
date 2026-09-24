@@ -32,7 +32,7 @@ The owner asked for this on 22 September 2026:
 | `00-decisions.md`, D17 | Money records are never edited directly — only through an approved change request. Pledge payments follow the same rule. |
 | `00-decisions.md`, Q8 and Q10 | Why pledges exist, why per-person tithe tracking still does not, and why a reminder names no figure by default. |
 | `apps/api/src/modules/finance/transaction-change.handler.ts` | How a finance record is changed by approval. You will write one like it for payments. |
-| Phase 7, steps 7.5, 7.6 and 7.8 | Audiences, templates and beats — the reminder is built from these, not from new code. |
+| Phase 7, steps 7.8, 7.9 and 7.11 | Audiences, templates and beats — the reminder is built from these, not from new code. |
 
 **3. Get your machine ready**, as in every phase:
 
@@ -111,7 +111,7 @@ Each has a recommendation; they may accept it or change it.
 3. **What may a reminder say?** *Recommended (Q10): no figure by default.* The
    default template is *"Salamu {{first_name}}, tunakukumbusha ahadi yako ya
    {{campaign_name}}. Karibu ofisini kwa maelezo."* A template containing
-   `{{balance}}` is allowed, but — like every template (7.6) — needs
+   `{{balance}}` is allowed, but — like every template (7.9) — needs
    Communications' approval, and the leadership should say whether it wants
    one at all.
 
@@ -246,7 +246,11 @@ always right.
    | `finance.pledges.read_sensitive` | read | manager, overseer — names against amounts |
    | `finance.pledges.manage` | write | manager — campaigns, pledges, cancelling |
    | `finance.pledges.record_payment` | write | clerk, manager |
-   | `finance.comms.send` | write | manager — sending reminders (Phase 7) |
+
+   Sending the reminders needs no Finance permission: it is the Finance
+   department's leaders who send, from My departments → Finance → Messages,
+   with the leadership permissions of 07 step 7.3 (D28), once Communications
+   has granted the Finance department the pledge audience.
 
    And a new system role, **`finance.pledges_overseer`** — "Pledges overseer",
    holding the first two — for the pastors. (A role holds one module's
@@ -303,7 +307,7 @@ anyone each time — and nobody is texted twice in a fortnight.
 
 **Do.** Almost everything here is Phase 7, used — not new machinery.
 
-1. **An audience provider** (7.5), registered by the Finance module:
+1. **An audience provider** (7.8), registered by the Finance module:
 
    | Key | Parameters | Who is in it |
    | --- | --- | --- |
@@ -312,12 +316,12 @@ anyone each time — and nobody is texted twice in a fortnight.
    It fills the blanks `first_name`, `campaign_name`, `amount`, `balance` and
    `due_date`, **already formatted for a text** (`200,000 TZS`, `12 Oktoba`),
    because formatting in a template is how someone gets texted `200000.00`.
-   Add the four new blanks to the list in 7.6.
+   Add the four new blanks to the list in 7.9.
 
 2. **Templates** in all three languages, drafted by Finance and approved by
-   Communications (7.6). The default one names no figure (9.0, question 3).
+   Communications (7.9). The default one names no figure (9.0, question 3).
 
-3. **A beat** (7.8): the first Monday of each month at 10:00, two or three
+3. **A beat** (7.11): the first Monday of each month at 10:00, two or three
    variants. Set it up in **Finance → Messages → Recurring**; no new screen.
 
 4. **At most once a fortnight per person**, whatever beats exist. Add a setting
