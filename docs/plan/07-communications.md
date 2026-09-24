@@ -95,7 +95,7 @@ gains one permission of its own.
        'comms.schedules.read':       { kind: 'read',  label: 'See recurring messages' },
        'comms.schedules.manage':     { kind: 'write', label: 'Set up recurring messages' },
        'comms.costs.read':           { kind: 'read',  label: 'See what messages cost and the credit left' },
-       'comms.settings.manage':      { kind: 'write', label: 'Set the sender id, the daily cap and the rate' },
+       'comms.settings.manage':      { kind: 'write', label: 'Set the Beem account, the sender id, the daily cap and the rate' },
      },
      systemRoles: [
        { key: 'comms.lead',   name: 'Communications lead',   permissions: [/* all of the above */] },
@@ -430,9 +430,10 @@ touch the network and development never spends credit.
 2. Three providers beside the email ones (`apps/api/src/core/sms/providers/`):
    `beem.provider.ts` (real), `log.provider.ts` (development: writes the
    message to the log), `memory.provider.ts` (tests: keeps an array, as
-   `MemoryEmailProvider` does). Chosen by `SMS_PROVIDER` in
-   `sms.module.ts` from `NODE_ENV` and whether the credentials are set,
-   exactly as email does it.
+   `MemoryEmailProvider` does). Chosen in `sms.module.ts` by `NODE_ENV` (tests
+   always get the memory provider) and, in development and production, by
+   whether `comms_settings` has a saved key — read fresh on every send rather
+   than cached at boot, since Comms can change it at any time (step 4 below).
 
 3. Beem's HTTP details (`POST https://apisms.beem.africa/v1/send`, HTTP Basic
    with the API key and secret, `{ source_addr, schedule_time, encoding,
@@ -442,18 +443,44 @@ touch the network and development never spends credit.
    endpoints between versions, and the plan is not the source of truth for
    someone else's API.
 
-4. Configuration (`apps/api/src/config/env.ts`, `.env.example`):
+4. **Configuration: the credentials live in the database, not `.env`** (owner,
+   24 Sept 2026 — changed from the original env-var design so that Comms can
+   put in a new key or move to a new Beem account themselves, the moment Beem
+   hands it to them, without asking anyone to redeploy).
 
-   ```
-   BEEM_API_KEY=            # the owner sets these in the host's environment
-   BEEM_SECRET_KEY=
-   BEEM_SENDER_ID=IRCA      # the approved sender name, per church in settings
-   BEEM_INBOUND_SECRET=     # the shared secret on the inbound webhook (7.9)
-   ```
+   A church settings table gets one row (`comms_settings`, analogous to the
+   `church` singleton in 6.1's schema): `beemApiKeyEnc`, `beemSecretKeyEnc`
+   (both `bytea`, AES-256-GCM, see below), `beemSenderId`, and
+   `beemUpdatedAt`/`beemUpdatedById` for the audit trail. **The key and secret
+   must be recoverable in plaintext** (the API sends them to Beem on every
+   message), so they cannot use the hash-only pattern this codebase already
+   uses for session and API client keys (`hashKey` in
+   `core/clients/api-client.service.ts`) — those only ever need to be
+   *verified*, never read back. Instead:
 
-   All optional: with none set the log provider is used, so the system runs
-   with no Beem account at all. **The owner holds the credentials; nothing in
-   the repository ever contains them.**
+   - Encrypt with a key from `BEEM_SETTINGS_KEY` (32 random bytes, generated
+     once, set in the host's environment like `SESSION_SECRET`). This one env
+     var barely ever changes; the Beem credentials behind it can change as
+     often as Comms needs.
+   - `Settings → Beem account` (Comms module, `comms.settings.manage`, write):
+     two password-style inputs for the key and secret, a text input for the
+     sender id, and a **Test connection** button that calls Beem's balance
+     endpoint before saving. On load, the fields show masked
+     (`•••• 4821`, last 4 characters only, the same masking style as finance's
+     emails in 6.4) and are **never sent back to the browser in full** — saving
+     without touching a field leaves it unchanged; typing a new value replaces
+     it. A person needs `comms.settings.manage` to see even the masked value;
+     everyone else sees only "Beem: connected" or "not connected".
+   - Every save is an audit event (`comms.settings.beem_updated`), summary
+     "Beem sender id changed to IRCA" or "Beem API key replaced" — never the
+     key itself, before or after.
+   - `BEEM_INBOUND_SECRET` stays an env var: it is not a Beem account
+     credential Comms rotates, it is this deployment's own shared secret on
+     the inbound webhook (7.9), set once when the webhook URL is registered
+     with Beem.
+
+   With no row saved (a fresh church) the log provider is used, so the system
+   runs with no Beem account at all until Comms sets one up.
 
 5. Segment counting (`packages/shared/src/sms.ts`, with unit tests): GSM-7
    when every character is in the GSM alphabet — 160 per segment, 153 when
@@ -463,10 +490,15 @@ touch the network and development never spends credit.
 
 **Check.** A unit test proves the segment maths on: a 160-character English
 message (1), 161 (2), a 70-character message with one emoji (1), 71 (2). With
-no credentials set, the API boots and `comms.messages.send` writes to the log.
+no `comms_settings` row saved, the API boots and `comms.messages.send` writes
+to the log. Saving a key and secret through the settings screen, then sending,
+uses them; reloading the page shows them masked, and the network tab never
+carries the full value back. `grep -r` for `BEEM_API_KEY`/`BEEM_SECRET_KEY`
+finds nothing outside this history.
 
 **Commit.** "Send SMS through Beem, or to the log"; "Count SMS segments the
-way the carriers do".
+way the carriers do"; "Let Comms hold its own Beem key, encrypted, without a
+redeploy".
 
 ---
 

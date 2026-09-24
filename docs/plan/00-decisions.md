@@ -402,6 +402,29 @@ monitoring of 10 step 10.4 alerts on before a Sunday rather than after one.
 
 ---
 
+## D26. The Beem key is held in the database, not `.env` (owner, 24 Sept 2026)
+
+The original design (07 step 7.4) put the Beem API key and secret in the
+host's environment, set once by the owner. The owner changed this: Beem hands
+out a new key, or the church moves to a different Beem account, without
+warning, and an env-var change means a redeploy every time — a delay Comms
+should not have to wait on. So the credentials are a row in the database,
+edited by Comms itself from `Settings → Beem account` behind
+`comms.settings.manage`, the same permission that already held the sender id
+and daily cap.
+
+They cannot use the hash-only pattern the codebase already uses for session
+and API client keys (`hashKey`), because those only ever need to be
+*verified* — the Beem key and secret must come back out in plaintext, since
+the API sends them to Beem on every message. They are encrypted at rest
+instead (AES-256-GCM, the encryption key itself in `.env` as
+`BEEM_SETTINGS_KEY`, since that key is generated once and never needs to
+change the way the Beem account does), masked in the UI to the last four
+characters, and never sent back to the browser in full. Every save is
+audited, by summary only — never the key, before or after.
+
+---
+
 ## Open questions (each with a recommendation — proceed on the recommendation unless the owner overrules)
 
 | # | Question | Recommendation and why |
