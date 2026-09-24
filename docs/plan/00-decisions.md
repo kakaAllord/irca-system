@@ -335,8 +335,14 @@ export, import, move and purge tooling (its whole reason for existing was
 moving one church out of a shared database) has nothing left to do in a
 world where a second church is a second deployment, and needs rewriting to
 keep only what is still real: backups of the one database, the restore
-drill, load testing and monitoring. None of this is done yet — it is listed
-here so it is not lost, not because it has been carried out.
+drill, load testing and monitoring.
+
+**Done on 24 September 2026:** `06-dev-console-hardening-launch.md`,
+`multi-tenancy.md` (retired, with a table of where each surviving guarantee
+now lives) and `appendix-database.md` are rewritten. One thing the first pass
+at this decision removed by mistake was put back: the read-only database role
+for viewing as someone, which was never about tenancy. **Still to do:**
+phases 7, 8, 9 and 10, each before it is built.
 
 ---
 

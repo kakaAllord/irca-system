@@ -1,475 +1,329 @@
 # Phase 6 — Dev console, hardening, deployment and launch
 
-**Outcome.** A dev signs in and sees **every church's usage, from database
-rows and bytes to requests, errors, active people, sign-ins, emails,
-registrations and finance entries**, over time. Devs can open any church,
-create a church and invite its admin, suspend it, manage its API keys, and view
-as anyone (read-only). The system is hardened and deployed to production;
-backing it up, load-testing it and watching it are Phase 10. There are runbooks for the things that go wrong, and a
-recipe for starting the next department.
+**Outcome.** A developer signs in and sees how the system is doing and what it
+is used for — database rows and bytes, requests, errors, active staff,
+sign-ins, emails, registrations and finance entries — over time. They can read
+the server log and the view-as log, change the church's settings and the
+registration form's keys, and view as anyone (read-only). The system is
+hardened, there is a written way to deploy it, runbooks for the things that go
+wrong, two training guides in the portal, and a recipe for starting the next
+department. Backing it up, load-testing it and watching it are Phase 10.
 
-| Step | What |
-| --- | --- |
-| 6.1 | What is collected (the complete list) |
-| 6.2 | The nightly database snapshot |
-| 6.3 | Platform API |
-| 6.4 | Dev console pages |
-| 6.5 | Security hardening |
-| 6.7 | Environments and deployment |
-| — | *(performance, backups, per-church moves and monitoring moved to Phase 10)* |
-| 6.10 | Runbooks |
-| 6.11 | Launch and training |
-| 6.12 | Starting the next department |
-| 6.13 | Phase check |
+**Rewritten for D27 (one church, one deployment).** This phase was first
+written for a console above many churches: every church listed side by side,
+one church's page with its tabs, creating and suspending churches, a platform
+role outside any church. D27 removed all of that. The console is now an
+ordinary portal, `dev`, with ordinary roles; what it shows is this church's
+system. The steps below describe that, and say where the original asked for
+something that no longer exists.
+
+**Status (24 September 2026).** Every step is built and tested except what
+only the owner or the church can do, which is listed in 6.13. The work is on
+branch `phase-6/finish`, which stacks on `single-church/strip-multi-tenancy`.
+
+| Step | What | State |
+| --- | --- | --- |
+| 6.1 | What is collected (the complete list) | built |
+| 6.2 | The nightly database snapshot | built |
+| 6.3 | Dev console API | built |
+| 6.4 | Dev console pages | built |
+| 6.5 | Security hardening | built; four checks at launch |
+| 6.6 | The command line for setting up and recovering | built |
+| 6.7 | Environments and deployment | written; the domain is the owner's |
+| — | *(performance, backups, per-church moves and monitoring moved to Phase 10)* | |
+| 6.10 | Runbooks | written |
+| 6.11 | Launch and training | guides built; the launch is the owner's |
+| 6.12 | Starting the next department | two briefs written |
+| 6.13 | Phase check | see there |
 
 ---
 
 ## 6.1 — What is collected (the complete list)
 
-Everything below is per church per local day, unless marked *platform*. It
-is written to `usage_daily` (counters from 2.11, gauges from 6.2) or
-`platform_usage_daily`. Put this table in
-`packages/shared/src/usage-metrics.ts` with each metric's **type**
-(`counter` = summed, `max` = greatest, `gauge` = latest snapshot value replaces),
-its label and its unit. The dev console renders from it, so adding a metric is
-one line plus the code that counts it.
+Everything below is per local day, written to `usage_daily` (counters from
+2.11, gauges from 6.2). The list lives in
+`packages/shared/src/usage-metrics.ts` with each metric's **type** (`counter`
+= summed, `max` = greatest, `gauge` = latest snapshot replaces), its label and
+its unit. The dev console draws from it, so adding a metric is one line plus
+the code that counts it, and `usage-metrics.spec.ts` fails if the code counts a
+metric the list does not name.
 
 | Area | Metric | Type | Source |
 | --- | --- | --- | --- |
-| **Database** | `db.rows.<table>` for every church-owned table | gauge | 6.2 |
-| | `db.bytes.<table>` (estimated, including the church's share of indexes) | gauge | 6.2 |
-| | `db.bytes.total`, `db.share_pct` (of the whole database) | gauge | 6.2 |
-| | *platform:* `db.size_bytes`, `db.connections.max_today`, table and index sizes | gauge | 6.2 |
+| **Database** | `db.rows.<table>`, `db.bytes.<table>` (with indexes and TOAST) | gauge | 6.2 |
+| | `db.bytes.total` (the measured tables), `db.size_bytes` (the whole database) | gauge | 6.2 |
+| | `db.connections.max_today` | max | 6.2, `db-sample` every 5 min |
 | **Entities** | `entities.people`, `entities.registrations.in_progress`, `entities.registrations.submitted`, `entities.members.confirmed`, `entities.finance.transactions`, `entities.finance.items`, `entities.users.active`, `entities.users.invited`, `entities.users.disabled`, `entities.roles.custom`, `entities.modules.enabled` | gauge | 6.2 |
-| **Activity** | `users.active` (DAU; WAU/MAU derived from `user_activity_daily`) | gauge | `user_activity_daily` |
+| **Activity** | `users.active` — staff active that day | gauge | counted from `user_activity_daily` when read, not written |
 | **API** | `api.requests`, `api.requests.<module>`, `api.route.<METHOD /template>` | counter | 2.11 |
-| | `api.errors.4xx`, `api.errors.5xx`, `api.errors.403` (permission denials) | counter | 2.11 |
+| | `api.route_ms.<METHOD /template>` — time spent answering that route | counter | 2.11 |
+| | `api.errors.4xx`, `api.errors.5xx`, `api.errors.403`, `api.throttled` | counter | 2.11 |
 | | `api.latency_ms.sum` (average = sum / requests), `api.latency_ms.max` | counter / max | 2.11 |
 | **Auth** | `auth.logins`, `auth.login_failures`, `auth.lockouts`, `auth.password_resets`, `auth.sessions_created` | counter | 1.13, 3.5 |
 | | `auth.sessions.active` | gauge | 6.2 |
 | **Impersonation** | `impersonation.started`, `impersonation.views`, `impersonation.minutes` | counter | 2.8, 2.11 |
 | **Admin** | `admin.invitations.sent`, `admin.invitations.accepted`, `admin.role_changes`, `admin.modules.toggled` | counter | Phase 3 |
 | **Email** | `email.sent`, `email.failed`, `email.retries` | counter | 3.1 |
-| **Registration** | `registrations.started`, `registrations.submitted`, `registrations.reminders` | counter | Phase 5 |
-| **Membership** | `membership.applications.submitted`, `.approved`, `.confirmed`, `membership.attendance.marked` | counter | Phase 5 |
-| **Finance** | `finance.transactions.created`, `finance.transactions.voided`, `finance.catalog.created`, `finance.exports`, `finance.change_requests.applied` | counter | Phase 4 |
-| **Change requests** | `change_requests.created`, `.approved`, `.rejected`, `.cancelled`, and `change_requests.pending` (gauge) | counter / gauge | 4.6a |
+| **Registration** | `registrations.started`, `registrations.submitted`, `membership.reminders.sent` | counter | Phase 5 |
+| **Membership** | `membership.people.added`, `membership.applications.submitted`, `membership.members.confirmed`, `membership.attendance.marked` | counter | Phase 5 |
+| **Finance** | `finance.transactions.created`, `.voided`, `.replaced`, `finance.catalog.created`, `finance.exports` | counter | Phase 4 |
+| **Change requests** | `change_requests.created`, `.applied`, `.rejected`, `.cancelled`, and `change_requests.pending` (gauge) | counter / gauge | 4.6a |
 | **Audit** | `audit.events` | counter | 2.10 |
-| **Storage** | `storage.bytes` (reserved for attachments) | gauge | later |
-| **Jobs** | *platform:* last run, duration, ok/failed per job | — | `job_runs` |
+| **Jobs** | last run, duration, ok/failed per job | — | `job_runs` |
 
 `api.route.*` uses the **route template** (`GET /finance/transactions/:code`),
 never the real path, so it cannot grow without bound or store codes and tokens.
 
-**Commit:** "List every usage metric in one place with its type and unit".
+*Changed from the first version:* `db.share_pct` (a church's share of a shared
+database) and the platform-wide table are gone with D27. `api.route_ms.*` is
+new, so the API tab can rank routes by time as well as calls. The latency
+total had been adding one per request instead of the milliseconds taken,
+which would have made every average read as 1 ms; that is fixed and
+unit-tested.
 
 ---
 
 ## 6.2 — The nightly database snapshot
 
-**Goal:** know how much of the database each church uses, and how that grows.
+**Goal:** know how big each table is and how it grows.
 
-**Do** — job `usage-snapshot`, daily at 02:00 Africa/Dar_es_Salaam, via
-`JobRunner`. It is a platform job, and it loops over `registry.clusters()`
-(02 step 2.4b), running the per-table queries below on each cluster through
-that cluster's core client, never through `PrismaCore` alone:
+Job `usage-snapshot`, daily at 02:00 Africa/Dar_es_Salaam, through `JobRunner`
+(`core/usage/usage-snapshot.service.ts`):
 
-1. The list of church-owned tables comes from the Prisma DMMF: every model
-   with a `churchId` field, plus the core tables with `church_id` (`audit_events`,
-   `email_outbox`, `usage_daily`, `user_activity_daily`, `invitations`,
-   `impersonation_sessions`). Map model names to table names with `dbName`.
-2. For each table:
+1. For each table in `MEASURED_TABLES` — the tables that grow with use —
+   `count(*)` and `pg_total_relation_size`, written as `db.rows.<table>` and
+   `db.bytes.<table>`. `audit_events` is counted through `audit_events_count()`,
+   because `irca_app` may not select from it (D16). Then `db.bytes.total` and
+   `db.size_bytes`.
+2. The entity gauges from 6.1, and `auth.sessions.active`.
+3. Clean-up: sessions revoked or expired more than 90 days ago, and
+   password-reset tokens older than 7 days, are deleted. Audit rows are kept
+   forever.
 
-   ```sql
-   -- tenant: platform job, grouped by church
-   select church_id, count(*)::bigint as rows, coalesce(sum(pg_column_size(t.*)), 0)::bigint as bytes
-   from <table> t
-   group by church_id;
-   ```
+`db-sample` runs every five minutes and keeps the day's highest connection
+count. Full counts are fine to a few million rows; past that, switch the
+counts to `tablesample` and scale.
 
-   and `pg_total_relation_size('<table>')` for the table including indexes and TOAST.
-   The church's estimated bytes = `total_relation_size × church_bytes /
-   all_churches_bytes` (its share of the heap, applied to the whole
-   relation). Write `db.rows.<table>` and `db.bytes.<table>` as **gauges**
-   (`on conflict do update set value = excluded.value`).
-3. Totals per church: `db.bytes.total`, and `db.share_pct` = its bytes /
-   `pg_database_size(current_database())` × 100 (stored ×100 as an integer to
-   keep `bigint`).
-4. Entity gauges from 6.1 with simple `count(*) … group by church_id` queries.
-5. `auth.sessions.active` = sessions not revoked and not expired, by `active_church_id`.
-6. *Platform:* `pg_database_size`, the top 20 tables and indexes by size, and
-   `max(numbackends)` observed today (sampled every 5 minutes by a small job
-   `db-sample` from `pg_stat_database`).
-7. **Cost note in the code:** full counts are fine up to a few million rows.
-   Beyond that, switch the byte estimate to `tablesample system (1)` and scale.
-8. In the same job: **delete** sessions revoked or expired more than 90 days ago,
-   and `password_reset_tokens` older than 7 days. Audit rows are kept forever.
+*Changed:* the first version grouped every table by `church_id` and shared out
+each relation's size by church. With one church, a table's size is the
+church's size.
 
-**Check:** run it by hand (`npm run cli -w @irca/api -- job:run usage-snapshot`).
-`usage_daily` has `db.rows.finance_transactions` for IRCA equal to
-`select count(*) … where church_id = IRCA`.
-
-**Commit:** "Measure each church's share of the database every night".
+**Check:** `npm run cli -w @irca/api -- job:run usage-snapshot`; then
+`db.rows.finance_transactions` in `usage_daily` equals
+`select count(*) from finance_transactions`.
 
 ---
 
-## 6.3 — Platform API
+## 6.3 — Dev console API
 
-All routes live under `/v1/platform`, in `src/modules/platform`, which is the
-only feature module allowed to inject `PrismaCore` (1.9), the connection that
-row-level security lets see every church (2.4a). Each route requires a
-`platform.*` permission, and so a dev.
+All routes are under `/v1/dev` in `src/modules/dev`, which reaches the
+database through `Db` like every other module (the lint exemption it used to
+have is gone). Each route needs a `dev.*` permission; the `dev.developer` role
+holds all of them, `dev.watcher` the read-only three.
 
 | Route | Permission | Returns / does |
 | --- | --- | --- |
-| `GET /platform/churches` | `platform.churches.read` | Every church: status, created, users (active/invited), modules enabled, last activity, and 7-day and 30-day sums of requests, 5xx errors, active users, sign-ins, emails, registrations and finance entries, plus the latest `db.bytes.total` and `db.share_pct`. |
-| `GET /platform/churches/:id` | `platform.churches.read` | The details plus the church's admins. |
-| `GET /platform/churches/:id/usage?metrics=a,b&from=&to=` | `platform.usage.read` | Daily series for the requested metrics, with missing days filled with 0 for counters and carried forward for gauges. |
-| `GET /platform/churches/:id/database` | `platform.usage.read` | The latest per-table rows and bytes, with the change vs 7 and 30 days ago. |
-| `GET /platform/churches/:id/users` | `platform.churches.read` | Users with roles and last active, plus `canImpersonate`. |
-| `GET /platform/churches/:id/audit` | `platform.churches.read` | That church's activity log (same shape as 3.12). |
-| `POST /platform/churches` | `platform.churches.manage` | Create a church and invite its first admin: the same code as the 3.15 CLI. |
-| `POST /platform/churches/:id/suspend` / `reactivate` `{ reason }` | `platform.churches.manage` | A suspended church: its members' sessions in that church are ended, and sign-in to it is refused with "This church's account is paused. Contact support." Its registration key stops working (`403`). Devs can still view and impersonate. Audited with `churchId: null` **and** in the church's own log. |
-| `GET/POST/DELETE /platform/churches/:id/api-clients` | `platform.churches.manage` | List (prefix, last used), create (the key is shown once), revoke. |
-| `GET /platform/health` | `platform.health.read` | DB size and connections, the top 10 queries from `pg_stat_statements` (by total time: calls, mean ms, and the query text **normalised**, which never includes parameter values), outbox backlog (pending / failed), `job_runs` (last run per job), and platform error rates. |
-| `GET /platform/usage?metrics=&from=&to=` | `platform.usage.read` | Platform-wide series (all churches summed, plus `platform_usage_daily`). |
+| `GET /dev/health` | `dev.health.read` | Database size and connections, the 20 biggest tables, the 10 slowest queries from `pg_stat_statements` (normalised text, never values), the email queue by status, the last run of every job, and 14 days of requests and 5xx. |
+| `GET /dev/usage?metrics=a,b&from=&to=` | `dev.usage.read` | Daily series, missing days filled with 0 for counters and carried forward for gauges. `users.active` is counted from `user_activity_daily`. No metrics asked for is an empty answer. |
+| `GET /dev/usage/routes?days=` | `dev.usage.read` | Each route's calls and average time over the window, busiest first. |
+| `GET /dev/usage/emails` | `dev.usage.read` | The last 50 emails: template, status, tries, error, times, and the address cut short **by the API** (`ne***@gmail.com`). |
+| `GET /dev/database` | `dev.usage.read` | Per table: rows, bytes, change against 7 and 30 days ago, share of the total. |
+| `GET /dev/logs/server` | `dev.logs.read` | The server's recent log lines, from memory. |
+| `GET /dev/logs/actions` | `dev.logs.read` | What people did, from the activity log; with `dev.impersonations.read` the view-as rows too. |
+| `GET/PATCH /dev/church` | `dev.church.manage` | The church's name, code, timezone and currency, and whether the code is locked (it is once any finance entry exists; the database enforces it too). Changes are in the activity log. |
+| `GET/POST/DELETE /dev/api-clients[/:id]` | `dev.church.manage` | The registration form's keys: list (prefix, last used), make (the key is in that answer only), revoke. Both are in the activity log. |
+| `GET /dev/impersonations?actor=&subject=&since=&until=&before=&limit=` | `dev.impersonations.read` | The view-as log, newest first (see 6.4). |
+| `GET /dev/impersonations/:idOrPrefix` | `dev.impersonations.read` | One session and every page opened in it. |
+| `GET /dev/impersonations/events?after=` | `dev.impersonations.read` | START / VIEW / END after a moment, for `follow`. |
 
-**The impersonation log** (the only place impersonation can be read, D16):
-
-| Route | Permission | Returns |
-| --- | --- | --- |
-| `GET /platform/impersonations?church=&actor=&subject=&since=&until=&before=&limit=` | `platform.impersonations.read` | Sessions, newest first (keyset by `startedAt, id`, limit ≤ 500): id, church code, the actor's and subject's name, email and role labels, started, ended, end reason, duration, and the number of pages viewed. `actor`/`subject` match name or email (contains, case-insensitive). `since`/`until` accept `24h`, `7d`, `30d` or a date. |
-| `GET /platform/impersonations/:id` | `platform.impersonations.read` | One session plus every `impersonation.view` row of it (time, method, route path, status, ms), read through `AuditQueries.forPlatform()`. |
-| `GET /platform/impersonations/events?after=<iso>&church=` | `platform.impersonations.read` | START / VIEW / END events after a moment, oldest first, max 200. Used by `follow` on the terminal page (polled every 5 s). |
-
-Impersonation from the dev console uses the normal `POST /v1/impersonation`
-with `churchId` (2.8).
-
-`pg_stat_statements`: enable it on Neon (`create extension if not exists
-pg_stat_statements;` as the owner). Reading it needs `pg_read_all_stats`,
-so grant that to `irca_app`, or read it through a narrow `security definer`
-function owned by `irca_owner`. The function is preferred: it exposes only
-the columns above.
-
-**Commits:** "List every church with its usage for devs"; "Serve usage series
-and database breakdowns per church"; "Create, suspend and reactivate churches";
-"Show platform health to devs".
+*Not built, because D27 removed what they were for:* listing, creating,
+suspending and reactivating churches, and one church's users and activity
+(those are Admin → People and Admin → Activity).
 
 ---
 
 ## 6.4 — Dev console pages
 
-Devs see a **Dev console** group at the top of the sidebar (2.13). Pages under
-`/platform`, all read-only by design except the four actions (create church,
-suspend/reactivate, API keys, view as). Follow the `dataviz` guidance in the
-repository's skills for charts. For this scale, small inline SVG line and bar
-charts are enough, and no chart library is needed.
+The **Dev console** group in the sidebar, for anyone holding its permissions.
 
-1. **`/platform`, Churches**
+1. **`/dev`, Health** — the figures from `GET /dev/health`: database and
+   connections, failed-request rate, emails waiting, requests and failures by
+   day, the biggest tables, every job's last run, the email queue, and the
+   slowest queries (or a note that `pg_stat_statements` is off).
+2. **`/dev/usage`, Usage**, in tabs:
+   - **Overview:** staff active today, requests and failure rate over 7 days,
+     people on record, data stored, emails in 30 days; 90 days of requests by
+     portal, of staff active, and of refused and failed requests.
+   - **Every number:** any four metrics from the catalogue on one chart, over
+     7 to 365 days, with a total or latest figure for each.
+   - **Database:** the ten biggest tables, all the tables together over 90
+     days, and a table with rows, growth this week and month, size and share.
+   - **API:** requests, average and slowest answer, throttling, refused and
+     failed by day, and the busiest and slowest routes (a route needs 20 calls
+     to rank as slow).
+   - **Sign-ins:** sign-ins, wrong passwords, lockouts, resets, sessions open,
+     how often someone was viewed as (who and whom is only in the view-as
+     log), and invitations sent and accepted.
+   - **Email:** sent, retried and given up on in 30 days, and the last 50.
+3. **`/dev/logs`, Logs** — the server's recent lines and what people did.
+4. **`/dev/impersonations`, the view-as log**, drawn as a terminal (below).
+5. **`/dev/settings`, Settings** — the church (edited in the drawer, the code
+   locked once it is on an entry number) and the registration form's keys.
 
-   ```
-   Dev console · Churches                                        [+ New church]
-   Last 7 days ▾
-    Church            Status   People  Portals  Requests  Errors  Active  Emails  Regs  Entries  DB size  Share  Last active
-    IRCA              Active   14      3        48,210    3 (0%)  11      12      86    142      41 MB    96%    2 min ago
-    ~~~~~~~~~~ sparkline of requests under each row ~~~~~~~~~~
-    Test Church       Active   2       1        310       0       1       2       0     4        1.2 MB   3%     3 days ago
-   ```
+Charts are small inline SVG (`modules/dev/components/Charts.tsx`), in four
+series colours checked for colour-blind separation against both themes'
+surfaces, with every value readable by pointing at a day and as a table one
+click away.
 
-   Sort by any column. The header row shows platform totals.
-2. **`/platform/churches/[id]`**, with tabs:
-   - **Overview:** stat tiles (Active today, Active this month, Requests 7d,
-     Error rate, DB size, Emails 30d) and 90-day charts for requests (split by
-     module, stacked), active users, and errors.
-   - **Database:** a table per church-owned table (rows, estimated size,
-     change in 7d/30d, share of the church's total), and a 90-day line of
-     `db.bytes.total`.
-   - **Activity:** sign-ins, failures, lockouts, password resets, active
-     sessions, the number of impersonations (details are only in the
-     impersonation log, 6.4 item 4), and the invitation funnel
-     (sent → accepted).
-   - **API:** the top routes by calls and by average latency, and 4xx/5xx over time.
-   - **Email:** sent, failed, retries, and the last 50 outbox rows (status,
-     template, recipient **masked** as `ne***@gmail.com`, error).
-   - **Modules & people:** enabled modules, and users with roles and last active,
-     each with **View as** (one click, as in 3.9).
-   - **Activity log:** the church's audit log (3.12's component, reused).
-   - **Settings:** status (Suspend / Reactivate with a reason), code and slug
-     (the code is shown as locked once finance entries exist), timezone and
-     currency, and API keys.
-3. **`/platform/churches/new`:** code, slug, name, timezone, currency, and the
-   first admin's name and email → creates and invites (their invitation
-   email says the church was set up for them).
-4. **`/platform/impersonations`, the impersonation log, drawn as a real terminal.**
-   This is the only screen in the system where anyone can see who viewed as
-   whom and when. It is read-only: no command changes anything.
+**The view-as log as a terminal.** The only screen where anyone can see who
+viewed as whom and when (D16). Read-only: no command changes anything.
 
-   ```
-   ┌─ ● ● ●  irca — impersonation-log — 132×40 ───────────────────────────────────────────────────┐
-   │ IRCA platform shell. Type `help` for commands.                                                │
-   │ dev@irca:~$ log --since 24h                                                                   │
-   │ 2026-09-21 14:02:11 EAT  IRCA  START  0193a2f1  kaka@irca.org (Church administrator)          │
-   │                                                 → neema@example.com (Finance clerk)          │
-   │ 2026-09-21 14:08:40 EAT  IRCA  END    0193a2f1  stopped · 6m29s · 14 pages                    │
-   │ 2026-09-21 16:40:03 EAT  TEST  START  0193b7c0  dev@irca.local (dev) → t-admin@example.com    │
-   │ 2026-09-21 17:10:03 EAT  TEST  END    0193b7c0  expired · 30m00s · 3 pages                    │
-   │ 2 sessions.                                                                                   │
-   │ dev@irca:~$ show 0193a2f1                                                                     │
-   │ 2026-09-21 14:02:15 EAT  IRCA  VIEW   0193a2f1    GET /finance                 200    61ms   │
-   │ 2026-09-21 14:02:22 EAT  IRCA  VIEW   0193a2f1    GET /finance/transactions    200    84ms   │
-   │ …                                                                                             │
-   │ dev@irca:~$ █                                                                                 │
-   └───────────────────────────────────────────────────────────────────────────────────────────────┘
-   ```
+```
+dev@irca:~$ log --since 24h
+2026-09-21 14:02:11 EAT  START  0193a2f1  kaka@irca.org (Church administrator)
+                                          → neema@example.com (Finance clerk)
+2026-09-21 14:08:40 EAT  END    0193a2f1  stopped · 6m29s · 14 pages
+1 session.
+dev@irca:~$ show 0193a2f1
+2026-09-21 14:02:15 EAT  VIEW   0193a2f1    GET /finance                 200    61ms
+```
 
-   **Look.** A window frame with three dots and a title bar, filling the content
-   area. Background `#0C0C0C` and text `#D4D4D4` **in both themes** (it is a
-   terminal), in a monospace font (load Geist Mono with `next/font`). The
-   prompt is `dev@irca:~$` in `#7FC79C`, `START` in amber `#E5B567`, `END`
-   in cyan `#7CC4D8`, `VIEW` in dim `#8E8880`, and errors in `#F2B8B5`.
-   Every one of those passes 4.5:1 on the background. A blinking block cursor,
-   which stops blinking under `prefers-reduced-motion`. Columns are aligned
-   with fixed widths, and long lines wrap with a hanging indent as above.
-   Times are in each church's timezone, with its abbreviation.
+Background `#0C0C0C` and text `#D4D4D4` in both themes, Geist Mono, the prompt
+in `#7FC79C`, START amber `#E5B567`, END cyan `#7CC4D8`, VIEW dim `#8E8880`,
+errors `#F2B8B5`, each at least 4.5:1. Commands, parsed in the browser
+(`modules/dev/terminal/`): `log [--actor] [--subject] [--since 24h|7d|30d|DATE]
+[--until DATE] [--views]`, `show <id>`, `follow` (5 s polling, Ctrl+C stops),
+`export`, `clear` / Ctrl+L, `help`. History on ↑/↓, Tab completion, a clicked
+id runs `show`, an unknown command suggests the nearest, 2,000 lines of
+scrollback. The output is `role="log"`, the prompt a real `<input>`. The
+`--church` flag and the `churches` command went with D27.
 
-   **Commands** (parsed in the browser; each one calls the endpoints above):
-
-   | Command | Does |
-   | --- | --- |
-   | `log [--church CODE] [--actor TEXT] [--subject TEXT] [--since 24h\|7d\|30d\|DATE] [--until DATE] [--views]` | List sessions (START and END lines). With `--views`, every page view is indented under its session. `log` alone = the last 24 h. |
-   | `show <id>` | One session with every page viewed. The first 8 characters of the id are enough. |
-   | `follow [--church CODE]` | Live: print new START/VIEW/END lines as they happen (5 s polling). `Ctrl+C` stops. |
-   | `churches` | List church codes and names, for `--church`. |
-   | `export [same flags as log]` | Download the output as `impersonations-2026-09-21.log` (plain text). |
-   | `clear` (or `Ctrl+L`) | Clear the screen. |
-   | `help [command]` | Usage. |
-
-   **Behaviour.** On open, it types and runs `log --since 24h` by itself, so
-   the page is useful at a glance. `↑`/`↓` walk the command history (kept in
-   `sessionStorage`), `Tab` completes command names, flags and church codes,
-   and clicking a session id runs `show <id>`. An unknown command prints
-   `irca: command not found: xyz` and suggests the nearest one. Output beyond
-   2,000 lines is trimmed from the top, like a real scrollback.
-
-   **Accessibility.** The output area is `role="log"` with `aria-live="polite"`.
-   The prompt is a real `<input>` with a visually hidden label, "Command". Text
-   can be selected and copied like any page, and nothing is drawn on a canvas.
-
-   **Build it** as `apps/portal/src/modules/platform/terminal/`: a `Terminal`
-   component (frame, scrollback, prompt, history, completion), a pure
-   `parseCommand(line)` (unit-tested for every command and every bad input), and
-   a `commands.ts` map from name to handler. Handlers return lines as
-   `{ text, tone }[]` and never touch the DOM, so they are easy to test.
-
-5. **`/platform/health`:** database size and top tables, connections today,
-   slow queries, job runs (last run, duration, ok/failed, and the last error),
-   outbox backlog, and 5xx rate across the platform.
-
-**Check:** with two churches and a few days of use, every tab shows numbers
-that match hand-run SQL for at least one metric each.
-
-**Commits:** one per page, and one per tab of the church page.
+**Check:** with the demo history (`npm run db:demo`) every tab shows numbers
+that match hand-run SQL for at least one metric each. Walked in a browser in
+both themes; `e2e/dev.spec.ts` covers health, logs, usage tab by tab,
+settings with a key made and revoked, and the view-as log.
 
 ---
 
 ## 6.5 — Security hardening
 
-Work through this list. Each item is a checkbox in the PR, with evidence.
+The checklist, each item with its evidence, is **`docs/hardening.md`**. In
+short, what this step added or found:
 
-**HTTP and browser**
+- Refusals and 404s went out without `Cache-Control: no-store`, because the
+  header was set by an interceptor that only runs after the guards. It is now
+  middleware.
+- The API refuses to boot in production unless the session cookie's name
+  starts with `__Host-`.
+- Tokens in request paths (invitation links) are redacted before a log line
+  is written.
+- The rate limits on forgot, reset, and looking up and accepting an
+  invitation are tested, as sign-in and the registration form already were.
+- The permission matrix is **generated** from the routes, for every module,
+  instead of written out for Finance alone.
+- Viewing as someone is read-only in **all three** layers again. The
+  single-church work had dropped the read-only database role as though it were
+  about tenancy, and deleted the tests for the API and database layers with
+  it; both are back, and a new test calls every GET route in the API on the
+  read-only connection.
 
-- [ ] Portal and registration: `Strict-Transport-Security: max-age=63072000;
-      includeSubDomains`, `X-Content-Type-Options: nosniff`, `Referrer-Policy:
-      strict-origin-when-cross-origin` (and `no-referrer` on token pages, 3.4),
-      `Permissions-Policy` denying camera/microphone/geolocation, and
-      `frame-ancestors 'none'`.
-- [ ] A **Content-Security-Policy** for the portal with nonces (read the Next 16
-      CSP guide in `node_modules/next/dist/docs/`): `default-src 'self'`,
-      scripts by nonce, `connect-src 'self'`, `img-src 'self' data:`,
-      fonts self-hosted by `next/font`.
-- [ ] No `dangerouslySetInnerHTML` anywhere (`grep`). React escapes everything else.
-- [ ] The API: `helmet()` defaults, no CORS, and `x-powered-by` off.
+*Changed:* the multi-tenancy items (the route fuzzer, the layer-alone tests,
+row-level security in production, cross-church tests) have nothing to check
+since D27. What they protected that was never about churches — the activity
+log that cannot be rewritten, finance entries that cannot be deleted, the
+view-as log only devs can read — is enforced by grants, and checked at launch
+with the query in `docs/hardening.md`.
 
-**Authentication and sessions**
+---
 
-- [ ] Production cookie name `__Host-irca_session`, `Secure`, `HttpOnly`, `SameSite=Lax`.
-- [ ] The login, forgot, reset, accept and public registration rate limits were tested.
-- [ ] Password change, reset, disable and suspension each end the right sessions (tests exist).
-- [ ] Session and invitation tokens never appear in logs (search a day of production logs for `irk_` and for 43-character base64url strings).
+## 6.6 — The command line for setting up and recovering
 
-**Multi-tenancy** (every section of `multi-tenancy.md`)
+Creating a church and its first administrator used to be a console action,
+and went with D27; nothing else could make the church's row on a production
+database. The command line (`apps/api/src/cli/main.ts`, every command listed
+at its top) now has:
 
-- [ ] The route fuzzer, the layer-alone tests and all CI coverage checks pass.
-- [ ] No cached response contains church data (`no-store` on every `/v1` response).
+| Command | Does |
+| --- | --- |
+| `church:setup --code --name [--timezone] [--currency]` | Writes the church's one row of settings. Once only. |
+| `user:create-dev --email --name` | Creates or takes over the account, sets its password, and gives it Developer and Church administrator. |
+| `user:send-reset --email` | Queues the same email "Forgot password" sends, and says why when it cannot. |
+| `role:grant --email --role <built-in key>` | Gives a built-in role back to a locked-out administrator. |
+| `sessions:revoke --email` | Signs someone out of every browser now. |
 
-**Access control**
+Each writes to the church's activity log as "from the command line".
+`api-client:create`, `registrations:import`, `registrations:export-back` and
+`person:erase` had kept requiring a `--church` flag their usage no longer
+mentioned; that is fixed.
 
-- [ ] The route audit is on in production (it runs at every boot).
-- [ ] Every module has a generated permission-matrix test.
-- [ ] Every module has a cross-church test (read, write and suggest endpoints).
-- [ ] Impersonation's three layers each have a passing test, and the
-      `@AllowWhileImpersonating` list is still exactly two.
-- [ ] The raw-SQL check (2.4) passes, and each `$queryRaw` has been read by a second person.
-- [ ] `$queryRawUnsafe` and `$executeRawUnsafe` are not used anywhere (`grep`, enforced by ESLint).
-
-**Data**
-
-- [ ] The database roles in production match 1.5 (`\du` output in the PR):
-      the runtime uses `irca_app`, `irca_readonly` and `irca_core`, never the
-      owner, and **no runtime role has `BYPASSRLS` or superuser**.
-- [ ] Row-level security is on for every table in the 2.4a coverage check,
-      in production (`select relname from pg_class where relrowsecurity`).
-- [ ] `audit_events` and `finance_transactions` have their revokes in production.
-- [ ] Personal data inventory written in `docs/data-inventory.md`: what is
-      stored about visitors (including prayer requests), staff and money, who
-      can see it, and how long it is kept. Tanzania's Personal Data Protection
-      Act (2022) applies to this data. **Have the church's leadership read
-      the inventory, and take advice on consent wording for the registration
-      form** before launch.
-- [ ] A dev-run CLI `person:erase --church IRCA --person <id>` for erasure
-      requests: it deletes the registration, person, notes and attendance,
-      replaces the name in audit summaries with "[erased]", and records that
-      it ran (audit, with no personal data).
-- [ ] Dependencies: `npm audit --omit=dev` is clean or its exceptions are
-      documented, and Dependabot (or Renovate) is enabled for the repository.
-- [ ] Secrets live only in the host's environment settings. `git log -p |
-      grep -i -E "irk_|re_[A-Za-z0-9]{20,}|postgres://[^ ]*:[^ ]*@"` finds nothing.
-
-**Commits:** one per area, each saying what was tightened and why.
+**Check:** run end to end against an empty database, then the API booted on it
+and the new developer signed in. `cli.e2e-spec.ts` covers each command.
 
 ---
 
 ## Moved out: performance, backups, per-church moves and monitoring
 
-Steps 6.6, 6.8, 6.8a and 6.9 are now **Phase 10**
-(`10-strengthening.md`), steps 10.1 to 10.4. They were moved on
-23 September 2026 because none of them is needed to build a feature, and
-keeping them here meant Communications and Outreach waited behind
-infrastructure. Phase 10 does not start until the owner says so.
+Steps 6.6 (old numbering), 6.8, 6.8a and 6.9 are **Phase 10**
+(`10-strengthening.md`). They were moved on 23 September 2026 because none of
+them is needed to build a feature. Phase 10 does not start until the owner
+says so.
 
 ---
 
 ## 6.7 — Environments and deployment
 
-**Three environments**
+**`docs/deployment.md`** is the version to follow: the three environments,
+the Neon roles (`irca_owner`, `irca_app`, `irca_readonly`, `irca_backup`; the
+old `irca_core` is not used) and why the runtime ones are made in SQL, the
+connection strings, the API's build, pre-deploy migration and start commands,
+every production setting, the two commands for an empty database, the portal
+and registration projects on Vercel, email records in Resend, error tracking,
+and what to check after each deploy.
 
-| | Local | Staging | Production |
-| --- | --- | --- | --- |
-| Database | local Postgres `irca_dev` | Neon branch `staging` | Neon `main` |
-| API | `localhost:4000` | `api-staging.<domain>` | `api.<domain>` |
-| Portal | `localhost:3000` | Vercel preview/staging | `portal.<domain>` |
-| Registration | `localhost:3001` | Vercel preview | the existing production domain |
-| Email | `log` | Resend, to team addresses only | Resend |
-| Churches | seeded IRCA + TEST | IRCA copy + TEST | IRCA (+ future) |
-
-Ask the owner for the domain before this step. The recommendation is
-subdomains of one domain the church controls, so email DNS is in one place.
-
-**Neon**
-
-1. In the Neon console, create roles `irca_owner` (the console makes it a
-   member of `neon_superuser`, which is needed for `create extension`),
-   `irca_core`, `irca_app`, `irca_readonly` and `irca_backup`. Set strong
-   generated passwords and store them in a password manager. **Check that
-   none of the runtime roles has `BYPASSRLS`** (`\du`). If Neon's console gives
-   console-made roles `neon_superuser` membership, create the four runtime roles
-   with SQL as `irca_owner` instead (`create role … login password …`), so they
-   stay ordinary roles that row-level security applies to.
-2. Create the database `irca` owned by `irca_owner`, and a branch `staging`.
-   Set the statement timeouts from 1.5 (`alter role irca_app set
-   statement_timeout = '10s'`, the same for `irca_readonly`, and `'60s'` for
-   `irca_core`) as the role that created them, and `set timezone = 'UTC'` for
-   all five roles (why: 01 step 1.5).
-3. `DIRECT_DATABASE_URL` = the owner on the direct host;
-   `DATABASE_URL` = the app role on the pooled host;
-   `DATABASE_URL_CORE` = the core role on the pooled host;
-   `DATABASE_URL_READONLY` = the read-only role on the pooled host.
-   The backup role's URL (direct host) goes only into the backup job's secrets.
-   All with `sslmode=verify-full` (see the registration README for why).
-
-**API on Railway or Render** (the same settings on either):
-
-- Root: the repository root. Node 24.
-- Build: `npm ci && npm run build -w @irca/shared && npx prisma generate --schema apps/api/prisma/schema.prisma && npm run build -w @irca/api`
-- Pre-deploy (release) command: `npm run db:deploy -w @irca/api`. Migrations
-  run once per deploy, before the new version takes traffic. A failed
-  migration fails the deploy, not the site.
-- Start: `node apps/api/dist/main.js`. Health check path: `/health`.
-- **One instance** to begin with (jobs are lock-safe if this ever changes, 2.12).
-- Env: every variable in `apps/api/.env.example`, with production values.
-  `NODE_ENV=production`, `SESSION_COOKIE_NAME=__Host-irca_session`,
-  `PORTAL_ORIGIN=https://portal.<domain>`,
-  `REGISTRATION_ORIGIN=https://<registration domain>`, `EMAIL_PROVIDER=resend`,
-  `TRUST_PROXY` = the number of proxies in front of it (the host's load balancer,
-  plus Vercel's rewrite hop. Verify it by logging `req.ip` once and checking it
-  is a real client IP).
-- After the first deploy, open a shell on the host:
-  `npm run cli -w @irca/api -- user:create-dev --email <owner> --name "<owner name>"`,
-  then sign in to the portal, and create IRCA from the dev console (or with
-  3.15's CLI) with the senior pastor as first admin.
-
-**Portal on Vercel:** a new project, Root Directory `apps/portal`, env
-`API_INTERNAL_URL=https://api.<domain>` and
-`SESSION_COOKIE_NAME=__Host-irca_session`, domain `portal.<domain>`.
-
-**Email:** in Resend, add the sending domain and create the SPF, DKIM and
-DMARC DNS records it shows. Send a test invitation to Gmail and Outlook
-addresses, and check it lands in the inbox, not spam.
-
-**Error tracking (recommended):** Sentry for the API and portal (the free
-tier is enough), with `beforeSend` scrubbing cookies, authorisation headers and
-request bodies.
-
-**Commit:** "Describe how each app is built and deployed" (in
-`docs/deployment.md`, with the tables above filled in with real names).
+**Open: the domain.** Ask the owner. The recommendation is subdomains of one
+domain the church controls (`api.`, `portal.`), so email records and
+certificates are in one place; the registration form keeps its current domain.
 
 ---
 
 ## 6.10 — Runbooks
 
-Write each as a short page in `docs/runbooks/`, with exact commands:
+In **`docs/runbooks/`**, each short and with exact commands:
+`locked-out-admin.md`, `revoke-access-now.md`, `rotate-registration-key.md`,
+`restore.md` (from Neon's history; the nightly dump is Phase 10),
+`erasure-request.md`, `cutover-registration.md` (5.18 as a checklist, with
+previews on staging rather than a TEST church), and `add-a-module.md`.
 
-- `restore.md`: restore from Neon history and from the nightly dump.
-- `locked-out-admin.md`: the only admin lost access →
-  `cli user:send-reset --email …` (a dev command that enqueues a reset
-  email), or as a last resort `cli role:grant --church IRCA --email … --role admin.administrator`
-  (audited as done by the dev).
-- `revoke-access-now.md`: disable a person from the portal. If they are a
-  dev, or the portal is unavailable: `cli sessions:revoke --email …`.
-- `rotate-registration-key.md`: create the new key → set it in Vercel →
-  redeploy → revoke the old one.
-- `suspend-church.md`.
-- `cutover-registration.md`: 5.18, kept for reference.
-- `add-a-module.md`: link to `docs/adding-a-module.md`.
-
-**Commit:** "Write the runbooks for the things that go wrong".
+*Changed:* `suspend-church.md` is not written. There is one church, and the
+people who run it do not suspend it; taking the system down is the host's
+switch.
 
 ---
 
 ## 6.11 — Launch and training
 
-1. Two one-page guides (in the portal under **Help**, and as PDFs to hand out):
-   - *Getting started*: accepting your invitation, signing in, forgetting your
-     password, what the sidebar shows you, and what "Viewing as" means if an
-     admin mentions it.
-   - *Finance in five minutes*: recording an expense (the suggest-or-create
-     field), recording a stack of receipts with "Record another", reading an
-     entry number, voiding a mistake, and printing the monthly statement.
+1. **Two one-page guides**, in the portal under **Help** (linked from the
+   sidebar for everyone) and printable as one A4 page each with "Print or save
+   as PDF": *Getting started* and *Finance in five minutes*. Built. Print one
+   of each for the training sessions from the portal itself, so the paper
+   never drifts from the screens.
 2. A 30-minute session with the pastors on Applications and Discipleship,
-   using the staging copy.
-3. Launch order: admins → the Membership portal (pastors and office) → the
-   registration cutover (5.18) → Finance (after a week on staging with the
-   finance team entering real receipts in parallel with their current book).
-4. For the first month, look at the dev console every Monday: errors, emails
-   failed, sign-in failures, and any church growing unexpectedly.
+   using staging. *The owner's.*
+3. Launch order: administrators → the Membership portal (pastors and office)
+   → the registration cutover (`docs/runbooks/cutover-registration.md`) →
+   Finance, after a week on staging with the finance team entering real
+   receipts alongside their current book. *The owner's.*
+4. For the first month, every Monday: **Dev → Usage** (failed requests,
+   sign-in failures and lockouts, emails given up on) and **Dev → Health**
+   (jobs failed, the email queue). *The owner's.*
 
 ---
 
 ## 6.12 — Starting the next department
 
-The owner does not yet know what Media, Outreach, Comms or Programs need.
-**Do not build a module from guesses.** Before writing a manifest, spend an
-hour with that department and fill in `docs/modules/<key>-brief.md`:
+The owner does not yet know what Media or Programs need. **Do not build a
+module from guesses.** Before writing a manifest, spend an hour with that
+department and fill in `docs/modules/<key>-brief.md`:
 
 1. Who is in the department, and who leads it? (These become the roles.)
 2. What do they do every week that involves a list, a record or a number?
@@ -477,38 +331,32 @@ hour with that department and fill in `docs/modules/<key>-brief.md`:
 3. What would they look up? What would they change? Who must approve what?
    (This splits the permissions into read and write, and finds `decide`-style
    permissions.)
-4. What do they need from other portals? (For example, the 17 Sept notes say
-   Comms needs names, gender and phone numbers from Membership, finance
-   balances to remind people of pledges, and "who gave in week X". Each of
-   those is an explicit cross-module read permission, such as
-   `membership.people.read` granted to a Comms role, **never** a copy of the
-   data.)
-5. What must they never see? (For example, Comms must not see prayer requests.
-   This is already true, since that is `membership.people.read_sensitive`.)
-6. What goes out of the system (SMS through Beem, emails, printed lists), and
-   who pays for it? (This adds usage metrics such as `sms.sent` and its cost.)
+4. What do they need from other portals? Each is an explicit cross-module read
+   permission, such as `membership.people.read` granted to a Comms role,
+   **never** a copy of the data.
+5. What must they never see? (Comms must not see prayer requests; that is
+   already `membership.people.read_sensitive`.)
+6. What goes out of the system (SMS, emails, printed lists), and who pays for
+   it? (This adds usage metrics such as `sms.sent` and its cost.)
 
-Then follow `docs/adding-a-module.md`. The first slice of any new module
-should be a single read-only list page plus its permission matrix test. That
-gets the department something to react to within days, and proves the RBAC
-wiring before any writes exist.
+Then follow `docs/adding-a-module.md`. The first slice of any new module is a
+single read-only list page; the generated permission matrix covers it without
+being asked.
 
-**Two of them are now written.** The owner gave the Outreach and
-Communications departments' own accounts on 22 September, so those two are no
-longer guesses:
+**Two are written.** The owner gave the Outreach and Communications
+departments' own accounts on 22 September:
 
-- `docs/modules/comms-brief.md` → built by **Phase 7**
-  (`07-communications.md`).
-- `docs/modules/outreach-brief.md` → built by **Phase 8** (`08-outreach.md`).
+- `docs/modules/comms-brief.md` → **Phase 7** (`07-communications.md`).
+- `docs/modules/outreach-brief.md` → **Phase 8** (`08-outreach.md`).
 
 Both still have "TBC" where the department itself has to answer — the
 Communications budget, the Outreach team's size, which figures they report
-upward — and those are step 7.1 and step 8.1 respectively. Media and Programs
-remain unwritten: do not build them from guesses either.
+upward — and those are step 7.1 and step 8.1. **Phases 7, 8 and 9 were drafted
+before D27** and still give their tables a `church_id` and church-scoped
+unique keys; each needs the same treatment the schema got before it is built
+(see D27, "Impact on the rest of the plan").
 
-The needs from the 17 September notes that the two phases answer:
-
-| Need from the notes | Where it is built |
+| Need from the 17 September notes | Where it is built |
 | --- | --- |
 | Send messages via Beem: welcome, thanks for giving, reminders | Phase 7, steps 7.4 and 7.7 |
 | See names, gender and phone numbers | `membership.people.read` (+ `read_sensitive`), granted to the Comms role |
@@ -520,8 +368,27 @@ The needs from the 17 September notes that the two phases answer:
 
 ## 6.13 — Phase check (launch)
 
-- [ ] The dev console shows every metric in 6.1 for IRCA with at least 7 days of history.
-- [ ] Hardening checklist complete, with evidence.
-- [ ] Runbooks exist and a second person has read them.
-- [ ] Production has: a dev account, IRCA with its first admin, Membership on, and the registration cut over.
+Done:
+
+- [x] The dev console shows every metric in 6.1 with history (checked against
+      eighteen months of demo history; production gains its own from launch).
+- [x] Hardening built and recorded, with evidence, in `docs/hardening.md`.
+- [x] Deployment written (`docs/deployment.md`); runbooks written
+      (`docs/runbooks/`); guides in the portal.
+- [x] API unit and end-to-end tests, and every browser journey, pass.
+
+The owner's, or the church's:
+
+- [ ] Choose the domain (6.7).
+- [ ] A second person reads the runbooks, and reads each raw query
+      (`docs/hardening.md`).
+- [ ] Leadership reads `docs/data-inventory.md`; legal advice on the form's
+      consent wording.
+- [ ] Production has: the developer account, IRCA set up with its first
+      administrator, Membership on, and the four launch checks in
+      `docs/hardening.md` pasted into the launch PR.
+- [ ] The registration cut over (`docs/runbooks/cutover-registration.md`).
 - [ ] Finance launched after the parallel-run week.
+- [ ] Someone other than the builder walks the new pages from a fresh
+      database (`npm run db:reset && npm run db:seed`), per the README's
+      definition of done.

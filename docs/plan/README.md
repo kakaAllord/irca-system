@@ -17,13 +17,13 @@ Phase 0 (`00-restructure.md`) comes before everything else.
 | `03-admin-portal.md` | Phase 3 (built) — the church Admin portal: users, email invitations, set-password, roles, portals (modules), impersonation UI, audit viewer, account page. |
 | `04-finance-portal.md` | Phase 4 (built) — the Finance portal: income sources, expense items with suggestions, transactions with `IRCA-EXP-2026-09-000001` codes, corrections and voids only through change requests that an admin approves, reports. This is the RBAC test case. |
 | `05-registration-and-membership.md` | Phase 5 (built; cutover is the owner's) — the registration form moved onto the API, live data migrated, and the Membership portal (Dashboard, Members, Applications, Discipleship, Insights) from the design. |
-| `06-dev-console-hardening-launch.md` | Phase 6 — the dev console with per-church usage, security hardening, deployment, cutover, and the runbook for adding the next department. Load testing, backups, per-church moves and monitoring moved to Phase 10. |
+| `06-dev-console-hardening-launch.md` | Phase 6 (built; launch is the owner's) — the dev console (health, usage, logs, the view-as log, settings and keys), security hardening, the setup and recovery commands, deployment, runbooks and the training guides. Rewritten for D27. Load testing, backups and monitoring are Phase 10. |
 | `07-communications.md` | Phase 7 — the Communication system: SMS through Beem, templates approved once and used weekly, audiences, recurring "beat" messages, opt-out, and what it all costs. Central control, departments sending their own routine messages. |
 | `08-outreach.md` | Phase 8 — the Outreach & Evangelism portal: the team, Saturday sessions, people reached in four fields, follow-up, one timeline per person, Friday training, the dashboard, and the session report as a PDF. |
 | `09-pledges-and-giving-reminders.md` | Phase 9 — pledges: what someone promised, what they have paid, what is left, and reminding them through Communications. |
 | `10-strengthening.md` | Phase 10 — strengthening: performance and load, backups and the restore drill, per-church export/move/offboarding, monitoring and alerts. **Starts only when the owner says so**, after every feature phase is done. |
 | `docs/modules/*-brief.md` | What a department actually does, in its own words, filled in before its module is built (step 6.12). `comms-brief.md` and `outreach-brief.md` exist. |
-| `multi-tenancy.md` | How churches are kept apart everywhere: sign-in, permissions, database (extension + row-level security), endpoints, files, caching, jobs, logs, backups, monitoring, rate limits, testing. Also the path from one shared database to dedicated databases for large churches. |
+| `multi-tenancy.md` | Retired by D27 (one church, one deployment). Says where each guarantee that outlived it is enforced now. |
 | `appendix-database.md` | Every table in one place, with what owns it and why it exists. |
 
 ---
@@ -38,16 +38,16 @@ Phase 0 (`00-restructure.md`) comes before everything else.
   staff browser  ──────▶ ┌──────────────────────────────┐  │
                          │ apps/portal        (Next.js) │──┤  /api/* is rewritten
                          │  /login  /admin  /finance    │  │  to the API, so the
-                         │  /membership  /platform      │  │  session cookie is
+                         │  /membership  /dev  /help    │  │  session cookie is
                          └──────────────────────────────┘  │  first-party
                                                            ▼
                          ┌──────────────────────────────────────────┐
                          │ apps/api                     (NestJS)    │
                          │  core:    auth · sessions · rbac ·       │
                          │           impersonation · audit · usage ·│
-                         │           email outbox · tenancy         │
+                         │           email outbox · jobs            │
                          │  modules: admin · finance · membership · │
-                         │           platform   (+ media, outreach, │
+                         │           dev        (+ media, outreach, │
                          │           comms … later)                 │
                          └───────────────┬──────────────────────────┘
                                          │ Prisma
@@ -55,7 +55,8 @@ Phase 0 (`00-restructure.md`) comes before everything else.
                                          ▼      every impersonated request)
                          ┌──────────────────────────────────────────┐
                          │ PostgreSQL (Neon in production)          │
-                         │  every business row carries church_id    │
+                         │  one church's data; a second church gets │
+                         │  its own database (D27)                  │
                          └──────────────────────────────────────────┘
 
   packages/shared — the registration flow (questions, three languages,
@@ -68,13 +69,13 @@ and conversation. Do not invent synonyms.
 
 | Word | Meaning |
 | --- | --- |
-| **Church** | A tenant. IRCA is the first. Every business row has a `church_id`. A church has a short `code` (`IRCA`) used in transaction numbers and a `slug` (`irca`) used in URLs. |
-| **Module** / **portal** | A department area of the system: `admin`, `membership`, `finance`, later `media`, `outreach`, `comms`, `programs`. A module is *defined in code* (its permissions, default roles, pages). A church admin *enables* modules for their church. They cannot invent new ones — a new module is a code change. "Portal" is the word staff see; "module" is the word in code. They are the same thing. |
+| **Church** | The one church this deployment serves (D27): one row of settings, with a short `code` (`IRCA`) used in entry numbers, a name, a timezone and a currency. A second church is a second deployment. |
+| **Module** / **portal** | A department area of the system: `admin`, `membership`, `finance`, later `media`, `outreach`, `comms`, `programs`. A module is *defined in code* (its permissions, default roles, pages). A church admin *enables* modules. They cannot invent new ones — a new module is a code change. "Portal" is the word staff see; "module" is the word in code. They are the same thing. |
 | **Permission** | One thing a person may do, such as `finance.transactions.create`. Defined in code by the module that owns it. Each permission is either `read` or `write`. That one flag is what makes read-only impersonation possible. |
-| **Role** | A named bundle of permissions from **one** module, stored in the database per church, such as "Finance clerk". Each module ships default roles. Admins can later create custom ones. |
-| **Membership** (of a church) | The link between a user and a church. Roles are granted to the membership, not to the user, so the same person can hold different roles in two churches. *Not* the same as "church membership" in the pastoral sense. In code that is `Person.stage = CONFIRMED_MEMBER`. See the glossary note in `05`. |
-| **Church admin** | A user holding the system role *Church administrator* in the `admin` module of their church. |
-| **Dev** | A platform-level user (`users.platform_role = 'DEV'`). Not a member of any church. Can see the dev console (every church's usage) and impersonate anyone, in any church. |
+| **Role** | A named bundle of permissions from **one** module, stored in the database, such as "Finance clerk". Each module ships default roles. Admins can later create custom ones. |
+| **Membership** | In the pastoral sense only: `Person.stage = CONFIRMED_MEMBER`. See the glossary note in `05`. (Until D27 the word also meant a user's link to a church, which held their roles; roles now belong to the user.) |
+| **Church admin** | A user holding the system role *Church administrator* in the `admin` module. |
+| **Dev** | A user holding the *Developer* role of the `dev` module: the dev console, the view-as log, the church's settings and keys, and viewing as anyone. An ordinary role since D27, not a rank above the church. |
 | **Change request** | A request to change a record that may not be changed directly (every finance entry). The person asks with a reason, and a church admin approves or rejects it in Admin → Requests. See D17. |
 | **Impersonation** | Viewing the system as another user sees it. **Always read-only, and silent:** the person viewed is never told, and only devs can read the log (D16). Enforced in three layers: the UI, the API and the database. See `02`, steps 2.8 and 2.9. |
 | **Actor** / **subject** | During impersonation the *actor* is the real person at the keyboard, and the *subject* is the person being viewed as. Every audit row records both. |
@@ -164,13 +165,12 @@ registration app were only visible that way. Types passing is not a Check.
 - **Deny by default.** Every API route declares its permission, or is
   explicitly `@Public()` or `@AuthenticatedOnly()`. The API refuses to boot if a
   route declares none of them (`02` step 2.7).
-- **Every business table has `church_id`, and every query filters by it.** The
-  tenant extension does this for you in Prisma calls (`02` step 2.4), and
-  **PostgreSQL row-level security** enforces it again in the database (`02`
-  step 2.4a). Multi-statement work and all raw SQL go through `db.tx()`, which
-  sets the church for the transaction. Never use session-level `SET`. The full
-  picture across auth, APIs, files, caches, jobs, logs, backups, monitoring and
-  rate limits is in `multi-tenancy.md`.
+- **Feature code reaches the database only through `Db`**, which hands out the
+  read-only connection while someone is being viewed as. Several statements
+  that must stand or fall together go through `db.tx()`; raw SQL uses the `sql`
+  tag, which binds every value. No table has a `church_id` (D27); what the
+  application may never do is enforced by grants and triggers in the
+  migrations (`appendix-database.md`).
 - **GET never writes business data.** Impersonation relies on it.
 - **Money is never a JS `number`.** Amounts travel as decimal strings
   (`"150000.00"`), are stored as `numeric(14,2)`, and are summed in SQL.
