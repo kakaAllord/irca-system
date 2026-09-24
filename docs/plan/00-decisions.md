@@ -363,9 +363,11 @@ Consequences, built in Phase 7:
 - A department reaches only the audiences it has been **granted**; its own
   team is granted when its portal is switched on, and anything wider is an
   administrator's deliberate act.
-- Only the department's leader and **one** delegate may send. It is a row in
-  `comms_senders` with a unique index enforcing "one", not a second role
-  system.
+- ~~Only the department's leader and **one** delegate may send.~~ *Amended
+  by D28 (24 Sept 2026):* every leader of a department may send for it, and
+  there is no delegate. Being a leader is what allows it; an administrator who
+  wants someone else to send names them a leader. There is no
+  `comms_senders` table.
 - Free text needs a separate permission nobody holds by default. Ordinary
   sending uses an approved template.
 - A template edit is a new version needing approval; the old version keeps
@@ -486,6 +488,51 @@ instead (AES-256-GCM, the encryption key itself in `.env` as
 change the way the Beem account does), masked in the UI to the last four
 characters, and never sent back to the browser in full. Every save is
 audited, by summary only — never the key, before or after.
+
+---
+
+## D28. Departments come first; a portal belongs to one (owner, 24 Sept 2026)
+
+**The owner's words:** *"In every department there is a leader, one or more,
+which are only added by admins, and also there are members, which the leader
+can add."* And: *"A department may or may not have a portal, but if it has
+then it has because there is a department."*
+
+Until this decision a "department" was only a portal (Membership, Finance),
+and nothing recorded who led or belonged to one. The church's departments are
+mostly not portals at all: the praise team, the choir, the ushers, the youth.
+They still have a chairperson and a secretary, members, and messages to send.
+
+| Option | What it costs |
+| --- | --- |
+| Departments are the portals | The praise team cannot have a leader, members or a message until someone builds it a portal. |
+| Leaders and members are staff accounts | Every choir member needs a login they will never use. |
+| **Departments are a list the administrators keep; leaders and members are people from People; a portal, where there is one, belongs to a department (taken)** | One new list and two join tables. Everyone is already in People, because everyone came through the registration form, so nobody is typed twice and their phone number and language are already known. |
+
+The rules that follow:
+
+- **Administrators keep the list of departments**, and only they name and
+  remove **leaders**. A department has one or more, each with a title
+  (Chairperson, Secretary). A leader must already be a **confirmed member**,
+  approved by the pastors; a department's ordinary members need not be.
+- **Leaders add and remove members**, from People, for the departments they
+  lead and no other.
+- **A leader signs in.** Naming a leader links their person record to a staff
+  account (`users.person_id`), and invites them by email if they have none.
+  What a leader may do comes from being one, not from a role an administrator
+  remembers to hand out: the permission resolver adds the leadership
+  permissions for as long as they lead a department that is not archived, and
+  they stop the moment they do not.
+- **A portal belongs to a department.** `departments.module_key` names it, and
+  a department portal cannot be switched on in Admin → Portals until a
+  department has been given it. Every staff account is still made in Admin.
+  Admin and the dev console are the system's own, not a department's.
+- **Communications sends to the whole church, to one or more departments
+  (leaders and members), to every leader at once, or to the leaders of the
+  departments it picks.** A department's leaders send approved templates to
+  their own department (D21, as amended).
+- Leadership and membership are ended, never deleted, so "who led the choir
+  in 2027" keeps an answer.
 
 ---
 
