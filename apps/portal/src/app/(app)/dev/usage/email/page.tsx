@@ -80,8 +80,8 @@ export default async function EmailPage() {
           </Table>
         )}
         <p className="mt-2 text-[11.5px] text-fg3">
-          Addresses are cut short before they leave the server. The full address is in the People
-          page, for those allowed to see it.
+          Addresses are cut short before they leave the server. The full address is on the
+          person&apos;s own page, in Admin or Membership, for those allowed to see it.
         </p>
       </section>
     </div>
