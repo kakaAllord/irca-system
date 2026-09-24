@@ -58,7 +58,8 @@ export class PublicRegistrationService {
       });
       // A registration is somebody, from the first tap: the office should see
       // them in the list even if they never finish.
-      await tx.person.create({ data: { registrationId: created.id } });
+      // The language they answer in is the one they are written to in (D22).
+      await tx.person.create({ data: { registrationId: created.id, lang } });
       return created;
     });
 
@@ -255,6 +256,7 @@ export class PublicRegistrationService {
         dial: row.dial.slice(0, 6),
         phone: row.phone.slice(0, 20),
         email: row.email.slice(0, 254),
+        lang: row.lang,
       },
     });
   }
