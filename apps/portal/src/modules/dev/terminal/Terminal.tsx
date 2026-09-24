@@ -37,7 +37,7 @@ const WELCOME: Line[] = [
  * for what has happened since the last thing it showed, so an open screen
  * fills in as people work, and `stop`, Escape or leaving the page ends it.
  */
-export function Terminal() {
+export function Terminal({ timezone }: { timezone: string }) {
   const [blocks, setBlocks] = useState<Block[]>([{ id: 0, typed: null, lines: WELCOME }]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -48,7 +48,7 @@ export function Terminal() {
   const nextId = useRef(1);
   const bottom = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLInputElement>(null);
-  const follow = useRef<{ since: string; church?: string; timer?: number } | null>(null);
+  const follow = useRef<{ since: string; timer?: number } | null>(null);
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ block: 'end' });
@@ -70,14 +70,14 @@ export function Terminal() {
 
   async function poll() {
     if (!follow.current) return;
-    const { since, church } = follow.current;
+    const { since } = follow.current;
     try {
-      const query = new URLSearchParams({ after: since, ...(church ? { church } : {}) });
+      const query = new URLSearchParams({ after: since });
       const events = await clientApi<LiveEvent[]>(`/dev/impersonations/events?${query}`);
       if (!follow.current) return;
       if (events.length) {
         follow.current.since = events.at(-1)!.at;
-        write(events.map(eventLine));
+        write(events.map((e) => eventLine(e, timezone)));
       }
     } catch {
       write([{ text: 'Lost the connection. Following again in a moment.', tone: 'danger' }]);
@@ -140,7 +140,7 @@ export function Terminal() {
             rows.length
               ? [
                   sessionHeader(),
-                  ...rows.map(sessionLine),
+                  ...rows.map((row) => sessionLine(row, timezone)),
                   {
                     text: `${rows.length} session${rows.length === 1 ? '' : 's'}${next ? ', and more before them — narrow it with --since or --limit' : ''}. Type export to save them, or show <id> for one.`,
                     tone: 'dim',
@@ -150,29 +150,18 @@ export function Terminal() {
             typed,
           );
         }
-        case 'churches': {
-          const churches = await clientApi<{ code: string; name: string }[]>(
-            '/dev/impersonations/churches',
-          );
-          return write(
-            churches.map((c) => ({ text: `${c.code.padEnd(8)}${c.name}` })),
-            typed,
-          );
-        }
         case 'show': {
           const session = await clientApi<SessionDetail>(`/dev/impersonations/${command.id}`);
           return write(
             [
               { text: `${session.actor.name} <${session.actor.email}>`, tone: 'accent' },
-              {
-                text: `viewed as ${session.subject.name} <${session.subject.email}> in ${session.church}`,
-              },
+              { text: `viewed as ${session.subject.name} <${session.subject.email}>` },
               {
                 text: `roles then: ${session.subject.roles.join(', ') || 'none'} · ${session.views.length} pages · ${session.endedAt ? `ended ${(session.endReason ?? '').toLowerCase()}` : 'still open'}`,
                 tone: 'dim',
               },
               { text: '' },
-              ...session.views.map((view) => viewLine(view, session.timezone)),
+              ...session.views.map((view) => viewLine(view, timezone)),
               ...(session.views.length
                 ? []
                 : [{ text: 'No pages were opened in it.', tone: 'dim' as const }]),
@@ -181,18 +170,10 @@ export function Terminal() {
           );
         }
         case 'follow': {
-          follow.current = {
-            since: new Date().toISOString(),
-            ...(command.church ? { church: command.church } : {}),
-          };
+          follow.current = { since: new Date().toISOString() };
           setFollowing(true);
           write(
-            [
-              {
-                text: `Following ${command.church ?? 'every church'}. Type stop, or press Escape, to end it.`,
-                tone: 'ok',
-              },
-            ],
+            [{ text: 'Following. Type stop, or press Escape, to end it.', tone: 'ok' }],
             typed,
           );
           return poll();

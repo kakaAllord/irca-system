@@ -1,8 +1,6 @@
 /** What a session looks like in the log. */
 export type LogSession = {
   id: string;
-  church: string;
-  timezone: string;
   actor: { name: string; email: string; roles: string[] };
   subject: { name: string; email: string; roles: string[] };
   startedAt: string;
@@ -23,8 +21,6 @@ export type LiveEvent = {
   at: string;
   kind: 'START' | 'VIEW' | 'END';
   sessionId: string | null;
-  church: string;
-  timezone: string;
   summary: string;
   method: string | null;
   path: string | null;
@@ -34,7 +30,8 @@ export type LiveEvent = {
 
 export type Line = { text: string; tone?: 'dim' | 'accent' | 'danger' | 'ok' };
 
-/** In the church's own time, because that is when it happened for them. */
+/** In the church's own time, because that is when it happened for them, not
+ * for whoever is reading the log. */
 export function at(iso: string, timezone: string): string {
   return new Intl.DateTimeFormat('en-GB', {
     timeZone: timezone,
@@ -58,12 +55,11 @@ const pad = (text: string, width: number) =>
   text.length > width ? `${text.slice(0, width - 1)}…` : text.padEnd(width);
 
 /** One session per line, in columns that line up in a monospace font. */
-export function sessionLine(session: LogSession): Line {
+export function sessionLine(session: LogSession, timezone: string): Line {
   return {
     text: [
       session.id.slice(0, 8),
-      pad(at(session.startedAt, session.timezone), 19),
-      pad(session.church, 6),
+      pad(at(session.startedAt, timezone), 19),
       pad(`${session.actor.email} → ${session.subject.email}`, 46),
       pad(howLong(session.seconds), 6),
       `${String(session.views).padStart(4)} views`,
@@ -78,7 +74,6 @@ export function sessionHeader(): Line {
     text: [
       pad('id', 8),
       pad('started', 19),
-      pad('church', 6),
       pad('who viewed as whom', 46),
       pad('for', 6),
       '     views',
@@ -101,16 +96,16 @@ export function viewLine(view: View, timezone: string): Line {
   };
 }
 
-export function eventLine(event: LiveEvent): Line {
+export function eventLine(event: LiveEvent, timezone: string): Line {
   const who = `${event.actor ?? '?'} → ${event.subject ?? '?'}`;
   if (event.kind === 'VIEW') {
     return {
-      text: `${at(event.at, event.timezone)}  ${pad(event.church, 6)}  ${pad(who, 46)}  ${event.method ?? ''} ${event.path ?? ''}`,
+      text: `${at(event.at, timezone)}  ${pad(who, 46)}  ${event.method ?? ''} ${event.path ?? ''}`,
       tone: (event.status ?? 200) >= 400 ? 'danger' : 'dim',
     };
   }
   return {
-    text: `${at(event.at, event.timezone)}  ${pad(event.church, 6)}  ${pad(who, 46)}  ${event.kind === 'START' ? 'started viewing as' : 'stopped'}`,
+    text: `${at(event.at, timezone)}  ${pad(who, 46)}  ${event.kind === 'START' ? 'started viewing as' : 'stopped'}`,
     tone: event.kind === 'START' ? 'accent' : 'ok',
   };
 }
@@ -119,7 +114,6 @@ export function eventLine(event: LiveEvent): Line {
 export function toCsv(rows: LogSession[]): string {
   const head = [
     'session_id',
-    'church',
     'actor_name',
     'actor_email',
     'subject_name',
@@ -139,7 +133,6 @@ export function toCsv(rows: LogSession[]): string {
     ...rows.map((r) =>
       [
         r.id,
-        r.church,
         r.actor.name,
         r.actor.email,
         r.subject.name,

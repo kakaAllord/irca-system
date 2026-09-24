@@ -18,7 +18,7 @@ export default async function ImpersonationsPage() {
         title="View-as log"
         subtitle="Who opened the portal as someone else, where, and every page they saw. Nothing here can be changed, and no church can see it."
       />
-      <Terminal />
+      <Terminal timezone={me.church?.timezone ?? 'UTC'} />
     </>
   );
 }

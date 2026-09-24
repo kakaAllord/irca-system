@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: 'Health' };
 
 export default async function HealthPage() {
   const me = await serverApi<MeResponse>('/auth/me');
-  if (!can(me, 'dev.health.read')) return <ForbiddenState what="platform health" />;
+  if (!can(me, 'dev.health.read')) return <ForbiddenState what="the health page" />;
 
   const health = await serverApi<Health>('/dev/health');
   const requests = health.errors.reduce((sum, d) => sum + d.requests, 0);

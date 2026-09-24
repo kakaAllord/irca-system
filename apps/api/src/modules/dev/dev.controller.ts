@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import { z } from 'zod';
 import { ZodPipe } from '../../core/http/zod.pipe.js';
 import { RequirePermission } from '../../core/rbac/decorators.js';
@@ -100,5 +100,12 @@ export class DevController {
   @Get('impersonations/events')
   events(@Query('after') after: string) {
     return this.impersonationLog.events(after);
+  }
+
+  /** One session and every page opened in it, for `show <id>` in the terminal. */
+  @RequirePermission('dev.impersonations.read')
+  @Get('impersonations/:idOrPrefix')
+  session(@Param('idOrPrefix') idOrPrefix: string) {
+    return this.impersonationLog.session(idOrPrefix);
   }
 }

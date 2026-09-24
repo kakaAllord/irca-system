@@ -2,14 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { parseCommand } from './parse';
 
 describe('the view-as log command line', () => {
-  it('reads a bare church code as the church', () => {
-    expect(parseCommand('log IRCA')).toEqual({ name: 'log', filters: { church: 'IRCA' } });
-  });
-
   it('reads every filter, and keeps quoted words together', () => {
-    expect(parseCommand('log --church=irca --actor="Paul Mwita" --since=7d --limit=20')).toEqual({
+    expect(parseCommand('log --actor="Paul Mwita" --since=7d --limit=20')).toEqual({
       name: 'log',
-      filters: { church: 'IRCA', actor: 'Paul Mwita', since: '7d', limit: 20 },
+      filters: { actor: 'Paul Mwita', since: '7d', limit: 20 },
     });
   });
 
@@ -17,6 +13,12 @@ describe('the view-as log command line', () => {
     const parsed = parseCommand('log --wherever=irca');
     expect(parsed).toMatchObject({ name: 'error' });
     expect((parsed as { message: string }).message).toContain('--wherever');
+  });
+
+  it('says what it does not understand, rather than guessing', () => {
+    const parsed = parseCommand('log irca');
+    expect(parsed).toMatchObject({ name: 'error' });
+    expect((parsed as { message: string }).message).toContain('irca');
   });
 
   it('refuses a limit that is not a sensible number', () => {
@@ -31,9 +33,8 @@ describe('the view-as log command line', () => {
     expect(parseCommand('show')).toMatchObject({ name: 'error' });
   });
 
-  it('follows one church or all of them, and stops', () => {
+  it('follows, and stops', () => {
     expect(parseCommand('follow')).toEqual({ name: 'follow' });
-    expect(parseCommand('follow irca')).toEqual({ name: 'follow', church: 'IRCA' });
     expect(parseCommand('stop')).toEqual({ name: 'stop' });
   });
 

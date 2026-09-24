@@ -2,15 +2,14 @@
  * The view-as log is read by typing, not by clicking.
  *
  * It is the one place anyone can see who viewed the portal as whom, and the
- * questions asked of it are of the shape "everything Paul did in IRCA last
- * week", which is a filter with four parts. A row of dropdowns for that is
- * slower to use than a line of text, and a line of text can be pasted into a
+ * questions asked of it are of the shape "everything Paul did last week",
+ * which is a filter with three parts. A row of dropdowns for that is slower
+ * to use than a line of text, and a line of text can be pasted into a
  * support thread. So: a small command language, parsed here, away from React,
  * where it can be tested by itself.
  */
 
 export type Filters = {
-  church?: string;
   actor?: string;
   subject?: string;
   since?: string;
@@ -21,23 +20,20 @@ export type Filters = {
 export type Command =
   | { name: 'log'; filters: Filters }
   | { name: 'show'; id: string }
-  | { name: 'follow'; church?: string }
+  | { name: 'follow' }
   | { name: 'stop' }
-  | { name: 'churches' }
   | { name: 'export'; format: 'csv' | 'json' }
   | { name: 'clear' }
   | { name: 'help' }
   | { name: 'error'; message: string };
 
-const FLAGS = ['church', 'actor', 'subject', 'since', 'until', 'limit'] as const;
+const FLAGS = ['actor', 'subject', 'since', 'until', 'limit'] as const;
 
 export const HELP = [
-  'log [--church=CODE] [--actor=text] [--subject=text] [--since=24h] [--until=DATE] [--limit=n]',
+  'log [--actor=text] [--subject=text] [--since=24h] [--until=DATE] [--limit=n]',
   '                  who viewed as whom, newest first',
   'show <id>         one session and every page opened in it (the first few characters of the id will do)',
-  'follow [--church=CODE]',
-  '                  watch it happen, live; "stop" ends it',
-  'churches          the codes you can filter by',
+  'follow            watch it happen, live; "stop" ends it',
   'export [csv|json] the last log you asked for, as a file',
   'clear             empty the screen',
   'help              this',
@@ -55,9 +51,7 @@ export function parseCommand(line: string): Command {
     case 'log': {
       const { flags, loose, error } = readFlags(rest);
       if (error) return { name: 'error', message: error };
-      // "log IRCA" means the church: the commonest filter needs no flag.
-      if (loose.length > 1) return { name: 'error', message: `I don't understand "${loose[1]}".` };
-      const church = flags.church ?? loose[0];
+      if (loose.length > 0) return { name: 'error', message: `I don't understand "${loose[0]}".` };
       const limit = flags.limit === undefined ? undefined : Number(flags.limit);
       if (limit !== undefined && (!Number.isInteger(limit) || limit < 1 || limit > 500)) {
         return { name: 'error', message: '--limit takes a whole number from 1 to 500.' };
@@ -65,7 +59,6 @@ export function parseCommand(line: string): Command {
       return {
         name: 'log',
         filters: {
-          ...(church ? { church: church.toUpperCase() } : {}),
           ...(flags.actor ? { actor: flags.actor } : {}),
           ...(flags.subject ? { subject: flags.subject } : {}),
           ...(flags.since ? { since: flags.since } : {}),
@@ -82,16 +75,10 @@ export function parseCommand(line: string): Command {
       }
       return { name: 'show', id: id.toLowerCase() };
     }
-    case 'follow': {
-      const { flags, loose, error } = readFlags(rest);
-      if (error) return { name: 'error', message: error };
-      const church = flags.church ?? loose[0];
-      return { name: 'follow', ...(church ? { church: church.toUpperCase() } : {}) };
-    }
+    case 'follow':
+      return { name: 'follow' };
     case 'stop':
       return { name: 'stop' };
-    case 'churches':
-      return { name: 'churches' };
     case 'export': {
       const format = (rest[0] ?? 'csv').toLowerCase();
       if (format !== 'csv' && format !== 'json') {
