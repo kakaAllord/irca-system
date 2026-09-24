@@ -1,14 +1,18 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import type pg from 'pg';
 import { DiscoveryService, MetadataScanner, Reflector } from '@nestjs/core';
-import type { Type } from '@nestjs/common';
+import { RequestMethod, type Type } from '@nestjs/common';
+import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants.js';
+import { ALL_MODULES } from '@irca/shared';
 import { Db } from '../src/core/database/db.service.js';
 import { ALLOW_WHILE_IMPERSONATING } from '../src/core/impersonation/decorators.js';
 import {
   createApp,
   createChurch,
+  createRole,
   createUser,
   createUserWithPermissions,
+  grantRole,
   ownerDb,
   portal,
   sessionCookie,
@@ -60,6 +64,33 @@ describe('viewing as someone else', () => {
     // administrator's certainly is not.
     const me = await portal(app).get('/v1/auth/me', cookie).expect(200);
     expect(me.body.permissions.some((p: string) => p.endsWith('.manage'))).toBe(false);
+  });
+
+  it('refuses every change while it runs, however the request is made', async () => {
+    const { admin, clerk } = await church();
+    const cookie = await signIn(admin.email, admin.password);
+    await portal(app).post('/v1/impersonation', { subjectUserId: clerk.id }, cookie).expect(200);
+
+    const refused = await portal(app).post('/v1/fixture/write', {}, cookie).expect(403);
+    expect(refused.body.error.code).toBe('IMPERSONATION_READ_ONLY');
+  });
+
+  it('is refused by the database itself, even on a route that slips through', async () => {
+    const { admin, clerk } = await church();
+    const cookie = await signIn(admin.email, admin.password);
+    await portal(app).post('/v1/impersonation', { subjectUserId: clerk.id }, cookie).expect(200);
+
+    const count = async () => (await db.query(`select count(*)::int as n from roles`)).rows[0].n;
+    const before = await count();
+    // This route is a GET, so the guards let it by, and it writes on purpose.
+    await portal(app).get('/v1/fixture/writes-anyway', cookie).expect(500);
+    expect(await count()).toBe(before);
+
+    // The same route writes perfectly well once the viewing has stopped, so
+    // what refused it was the connection, not something wrong with the write.
+    await portal(app).del('/v1/impersonation', cookie).expect(200);
+    await portal(app).get('/v1/fixture/writes-anyway', cookie).expect(200);
+    expect(await count()).toBe(before + 1);
   });
 
   it('will not view as yourself, or someone disabled or not yet signed up', async () => {
@@ -146,6 +177,38 @@ describe('viewing as someone else', () => {
     expect(counts['impersonation.view']).toBeGreaterThanOrEqual(2);
   });
 
+  it('can open every page of every portal on the read-only connection', async () => {
+    await createChurch(
+      db,
+      'IRCA',
+      ALL_MODULES.map((m) => m.key),
+    );
+    const admin = await createUserWithPermissions(db, ['admin.users.impersonate']);
+    // Someone who may read everything there is, one role per portal.
+    const everyone = await createUser(db);
+    for (const m of ALL_MODULES) {
+      const role = await createRole(db, {
+        moduleKey: m.key,
+        permissions: Object.keys(m.permissions),
+      });
+      await grantRole(db, everyone.id, role.id);
+    }
+    const cookie = await signIn(admin.email, admin.password);
+    await portal(app).post('/v1/impersonation', { subjectUserId: everyone.id }, cookie).expect(200);
+
+    // A GET that writes anything at all — a counter, a "last seen", a default
+    // row created on first read — fails here with a 500, because the
+    // connection cannot write. Missing records and bad parameters are fine.
+    const failed: string[] = [];
+    for (const path of getRoutes(app)) {
+      if (path.startsWith('/v1/fixture/')) continue;
+      const url = path.replace(/:[A-Za-z]+/g, '00000000-0000-4000-8000-000000000000');
+      const res = await portal(app).get(url, cookie);
+      if (res.status >= 500) failed.push(`${path} → ${res.status}`);
+    }
+    expect(failed).toEqual([]);
+  });
+
   it('allows exactly two routes to run while viewing as someone', () => {
     const discovery = app.get(DiscoveryService);
     const scanner = app.get(MetadataScanner);
@@ -164,3 +227,31 @@ describe('viewing as someone else', () => {
     expect(allowed.sort()).toEqual(['AuthController.logout', 'ImpersonationController.stop']);
   });
 });
+
+/** Every GET route the API serves, as its template (`/v1/people/:id`). */
+function getRoutes(app: NestExpressApplication): string[] {
+  const discovery = app.get(DiscoveryService);
+  const scanner = app.get(MetadataScanner);
+  const reflector = app.get(Reflector);
+  const join = (...parts: string[]) =>
+    '/' +
+    parts
+      .map((p) => p.replace(/^\/|\/$/g, ''))
+      .filter(Boolean)
+      .join('/');
+  const routes: string[] = [];
+  for (const wrapper of discovery.getControllers()) {
+    const cls = wrapper.metatype as Type<object> | undefined;
+    if (!cls?.prototype) continue;
+    const base = reflector.get<string | string[]>(PATH_METADATA, cls) ?? '';
+    for (const name of scanner.getAllMethodNames(cls.prototype)) {
+      const handler = cls.prototype[name as keyof object] as () => unknown;
+      if (reflector.get(METHOD_METADATA, handler) !== RequestMethod.GET) continue;
+      const path = reflector.get<string | string[]>(PATH_METADATA, handler) ?? '';
+      for (const b of [base].flat()) {
+        for (const p of [path].flat()) routes.push(join('v1', b, p));
+      }
+    }
+  }
+  return routes.filter((r) => r !== '/v1/health');
+}

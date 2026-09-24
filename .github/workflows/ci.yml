@@ -26,24 +26,22 @@ jobs:
 
       - run: npm ci
 
-      # The same five roles and settings as docs/plan step 1.5, with the
-      # local-only passwords apps/api/.env.test expects.
+      # The roles from docs/plan step 1.5 that still exist (irca_core went
+      # with multi-tenancy, D27), with the local-only passwords
+      # apps/api/.env.test expects.
       - name: Create database roles and the test database
         env:
           PGPASSWORD: postgres
         run: |
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 <<'SQL'
           create role irca_owner    login password 'owner_local_pw' createdb;
-          create role irca_core     login password 'core_local_pw';
           create role irca_app      login password 'app_local_pw';
           create role irca_readonly login password 'ro_local_pw';
           create role irca_backup   login password 'backup_local_pw';
           create database irca_test owner irca_owner;
           alter role irca_app      set statement_timeout = '10s';
           alter role irca_readonly set statement_timeout = '10s';
-          alter role irca_core     set statement_timeout = '60s';
           alter role irca_owner    set timezone = 'UTC';
-          alter role irca_core     set timezone = 'UTC';
           alter role irca_app      set timezone = 'UTC';
           alter role irca_readonly set timezone = 'UTC';
           alter role irca_backup   set timezone = 'UTC';

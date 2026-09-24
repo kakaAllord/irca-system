@@ -6,8 +6,9 @@ export const EnvSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']),
     PORT: z.coerce.number().int().positive().default(4000),
+    /** Everything the app does, as irca_app. */
     DATABASE_URL: z.url(),
-    DATABASE_URL_CORE: z.url(),
+    /** Feature code while viewing as someone, as irca_readonly: reads only. */
     DATABASE_URL_READONLY: z.url(),
     DIRECT_DATABASE_URL: z.url(),
     PORTAL_ORIGIN: z.url(),
