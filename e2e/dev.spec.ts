@@ -59,6 +59,62 @@ test.describe('the dev console', () => {
     await expect(field).toHaveValue('sudo rm -rf /');
   });
 
+  test('usage, tab by tab, from what the system itself has counted', async ({ page }) => {
+    await signIn(page, DEV);
+    await page.getByRole('link', { name: 'Usage', exact: true }).click();
+    await expect(page.getByText('Staff active today')).toBeVisible();
+    await expect(page.getByText('Requests by portal')).toBeVisible();
+
+    const tabs = page.getByRole('navigation', { name: 'Usage' });
+    await tabs.getByRole('link', { name: 'Every number' }).click();
+    await page.getByRole('button', { name: 'Failed sign-ins' }).click();
+    await expect(page).toHaveURL(/metrics=.*auth\.login_failures/);
+    await expect(page.getByText('Failed sign-ins').last()).toBeVisible();
+
+    // Every request in these journeys is counted, the sign-in above among them.
+    await tabs.getByRole('link', { name: 'API' }).click();
+    await expect(page.getByRole('cell', { name: 'POST /auth/login' }).first()).toBeVisible();
+
+    await tabs.getByRole('link', { name: 'Sign-ins' }).click();
+    await expect(page.getByText('Wrong passwords', { exact: true }).first()).toBeVisible();
+    await tabs.getByRole('link', { name: 'Email' }).click();
+    await expect(page.getByText('The last 50')).toBeVisible();
+    // No whole address ever reaches the page.
+    await expect(page.getByText(/[a-z]{3,}@irca\.local/)).toHaveCount(0);
+  });
+
+  test('the church settings and the registration keys', async ({ page }) => {
+    await signIn(page, DEV);
+    await page.getByRole('link', { name: 'Settings', exact: true }).click();
+
+    await page.getByRole('button', { name: 'Edit' }).click();
+    const drawer = page.getByRole('dialog');
+    await drawer.getByLabel('Timezone').fill('Mars/Olympus');
+    await drawer.getByRole('button', { name: 'Save' }).click();
+    await expect(drawer.getByText(/not a timezone/).first()).toBeVisible();
+    await drawer.getByLabel('Timezone').fill('Africa/Dar_es_Salaam');
+    await drawer.getByLabel('Name').fill('IRCA, renamed for a moment');
+    await drawer.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByText('IRCA, renamed for a moment')).toBeVisible();
+    // Put it back, so other journeys read the name they expect.
+    await page.getByRole('button', { name: 'Edit' }).click();
+    await drawer.getByLabel('Name').fill('International Revival Church Arusha');
+    await drawer.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByText('International Revival Church Arusha')).toBeVisible();
+
+    // Named for this run: the test database keeps the keys earlier runs made.
+    const name = `Made by a browser test ${Date.now()}`;
+    await page.getByRole('button', { name: '+ New key' }).click();
+    await page.getByRole('dialog').getByLabel('Name').fill(name);
+    await page.getByRole('button', { name: 'Make the key' }).click();
+    await expect(page.getByText('Copy this key now. It is not shown again.')).toBeVisible();
+    await page.getByRole('button', { name: 'I have copied it' }).click();
+    const row = page.getByRole('row', { name: new RegExp(name) });
+    await row.getByRole('button', { name: 'Revoke' }).click();
+    await page.getByRole('button', { name: 'Revoke it' }).click();
+    await expect(row.getByText('Revoked')).toBeVisible();
+  });
+
   test('the dev console is not for an ordinary administrator', async ({ page }) => {
     await signIn(page, { email: 'admin@irca.local', password: 'admin-password-123' });
     await expect(page.getByRole('link', { name: 'Health', exact: true })).toHaveCount(0);
