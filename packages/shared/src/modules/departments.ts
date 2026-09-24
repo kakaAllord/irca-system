@@ -11,7 +11,7 @@ import { defineModule } from '../rbac/define';
  */
 export const departmentsModule = defineModule({
   key: 'departments',
-  name: 'My departments',
+  name: 'Departments',
   description: 'The departments you lead, and who is in them.',
   kind: 'core',
   home: '/departments',
