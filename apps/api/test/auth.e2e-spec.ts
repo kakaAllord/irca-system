@@ -154,6 +154,21 @@ describe('signing in and out', () => {
     expect(Number(rows[0].drift)).toBeLessThan(60);
   });
 
+  it('tells every cache not to keep an answer, signed in or not', async () => {
+    const u = await createUser(db);
+    const cookie = sessionCookie(
+      await portal(app)
+        .post('/v1/auth/login', { email: u.email, password: u.password })
+        .expect(200),
+    );
+    for (const res of [
+      await portal(app).get('/v1/auth/me', cookie).expect(200),
+      await portal(app).get('/v1/auth/me').expect(401),
+    ]) {
+      expect(res.headers['cache-control']).toBe('private, no-store');
+    }
+  });
+
   it('stores only a hash of the session token', async () => {
     const u = await createUser(db);
     const cookie = sessionCookie(await login(u.email, u.password).expect(200));

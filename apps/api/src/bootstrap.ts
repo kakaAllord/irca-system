@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { AppConfig } from './config/app-config.js';
 import { requestContextOptions } from './core/context/context.module.js';
+import { noStore } from './core/http/no-store.middleware.js';
 
 /**
  * Everything the running API sets up around its modules, shared by main.ts and
@@ -24,6 +25,7 @@ export function configureApp(app: NestExpressApplication): AppConfig {
   // would throttle everyone together.
   app.set('trust proxy', config.get('TRUST_PROXY'));
   app.use(helmet());
+  app.use(noStore);
   app.use(cookieParser());
   app.useBodyParser('json', { limit: '256kb' });
   app.setGlobalPrefix('v1', { exclude: ['health'] });

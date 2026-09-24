@@ -18,7 +18,6 @@ import { AuditInterceptor } from './audit/audit.interceptor.js';
 import { UsageService } from './usage/usage.service.js';
 import { UsageSnapshot } from './usage/usage-snapshot.service.js';
 import { UsageInterceptor } from './usage/usage.interceptor.js';
-import { NoStoreInterceptor } from './http/no-store.interceptor.js';
 import { RateLimitGuard } from './limits/rate-limit.guard.js';
 import { QuotaService } from './limits/quota.service.js';
 import { InvitationService } from './invitations/invitation.service.js';
@@ -73,7 +72,6 @@ import { ScheduledJobs } from './jobs/scheduled-jobs.service.js';
     RateLimitGuard,
     AuditInterceptor,
     UsageInterceptor,
-    NoStoreInterceptor,
   ],
   exports: [
     LogBufferService,
@@ -103,7 +101,6 @@ import { ScheduledJobs } from './jobs/scheduled-jobs.service.js';
     RateLimitGuard,
     AuditInterceptor,
     UsageInterceptor,
-    NoStoreInterceptor,
   ],
 })
 export class CoreModule {}
