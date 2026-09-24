@@ -101,13 +101,11 @@ const exactTimes = {
  */
 export async function importRegistrations(options: {
   from: string;
-  churchCode: string;
   dryRun: boolean;
   db: PrismaDb;
 }): Promise<void> {
   const { db } = options;
-  const church = await db.church.findUnique({ where: { code: options.churchCode.toUpperCase() } });
-  if (!church) throw new Error(`No church with the code ${options.churchCode}.`);
+  const church = await db.church.findFirstOrThrow();
 
   const old = new pg.Client({ connectionString: options.from, types: exactTimes });
   await old.connect();
@@ -130,10 +128,9 @@ export async function importRegistrations(options: {
 
       await db.$transaction(async (tx) => {
         for (const row of rows) {
-          const values = [church.id, row.id, ...COLUMNS.map((c) => row[c])];
+          const values = [row.id, ...COLUMNS.map((c) => row[c])];
           await tx.$executeRaw(
-            sql`-- tenant: church_id is the first value
-             insert into registrations (id, church_id, legacy_id, ${join(NAMES, ', ')})
+            sql`insert into registrations (id, legacy_id, ${join(NAMES, ', ')})
              values (gen_random_uuid(), ${join(
                values.map((v) => sql`${v}`),
                ', ',
@@ -145,21 +142,20 @@ export async function importRegistrations(options: {
         // Everyone who registered is somebody the church cares for, finished
         // or not; the Members list shows them as "Unknown — +255 622…".
         await tx.$executeRaw(
-          sql`-- tenant: church_id is bound below
-           insert into people (id, church_id, registration_id, full_name, gender, age_group,
+          sql`insert into people (id, registration_id, full_name, gender, age_group,
                                dial, phone, email, updated_at)
-           select gen_random_uuid(), r.church_id, r.id, left(r.fullname, 120), left(r.gender, 20),
+           select gen_random_uuid(), r.id, left(r.fullname, 120), left(r.gender, 20),
                   left(r.age, 20), left(r.dial, 6), left(r.phone, 20), left(r.email, 254), now()
            from registrations r
            left join people p on p.registration_id = r.id
-           where r.church_id = ${church.id}::uuid and p.id is null`,
+           where p.id is null`,
         );
         copied += rows.length;
         if (options.dryRun) throw new RolledBack();
       });
     }
 
-    await report(old, db, church.id, church.code);
+    await report(old, db, church.code);
     console.log(`${copied} rows read.`);
   } catch (err) {
     if (!(err instanceof RolledBack)) throw err;
@@ -178,13 +174,10 @@ export async function importRegistrations(options: {
  */
 export async function exportRegistrationsBack(options: {
   to: string;
-  churchCode: string;
   since: string;
   db: PrismaDb;
 }): Promise<void> {
   const { db } = options;
-  const church = await db.church.findUnique({ where: { code: options.churchCode.toUpperCase() } });
-  if (!church) throw new Error(`No church with the code ${options.churchCode}.`);
 
   const target = new pg.Client({ connectionString: options.to, types: exactTimes });
   await target.connect();
@@ -199,9 +192,8 @@ export async function exportRegistrationsBack(options: {
       ', ',
     );
     const rows = await db.$queryRaw<Record<string, unknown>[]>(
-      sql`-- tenant: church_id is bound below
-       select ${select} from registrations
-       where church_id = ${church.id}::uuid and updated_at >= ${options.since}::timestamptz
+      sql`select ${select} from registrations
+       where updated_at >= ${options.since}::timestamptz
        order by updated_at`,
     );
     for (const row of rows) {

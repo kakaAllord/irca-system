@@ -81,7 +81,7 @@ export default tseslint.config(
   },
   {
     // The dev console must see every church, so it may use PrismaCore.
-    files: ['apps/api/src/modules/platform/**/*.ts'],
+    files: ['apps/api/src/modules/dev/**/*.ts'],
     rules: { '@typescript-eslint/no-restricted-imports': 'off' },
   },
 );

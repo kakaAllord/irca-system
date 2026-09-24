@@ -30,7 +30,7 @@ export class RolesService {
   /** Every role, grouped by portal, with how many people hold it. */
   async list(assignableOnly = false) {
     const enabled = new Set(
-      (await this.db.client.churchModule.findMany({ where: { enabled: true } })).map(
+      (await this.db.client.moduleState.findMany({ where: { enabled: true } })).map(
         (m) => m.moduleKey,
       ),
     );
@@ -71,7 +71,7 @@ export class RolesService {
 
   async create(input: RoleInput) {
     this.checkPermissions(input);
-    const enabled = await this.db.client.churchModule.findUnique({
+    const enabled = await this.db.client.moduleState.findUnique({
       where: { moduleKey: input.moduleKey },
     });
     if (!enabled?.enabled) {
@@ -154,7 +154,7 @@ export class RolesService {
       where: { id: roleId },
       include: {
         _count: { select: { members: true } },
-        members: { include: { membership: { include: { user: true } } } },
+        members: { include: { user: true } },
       },
     });
     if (!role || role.deletedAt) throw new AppError(404, ErrorCode.NOT_FOUND, 'No such role.');
@@ -162,7 +162,7 @@ export class RolesService {
       throw new AppError(409, ErrorCode.SYSTEM_ROLE, 'Built-in roles cannot be deleted.');
     if (role._count.members > 0) {
       throw new AppError(409, ErrorCode.ROLE_IN_USE, 'Take this role away from everyone first.', {
-        people: role.members.map((m) => m.membership.user.fullName),
+        people: role.members.map((m) => m.user.fullName),
       });
     }
 

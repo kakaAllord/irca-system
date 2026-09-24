@@ -47,7 +47,7 @@ export class AuthService {
     if (!user || !ok || user.status !== 'ACTIVE') {
       if (user) await this.recordFailure(user.id, user.failedLoginCount);
       // No church yet: a failed sign-in is counted for the platform.
-      this.usage.inc('auth.login_failures', 1, null);
+      this.usage.inc('auth.login_failures', 1);
       // The address is hashed, never logged: repeated attacks on one address
       // stay visible without keeping the emails of people with no account.
       this.logger.log({
@@ -99,7 +99,7 @@ export class AuthService {
 
   private async recordFailure(userId: string, failuresSoFar: number): Promise<void> {
     const failures = failuresSoFar + 1;
-    if (failures >= MAX_FAILURES) this.usage.inc('auth.lockouts', 1, null);
+    if (failures >= MAX_FAILURES) this.usage.inc('auth.lockouts', 1);
     await this.db.user.update({
       where: { id: userId },
       data:

@@ -77,12 +77,11 @@ export class CatalogService {
     const items = identifier(table.items);
     const column = identifier(table.column);
     const rows = await this.query<{ id: string; name: string; description: string; uses: number }>(
-      sql`-- tenant: church_id is bound below
-       select i.id, i.name, i.description, coalesce(u.uses, 0)::int as uses
+      sql`       select i.id, i.name, i.description, coalesce(u.uses, 0)::int as uses
        from ${items} i
        left join lateral (
          select count(*)::int as uses from finance_transactions t
-         where t.church_id = i.church_id and t.${column} = i.id
+         where t.${column} = i.id
            and t.status = 'POSTED' and t.txn_date > current_date - 180
        ) u on true
        where i.is_active
@@ -94,8 +93,7 @@ export class CatalogService {
 
     const exact = key
       ? await this.query<{ id: string; name: string; is_active: boolean }>(
-          sql`-- tenant: church_id is bound below
-           select id, name, is_active from ${items}
+          sql`           select id, name, is_active from ${items}
            where name_key = ${key}`,
         )
       : [];
@@ -124,14 +122,13 @@ export class CatalogService {
       and (${status} = 'all' or i.is_active = (${status} = 'active'))`;
 
     const rows = await this.query<ItemRow>(
-      sql`-- tenant: church_id is bound in the where clause
-       select i.id, i.name, i.description, i.is_active,
+      sql`       select i.id, i.name, i.description, i.is_active,
               coalesce(u.uses, 0)::int as uses, u.last_used_on
        from ${items} i
        left join lateral (
          select count(*)::int as uses, max(t.txn_date) as last_used_on
          from finance_transactions t
-         where t.church_id = i.church_id and t.${column} = i.id and t.status = 'POSTED'
+         where t.${column} = i.id and t.status = 'POSTED'
        ) u on true
        where ${where}
        order by i.name
@@ -139,8 +136,7 @@ export class CatalogService {
     );
 
     const counted = await this.query<{ count: bigint }>(
-      sql`-- tenant: church_id is bound in the where clause
-       select count(*) as count from ${items} i where ${where}`,
+      sql`       select count(*) as count from ${items} i where ${where}`,
     );
     const total = Number(counted[0]?.count ?? 0);
 
@@ -319,8 +315,7 @@ export class CatalogService {
 
     const items = identifier(table.items);
     const exact = await this.query<{ id: string; name: string; is_active: boolean }>(
-      sql`-- tenant: church_id is bound below
-       select id, name, is_active from ${items}
+      sql`       select id, name, is_active from ${items}
        where name_key = ${key}`,
     );
     if (exact[0]) {
@@ -332,8 +327,7 @@ export class CatalogService {
 
     if (confirmDistinct) return;
     const similar = await this.query<{ id: string; name: string }>(
-      sql`-- tenant: church_id is bound below
-       select id, name from ${items}
+      sql`       select id, name from ${items}
        where similarity(name_key, ${key}) >= ${SIMILAR_ENOUGH}
        order by similarity(name_key, ${key}) desc
        limit 3`,

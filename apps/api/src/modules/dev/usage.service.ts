@@ -9,7 +9,7 @@ type Series = { metric: string; points: { day: string; value: number }[] };
 const MAX_DAYS = 400;
 
 /**
- * Usage over time, for one church or the whole platform.
+ * Usage over time.
  *
  * Days with nothing recorded are filled in: a counter with no row means
  * nothing happened, so it is zero; a gauge with no row means the snapshot did
@@ -17,10 +17,10 @@ const MAX_DAYS = 400;
  * nothing on the chart.
  */
 @Injectable()
-export class PlatformUsageService {
+export class DevUsageService {
   constructor(private readonly db: PrismaDb) {}
 
-  async church(churchId: string, metrics: string[], from: string, to: string): Promise<Series[]> {
+  async series(metrics: string[], from: string, to: string): Promise<Series[]> {
     const days = this.days(from, to);
     const rows = await this.db.$queryRaw<{ metric: string; day: Date; value: bigint }[]>`
       select metric, day, value from usage_daily
@@ -60,7 +60,7 @@ export class PlatformUsageService {
    * The latest per-table rows and bytes for a church, with how each moved
    * against a week and a month before.
    */
-  async database(churchId: string) {
+  async database() {
     const rows = await this.db.$queryRaw<{ metric: string; day: Date; value: bigint }[]>`
       select metric, day, value from usage_daily
       where (metric like 'db.rows.%' or metric like 'db.bytes.%')

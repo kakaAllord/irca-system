@@ -62,7 +62,6 @@ export const devModule = defineModule({
   ],
   nav: [
     { label: 'Health', href: '/dev', icon: 'health', permission: 'dev.health.read' },
-    { label: 'Usage', href: '/dev/usage', icon: 'insights', permission: 'dev.usage.read' },
     { label: 'Logs', href: '/dev/logs', icon: 'terminal', permission: 'dev.logs.read' },
     {
       label: 'View-as log',

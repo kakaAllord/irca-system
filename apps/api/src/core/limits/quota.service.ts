@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { ErrorCode } from '@irca/shared';
 import { PrismaDb } from '../database/prisma-clients.js';
 import { AppError } from '../http/app-error.js';
-import { RequestAuth } from '../context/request-auth.js';
 import { UsageService } from '../usage/usage.service.js';
 
 /** What one church may use in a day. Defaults in code; a dev can raise them later. */
@@ -22,25 +21,22 @@ export type QuotaKey = keyof typeof QUOTAS;
 export class QuotaService {
   constructor(
     private readonly db: PrismaDb,
-    private readonly auth: RequestAuth,
     private readonly usage: UsageService,
   ) {}
 
-  async consume(key: QuotaKey, churchId = this.auth.by = 1): Promise<void> {
-    if (!churchId) return;
+  async consume(key: QuotaKey, by = 1): Promise<void> {
     const { limit, what } = QUOTAS[key];
-    const today = new Date();
     const used = await this.db.usageDaily.findUnique({
-      where: { churchId_day_metric: { day: startOfDay(today), metric: key } },
+      where: { day_metric: { day: startOfDay(new Date()), metric: key } },
     });
     if (Number(used?.value ?? 0) + by > limit) {
       throw new AppError(
         429,
         ErrorCode.RATE_LIMITED,
-        `Today's limit of ${limit} ${what} for this church has been reached. It resets at midnight.`,
+        `Today's limit of ${limit} ${what} has been reached. It resets at midnight.`,
       );
     }
-    this.usage.inc(key, by, churchId);
+    this.usage.inc(key, by);
   }
 }
 

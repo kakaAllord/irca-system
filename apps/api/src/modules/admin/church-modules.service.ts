@@ -27,9 +27,9 @@ export class ChurchModulesService {
   ) {}
 
   async list() {
-    const rows = await this.db.client.churchModule.findMany();
+    const rows = await this.db.client.moduleState.findMany();
     const state = new Map(rows.map((r) => [r.moduleKey, r]));
-    const counts = await this.db.client.membershipRole.groupBy({
+    const counts = await this.db.client.userRole.groupBy({
       by: ['roleId'],
       _count: { roleId: true },
     });
@@ -59,7 +59,7 @@ export class ChurchModulesService {
     }
 
     await this.db.tx(async (tx) => {
-      await tx.churchModule.upsert({
+      await tx.moduleState.upsert({
         where: { moduleKey },
         update: enabled
           ? { enabled: true, enabledAt: new Date(), enabledById: this.auth.actorUserId }

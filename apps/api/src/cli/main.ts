@@ -17,28 +17,28 @@
 //       database. The API does this at every boot; this is for a fresh
 //       database that must be seeded before the API has ever run.
 //
-//   api-client:create --church <CODE> --kind REGISTRATION --name "<what it is>"
-//       Makes a key a church's own app uses to call the API. The key is
+//   api-client:create --kind REGISTRATION --name "<what it is>"
+//       Makes a key the registration form uses to call the API. The key is
 //       printed once and never stored, only its hash.
 //
-//   registrations:import --from <old database url> --church <CODE> [--dry-run]
+//   registrations:import --from <old database url> [--dry-run]
 //       Copies the live registrations into this database, keeping tokens and
 //       timestamps exactly. Re-runnable: it brings across only what changed.
 //
-//   registrations:export-back --to <old database url> --church <CODE> --since <iso time>
+//   registrations:export-back --to <old database url> --since <iso time>
 //       The other direction, for rolling a cutover back.
 //
 //   job:run <usage-snapshot | db-sample>
 //       Runs a scheduled job now, recorded like any other run.
 //
-//   person:erase --church <CODE> --person <uuid> [--dry-run]
+//   person:erase --person <uuid> [--dry-run]
 //       For an erasure request under the Personal Data Protection Act. Erases
 //       the person, their registration and answers, notes, journey, class
 //       records; keeps the activity log's lines with the name replaced by
 //       "[erased]". Asks for the id back before it does anything, and cannot
 //       be undone.
 //
-//   api-client:list [--church <CODE>]
+//   api-client:list []
 //   api-client:revoke --id <uuid>
 //       A revoked key stops working at once; the row stays, so the log of
 //       which key did what still reads.
@@ -90,11 +90,10 @@ async function createDev(args: string[]) {
     const now = new Date();
     const user = await db.user.upsert({
       where: { email },
-      update: { platformRole: 'DEV', status: 'ACTIVE', passwordHash, passwordChangedAt: now },
+      update: { status: 'ACTIVE', passwordHash, passwordChangedAt: now },
       create: {
         email,
         fullName: values.name,
-        platformRole: 'DEV',
         status: 'ACTIVE',
         passwordHash,
         passwordChangedAt: now,
@@ -141,14 +140,13 @@ async function createApiClient(args: string[]) {
     },
   });
   if (!values.church || !values.name) {
-    throw new Error('Usage: api-client:create --church <CODE> --name "<what it is>"');
+    throw new Error('Usage: api-client:create --name "<what it is>"');
   }
   if (values.kind !== 'REGISTRATION') throw new Error('The only kind today is REGISTRATION.');
 
   await withApp(async (app) => {
     const db = app.get(PrismaDb);
-    const church = await db.church.findUnique({ where: { code: values.church!.toUpperCase() } });
-    if (!church) throw new Error(`No church with the code ${values.church}.`);
+    const church = await db.church.findFirstOrThrow();
 
     const { key, client } = await app.get(ApiClientService).create({
       kind: 'REGISTRATION',
@@ -163,15 +161,9 @@ async function createApiClient(args: string[]) {
 }
 
 async function listApiClients(args: string[]) {
-  const { values } = parseArgs({ args, options: { church: { type: 'string' } } });
+  parseArgs({ args, options: {} });
   await withApp(async (app) => {
-    const db = app.get(PrismaDb);
-    const church = values.church
-      ? await db.church.findUnique({ where: { code: values.church.toUpperCase() } })
-      : null;
-    if (values.church && !church) throw new Error(`No church with the code ${values.church}.`);
-
-    const clients = await app.get(ApiClientService).list(church?.id);
+    const clients = await app.get(ApiClientService).list();
     if (!clients.length) return console.log('No keys.');
     for (const client of clients) {
       const state = client.revokedAt
@@ -201,12 +193,11 @@ async function importRegistrationsCommand(args: string[]) {
     },
   });
   if (!values.from || !values.church) {
-    throw new Error('Usage: registrations:import --from <url> --church <CODE> [--dry-run]');
+    throw new Error('Usage: registrations:import --from <url> [--dry-run]');
   }
   await withApp((app) =>
     importRegistrations({
       from: values.from!,
-      churchCode: values.church!,
       dryRun: values['dry-run'] ?? false,
       db: app.get(PrismaDb),
     }),
@@ -220,13 +211,12 @@ async function exportRegistrationsCommand(args: string[]) {
   });
   if (!values.to || !values.church || !values.since) {
     throw new Error(
-      'Usage: registrations:export-back --to <url> --church <CODE> --since <iso time>',
+      'Usage: registrations:export-back --to <url> --since <iso time>',
     );
   }
   await withApp((app) =>
     exportRegistrationsBack({
       to: values.to!,
-      churchCode: values.church!,
       since: values.since!,
       db: app.get(PrismaDb),
     }),
@@ -259,13 +249,12 @@ async function erasePersonCommand(args: string[]) {
     },
   });
   if (!values.church || !values.person) {
-    throw new Error('Usage: person:erase --church <CODE> --person <uuid> [--dry-run]');
+    throw new Error('Usage: person:erase --person <uuid> [--dry-run]');
   }
   const dryRun = values['dry-run'] ?? false;
 
   await withApp(async (app) => {
     const result = await erasePerson({
-      churchCode: values.church!,
       personId: values.person!,
       dryRun,
       db: app.get(PrismaDb),

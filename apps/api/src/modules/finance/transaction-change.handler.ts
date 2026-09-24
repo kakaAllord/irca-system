@@ -100,9 +100,7 @@ export class TransactionChangeHandler implements ChangeRequestHandler, OnModuleI
       await this.catalog.requireUsable(tx, 'expense', text(proposed.expenseItemId));
     }
     if (proposed.txnDate) {
-      const church = await tx.church.findFirstOrThrow({
-        where: { id: this.auth.requireChurch() },
-      });
+      const church = await tx.church.findFirstOrThrow();
       const today = new Intl.DateTimeFormat('en-CA', { timeZone: church.timezone }).format(
         new Date(),
       );
@@ -247,7 +245,7 @@ export class TransactionChangeHandler implements ChangeRequestHandler, OnModuleI
     request: ChangeRequest,
     proposed: Record<string, unknown>,
   ): Promise<FinanceTransaction> {
-    const church = await tx.church.findFirstOrThrow({ where: { id: churchId } });
+    const church = await tx.church.findFirstOrThrow();
     const date = text(proposed.txnDate);
     const year = Number(date.slice(0, 4));
     const month = Number(date.slice(5, 7));
@@ -309,7 +307,7 @@ export class TransactionChangeHandler implements ChangeRequestHandler, OnModuleI
 
   private async row(tx: Tx, id: string): Promise<FinanceTransaction | null> {
     if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
-    return tx.financeTransaction.findFirst({ where: { id, churchId } });
+    return tx.financeTransaction.findFirst({ where: { id } });
   }
 
   private async itemNames(tx: Tx, ids: unknown[]): Promise<Map<string, string>> {

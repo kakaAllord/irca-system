@@ -73,7 +73,7 @@ export function Terminal() {
     const { since, church } = follow.current;
     try {
       const query = new URLSearchParams({ after: since, ...(church ? { church } : {}) });
-      const events = await clientApi<LiveEvent[]>(`/platform/impersonations/events?${query}`);
+      const events = await clientApi<LiveEvent[]>(`/dev/impersonations/events?${query}`);
       if (!follow.current) return;
       if (events.length) {
         follow.current.since = events.at(-1)!.at;
@@ -133,7 +133,7 @@ export function Terminal() {
       switch (command.name) {
         case 'log': {
           const { rows, next } = await clientApi<{ rows: LogSession[]; next: string | null }>(
-            `/platform/impersonations?${query(command.filters)}`,
+            `/dev/impersonations?${query(command.filters)}`,
           );
           lastRows.current = rows;
           return write(
@@ -152,7 +152,7 @@ export function Terminal() {
         }
         case 'churches': {
           const churches = await clientApi<{ code: string; name: string }[]>(
-            '/platform/impersonations/churches',
+            '/dev/impersonations/churches',
           );
           return write(
             churches.map((c) => ({ text: `${c.code.padEnd(8)}${c.name}` })),
@@ -160,7 +160,7 @@ export function Terminal() {
           );
         }
         case 'show': {
-          const session = await clientApi<SessionDetail>(`/platform/impersonations/${command.id}`);
+          const session = await clientApi<SessionDetail>(`/dev/impersonations/${command.id}`);
           return write(
             [
               { text: `${session.actor.name} <${session.actor.email}>`, tone: 'accent' },

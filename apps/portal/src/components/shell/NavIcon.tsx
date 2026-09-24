@@ -115,13 +115,6 @@ const PATHS: Record<Name, React.ReactNode> = {
     </>
   ),
   // A building with a cross: the churches on the platform.
-  churches: (
-    <>
-      <path d="M12 2v5M10 4h4" />
-      <path d="M5 21V11l7-4 7 4v10" />
-      <path d="M10 21v-5h4v5M3 21h18" />
-    </>
-  ),
   // A prompt: the dev console.
   terminal: (
     <>

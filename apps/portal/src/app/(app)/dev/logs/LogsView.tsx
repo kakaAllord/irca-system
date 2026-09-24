@@ -135,7 +135,7 @@ function ServerLog({ timezone, isDev }: { timezone: string; isDev: boolean }) {
       const params = new URLSearchParams({ limit: '300' });
       if (level) params.set('level', level);
       if (search.trim()) params.set('search', search.trim());
-      setData(await clientApi<ServerLogs>(`/platform/logs/server?${params}`));
+      setData(await clientApi<ServerLogs>(`/dev/logs/server?${params}`));
       setError(null);
     } catch {
       setError('Could not read the log just now.');
@@ -252,7 +252,7 @@ function ActionLog({ timezone, isDev }: { timezone: string; isDev: boolean }) {
         if (search.trim()) params.set('search', search.trim());
         if (action.trim()) params.set('action', action.trim());
         if (before) params.set('before', before);
-        const page = await clientApi<ActionLogs>(`/platform/logs/actions?${params}`);
+        const page = await clientApi<ActionLogs>(`/dev/logs/actions?${params}`);
         setRows((old) => (before && old ? [...old, ...page.rows] : page.rows));
         setNextBefore(page.nextBefore);
         setError(null);

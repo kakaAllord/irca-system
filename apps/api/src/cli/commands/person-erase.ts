@@ -40,7 +40,6 @@ export type EraseResult = {
  * out of band and by hand.
  */
 export async function erasePerson(options: {
-  churchCode: string;
   personId: string;
   dryRun: boolean;
   db: PrismaDb;
@@ -49,12 +48,11 @@ export async function erasePerson(options: {
   confirm?: (person: { fullName: string; phone: string }) => Promise<string>;
 }): Promise<EraseResult> {
   const { db } = options;
-  const church = await db.church.findUnique({ where: { code: options.churchCode.toUpperCase() } });
-  if (!church) throw new Error(`No church with the code ${options.churchCode}.`);
+  const church = await db.church.findFirstOrThrow();
   if (!/^[0-9a-f-]{36}$/i.test(options.personId)) throw new Error('That is not a person id.');
 
   const person = await db.person.findFirst({
-    where: { id, id: options.personId },
+    where: { id: options.personId },
   });
   if (!person) throw new Error(`No person ${options.personId} in ${church.code}.`);
 
@@ -75,61 +73,55 @@ export async function erasePerson(options: {
 
     // Counted before they go, so the report says what was actually erased.
     const before = {
-      notes: await count('select 1 from person_notes where church_id = $1 and person_id = $2', [
-        church.id,
-        person.id,
-      ]),
+      notes: await count('select 1 from person_notes where person_id = $1', [person.id]),
       stageEvents: await count(
-        'select 1 from person_stage_events where church_id = $1 and person_id = $2',
-        [church.id, person.id],
+        'select 1 from person_stage_events where person_id = $1',
+        [person.id],
       ),
       applications: await count(
-        'select 1 from membership_applications where church_id = $1 and person_id = $2',
-        [church.id, person.id],
+        'select 1 from membership_applications where person_id = $1',
+        [person.id],
       ),
       enrollments: await count(
-        'select 1 from foundation_enrollments where church_id = $1 and person_id = $2',
-        [church.id, person.id],
+        'select 1 from foundation_enrollments where person_id = $1',
+        [person.id],
       ),
       attendance: await count(
         `select 1 from foundation_attendance a
-         join foundation_enrollments e on e.id = a.enrollment_id and e.church_id = a.church_id
-         where a.church_id = $1 and e.person_id = $2`,
-        [church.id, person.id],
+         join foundation_enrollments e on e.id = a.enrollment_id
+         where e.person_id = $1`,
+        [person.id],
       ),
     };
 
     // The person goes first; everything that hangs off them follows by cascade.
-    await count('delete from people where church_id = $1 and id = $2', [church.id, person.id]);
+    await count('delete from people where id = $1', [person.id]);
     const registrationErased = person.registrationId
-      ? (await count('delete from registrations where church_id = $1 and id = $2', [
-          church.id,
-          person.registrationId,
-        ])) > 0
+      ? (await count('delete from registrations where id = $1', [person.registrationId])) > 0
       : false;
 
     // The log keeps its lines; the name in them does not.
     const summariesRewritten = person.fullName.trim()
       ? await count(
-          `update audit_events set summary = replace(summary, $2, '[erased]')
-           where church_id = $1 and summary like '%' || $2 || '%'`,
-          [church.id, person.fullName],
+          `update audit_events set summary = replace(summary, $1, '[erased]')
+           where summary like '%' || $1 || '%'`,
+          [person.fullName],
         )
       : 0;
     const detailsCleared = await count(
       `update audit_events set before = null, after = null, meta = null
-       where church_id = $1 and entity_type in ('person', 'registration')
-         and entity_id = any($2::text[])
+       where entity_type in ('person', 'registration')
+         and entity_id = any($1::text[])
          and (before is not null or after is not null or meta is not null)`,
-      [church.id, [person.id, person.registrationId].filter(Boolean)],
+      [[person.id, person.registrationId].filter(Boolean)],
     );
 
     // That it happened is itself a record, and it names nobody.
     await owner.query(
-      `insert into audit_events (id, church_id, source, action, entity_type, entity_id, summary)
-       values (gen_random_uuid(), $1, 'feature', 'person.erased', 'person', $2,
+      `insert into audit_events (id, source, action, entity_type, entity_id, summary)
+       values (gen_random_uuid(), 'feature', 'person.erased', 'person', $1,
                'Erased everything about one person, at their request')`,
-      [church.id, person.id],
+      [person.id],
     );
 
     await owner.query(options.dryRun ? 'rollback' : 'commit');

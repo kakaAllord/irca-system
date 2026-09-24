@@ -75,15 +75,14 @@ export class PeopleService {
   }
 
   async list(query: PeopleQuery) {
-    const where = this.filters(query, churchId);
+    const where = this.filters(query);
     const tab = TABS.includes(query.tab as Tab) ? (query.tab as Tab) : 'all';
     const pageSize = Math.min(query.pageSize ?? 25, 100);
     const page = Math.max(1, query.page ?? 1);
 
     const ids = await this.query<{ id: string }>(
-      sql`-- tenant: church_id is bound in the where clause
-       select p.id from people p
-       left join registrations r on r.id = p.registration_id and r.church_id = p.church_id
+      sql`       select p.id from people p
+       left join registrations r on r.id = p.registration_id
        where ${where} and ${TAB_SQL[tab]}
        -- Unfinished ones first, as the office list always had it, then newest.
        order by (r.status = 'in_progress') desc nulls last,
@@ -92,13 +91,12 @@ export class PeopleService {
     );
 
     const counts = await this.query<Record<Tab, number>>(
-      sql`-- tenant: church_id is bound in the where clause
-       select ${join(
+      sql`       select ${join(
          TABS.map((key) => sql`count(*) filter (where ${TAB_SQL[key]})::int as ${identifier(key)}`),
          ', ',
        )}
        from people p
-       left join registrations r on r.id = p.registration_id and r.church_id = p.church_id
+       left join registrations r on r.id = p.registration_id
        where ${where}`,
     );
 
@@ -117,8 +115,8 @@ export class PeopleService {
   }
 
   /** Every filter but the tab, as SQL, so the tab counts can share it. */
-  private filters(query: PeopleQuery, churchId: string): Sql {
-    const clauses: Sql[] = [sql`p.church_id = ${churchId}::uuid`];
+  private filters(query: PeopleQuery): Sql {
+    const clauses: Sql[] = [];
 
     const q = query.q?.trim();
     if (q) {
@@ -140,7 +138,9 @@ export class PeopleService {
     if (query.lives) clauses.push(sql`r.where_at = ${query.lives}`);
     if (query.source) clauses.push(sql`${query.source} = any(coalesce(r.heard, '{}'))`);
 
-    return join(clauses, ' and ');
+    // The church clause used to be here and was always true, so the list was
+    // never empty. With no filters at all, everyone matches.
+    return clauses.length ? join(clauses, ' and ') : sql`true`;
   }
 
   async get(id: string) {
@@ -233,7 +233,7 @@ export class PeopleService {
     const person = await this.require(id);
     await this.db.tx(async (tx) => {
       await tx.person.update({
-        where: { churchId_id: { id } },
+        where: { id },
         data:
           flag === 'saved'
             ? { saved: value, savedSetById: this.auth.userId, savedSetAt: new Date() }
@@ -313,6 +313,7 @@ export class PeopleService {
     }
     await this.db.client.registrationReminder.create({
       data: {
+        registrationId: person.registration.id,
         channel,
         sentById: this.auth.userId!,
       },

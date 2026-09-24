@@ -8,7 +8,6 @@ import { TEMPLATES, type TemplateName } from './templates/index.js';
 const BACKOFF_MINUTES = [1, 5, 30, 120, 360];
 const MAX_ATTEMPTS = 6;
 /** At most this many per church per round, so one church's bulk sending waits its turn. */
-const PER_CHURCH = 5;
 const BATCH = 20;
 
 type Enqueue = {
@@ -66,13 +65,9 @@ export class EmailService {
       where status = 'SENDING' and next_attempt_at < now() - interval '10 minutes'`;
 
     const due = await this.db.$queryRaw<{ id: string }[]>`
-      select id from (
-        select id, row_number() over (partition by church_id order by created_at) as rank
-        from email_outbox
-        where status = 'PENDING' and next_attempt_at <= now()
-      ) ranked
-      where rank <= ${PER_CHURCH}
-      order by rank
+      select id from email_outbox
+      where status = 'PENDING' and next_attempt_at <= now()
+      order by created_at
       limit ${BATCH}`;
     if (!due.length) return { sent: 0, failed: 0 };
 
@@ -105,14 +100,14 @@ export class EmailService {
             payload: scrubLinks(row.payload),
           },
         });
-        this.usage.inc('email.sent', 1, row.churchId);
+        this.usage.inc('email.sent', 1);
         sent++;
       } catch (err) {
         failed++;
         const attempts = row.attempts;
         if (attempts >= MAX_ATTEMPTS) {
           await this.giveUp(row.id, (err as Error).message);
-          this.usage.inc('email.failed', 1, row.churchId);
+          this.usage.inc('email.failed', 1);
           continue;
         }
         const minutes = BACKOFF_MINUTES[Math.min(attempts - 1, BACKOFF_MINUTES.length - 1)]!;
@@ -124,7 +119,7 @@ export class EmailService {
             lastError: (err as Error).message.slice(0, 500),
           },
         });
-        this.usage.inc('email.retries', 1, row.churchId);
+        this.usage.inc('email.retries', 1);
         this.logger.warn({ msg: 'email not sent, will try again', minutes, id: row.id });
       }
     }

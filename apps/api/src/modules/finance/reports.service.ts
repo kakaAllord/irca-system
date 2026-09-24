@@ -93,10 +93,9 @@ export class ReportsService {
     };
   }
 
-  private async monthTotals(churchId: string, year: number, month: number) {
+  private async monthTotals(year: number, month: number) {
     const rows = await this.query<{ kind: string; total: string; count: number }>(
-      sql`-- tenant: church_id is bound below
-       select kind, sum(amount)::text as total, count(*)::int as count
+      sql`       select kind, sum(amount)::text as total, count(*)::int as count
        from finance_transactions
        where status = 'POSTED'
          and period_year = ${year} and period_month = ${month}
@@ -105,10 +104,9 @@ export class ReportsService {
     return summarise(rows);
   }
 
-  private async rangeTotals(churchId: string, from: string, to: string) {
+  private async rangeTotals(from: string, to: string) {
     const rows = await this.query<{ kind: string; total: string; count: number }>(
-      sql`-- tenant: church_id is bound below
-       select kind, sum(amount)::text as total, count(*)::int as count
+      sql`       select kind, sum(amount)::text as total, count(*)::int as count
        from finance_transactions
        where status = 'POSTED'
          and txn_date between ${from}::date and ${to}::date
@@ -117,14 +115,14 @@ export class ReportsService {
     return summarise(rows);
   }
 
-  private groupBy(churchId: string, kind: 'INCOME' | 'EXPENSE', year: number, month: number) {
+  private groupBy(kind: 'INCOME' | 'EXPENSE', year: number, month: number) {
     return this.groupQuery(
       kind,
       sql`and t.period_year = ${year} and t.period_month = ${month}`,
     );
   }
 
-  private groupByRange(churchId: string, kind: 'INCOME' | 'EXPENSE', from: string, to: string) {
+  private groupByRange(kind: 'INCOME' | 'EXPENSE', from: string, to: string) {
     return this.groupQuery(
       kind,
       sql`and t.txn_date between ${from}::date and ${to}::date`,
@@ -141,10 +139,9 @@ export class ReportsService {
     );
     const column = identifier(kind === 'INCOME' ? 'income_source_id' : 'expense_item_id');
     return this.query<GroupRow>(
-      sql`-- tenant: church_id is bound below
-       select i.id, i.name, sum(t.amount)::text as total
+      sql`       select i.id, i.name, sum(t.amount)::text as total
        from finance_transactions t
-       join ${table} i on i.id = t.${column} and i.church_id = t.church_id
+       join ${table} i on i.id = t.${column}
        where t.status = 'POSTED' and t.kind = ${kind} ${period}
        group by i.id, i.name
        order by sum(t.amount) desc`,
@@ -152,10 +149,9 @@ export class ReportsService {
   }
 
   /** The last twelve months, ending with the month being shown. */
-  private async trend(churchId: string, year: number, month: number): Promise<MonthRow[]> {
+  private async trend(year: number, month: number): Promise<MonthRow[]> {
     const rows = await this.query<{ month: string; kind: string; total: string }>(
-      sql`-- tenant: church_id is bound below
-       select to_char(make_date(period_year, period_month, 1), 'YYYY-MM') as month,
+      sql`       select to_char(make_date(period_year, period_month, 1), 'YYYY-MM') as month,
               kind, sum(amount)::text as total
        from finance_transactions
        where status = 'POSTED'
@@ -168,10 +164,9 @@ export class ReportsService {
     return byMonth(rows, lastMonths(year, month, 12));
   }
 
-  private async monthsInRange(churchId: string, from: string, to: string): Promise<MonthRow[]> {
+  private async monthsInRange(from: string, to: string): Promise<MonthRow[]> {
     const rows = await this.query<{ month: string; kind: string; total: string }>(
-      sql`-- tenant: church_id is bound below
-       select to_char(make_date(period_year, period_month, 1), 'YYYY-MM') as month,
+      sql`       select to_char(make_date(period_year, period_month, 1), 'YYYY-MM') as month,
               kind, sum(amount)::text as total
        from finance_transactions
        where status = 'POSTED'

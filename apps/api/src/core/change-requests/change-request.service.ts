@@ -265,7 +265,7 @@ export class ChangeRequestService {
   }
 
   async get(id: string): Promise<ChangeRequestView> {
-    const row = await this.db.client.changeRequest.findFirst({ where: { id, churchId } });
+    const row = await this.db.client.changeRequest.findFirst({ where: { id } });
     if (!row) throw new AppError(404, ErrorCode.NOT_FOUND, 'No such request.');
     return (await this.views([row]))[0]!;
   }
@@ -279,7 +279,7 @@ export class ChangeRequestService {
   }
 
   /** The number on the sidebar's Requests badge. */
-  async pendingCount(churchId: string): Promise<number> {
+  async pendingCount(): Promise<number> {
     return this.core.changeRequest.count({ where: { status: 'PENDING' } });
   }
 
@@ -347,18 +347,18 @@ export class ChangeRequestService {
   }
 
   private async rolesOf(userIds: string[]): Promise<Map<string, string[]>> {
-    const rows = await this.db.client.membershipRole.findMany({
+    const rows = await this.db.client.userRole.findMany({
       where: {
-        membership: { userId: { in: [...new Set(userIds)] } },
+        userId: { in: [...new Set(userIds)] },
         role: { deletedAt: null },
       },
-      include: { role: { select: { name: true } }, membership: { select: { userId: true } } },
+      include: { role: { select: { name: true } } },
     });
     const out = new Map<string, string[]>();
     for (const row of rows) {
-      const list = out.get(row.membership.userId) ?? [];
+      const list = out.get(row.userId) ?? [];
       list.push(row.role.name);
-      out.set(row.membership.userId, list);
+      out.set(row.userId, list);
     }
     return out;
   }
@@ -366,9 +366,8 @@ export class ChangeRequestService {
   /** Holds the row for the rest of the transaction, so two decisions cannot race. */
   private async lock(tx: Tx, id: string): Promise<ChangeRequest> {
     await tx.$executeRaw`
-      -- tenant: church_id is pinned here as well as by row-level security
       select 1 from change_requests where id = ${id}::uuid for update`;
-    const request = await tx.changeRequest.findFirst({ where: { id, churchId } });
+    const request = await tx.changeRequest.findFirst({ where: { id } });
     if (!request) throw new AppError(404, ErrorCode.NOT_FOUND, 'No such request.');
     if (request.status !== 'PENDING') {
       throw new AppError(409, ErrorCode.CONFLICT, 'This request has already been decided.');
@@ -390,14 +389,13 @@ export class ChangeRequestService {
     });
     const approvers = await this.core.$queryRaw<{ email: string; full_name: string }[]>`
       select distinct u.email, u.full_name
-      from church_memberships m
-      join users u             on u.id = m.user_id and u.status = 'ACTIVE'
-      join membership_roles mr on mr.membership_id = m.id and mr.church_id = m.church_id
-      join roles r             on r.id = mr.role_id and r.church_id = m.church_id and r.deleted_at is null
-      join role_permissions rp on rp.role_id = r.id and rp.church_id = r.church_id
-      where m.status = 'ACTIVE'
+      from users u
+      join user_roles ur       on ur.user_id = u.id
+      join roles r             on r.id = ur.role_id and r.deleted_at is null
+      join role_permissions rp on rp.role_id = r.id
+      where u.status = 'ACTIVE'
         and rp.permission_key = 'admin.requests.decide'
-        and m.user_id <> ${requesterId}::uuid`;
+        and u.id <> ${requesterId}::uuid`;
 
     for (const approver of approvers) {
       await this.email.enqueueNow({

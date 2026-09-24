@@ -274,7 +274,7 @@ export class DiscipleshipService {
     return { sessions, columns };
   }
 
-  private async openEnrollment(tx: Tx, churchId: string, id: string) {
+  private async openEnrollment(tx: Tx, id: string) {
     const enrollment = await tx.foundationEnrollment.findFirst({
       where: { id, droppedAt: null },
     });

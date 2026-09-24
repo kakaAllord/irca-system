@@ -24,13 +24,13 @@ export class ApiClientService {
 
   /** Makes a key. The plain text is returned once and never stored. */
   async create(input: {
-    churchId: string;
     kind: 'REGISTRATION';
     name: string;
   }): Promise<{ key: string; client: ApiClient }> {
     const key = PREFIX + randomBytes(BYTES).toString('base64url');
     const client = await this.db.apiClient.create({
       data: {
+        kind: input.kind,
         name: input.name,
         keyPrefix: key.slice(0, 12),
         keyHash: hashKey(key),
@@ -55,14 +55,6 @@ export class ApiClientService {
       });
     }
     return client;
-  }
-
-  async churchIsActive(churchId: string): Promise<boolean> {
-    const church = await this.db.church.findUnique({
-      where: { id: churchId },
-      select: { status: true },
-    });
-    return church?.status === 'ACTIVE';
   }
 
   async revoke(id: string): Promise<boolean> {

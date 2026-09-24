@@ -93,9 +93,6 @@ export class AccountService {
     }
 
     const hash = await this.passwords.hash(next);
-    const session = await this.db.session.findUniqueOrThrow({
-      where: { id: this.cls.get('sessionId')! },
-    });
     await this.db.user.update({
       where: { id: userId },
       data: { passwordHash: hash, passwordChangedAt: new Date() },
@@ -108,7 +105,6 @@ export class AccountService {
 
     const fresh = await this.sessions.create({
       userId,
-      activeChurchId: session.activeChurchId,
       ip: this.cls.get('ip'),
       userAgent: this.cls.get('userAgent'),
     });

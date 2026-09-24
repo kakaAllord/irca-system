@@ -1,10 +1,8 @@
 /* eslint-disable no-console -- a script reports to its terminal */
-// Local and test data: two churches and a few accounts to sign in with.
+// Local and test data: the church, and a few accounts to sign in with.
 //
 // Refuses to run anywhere but development and test, because it writes known
-// passwords. TEST exists from the start, with records that overlap IRCA's,
-// so a leak between churches shows up as a wrong row in a test rather than
-// an empty page (docs/plan/multi-tenancy.md, section 15).
+// passwords.
 import { createHash } from 'node:crypto';
 import { config } from 'dotenv';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -28,112 +26,81 @@ const db = new PrismaClient({
 });
 const passwords = new PasswordService();
 
-async function church(code: string, slug: string, name: string) {
-  return db.church.upsert({
-    where: { code },
-    update: { name, slug },
-    create: { code, slug, name },
-  });
-}
-
-async function user(
-  email: string,
-  fullName: string,
-  password: string,
-  platformRole: 'NONE' | 'DEV' = 'NONE',
-) {
+async function user(email: string, fullName: string, password: string, roleKeys: string[] = []) {
   const passwordHash = await passwords.hash(password);
-  return db.user.upsert({
+  const person = await db.user.upsert({
     where: { email },
     update: {
       fullName,
       passwordHash,
-      platformRole,
       status: 'ACTIVE',
       failedLoginCount: 0,
       lockedUntil: null,
     },
-    create: { email, fullName, passwordHash, platformRole, status: 'ACTIVE' },
+    create: { email, fullName, passwordHash, status: 'ACTIVE' },
   });
-}
-
-/** A portal the church uses. Its built-in roles follow from the sync below. */
-async function portal(churchId: string, moduleKey: string) {
-  await db.churchModule.upsert({
-    where: { churchId_moduleKey: { churchId, moduleKey } },
-    update: { enabled: true },
-    create: { churchId, moduleKey, enabled: true, enabledAt: new Date() },
-  });
-}
-
-async function member(churchId: string, userId: string, systemRoleKeys: string[] = []) {
-  const membership = await db.churchMembership.upsert({
-    where: { churchId_userId: { churchId, userId } },
-    update: { status: 'ACTIVE' },
-    create: { churchId, userId, status: 'ACTIVE', joinedAt: new Date() },
-  });
-  // The roles themselves come from the module definitions, written by the
-  // same sync the API runs at boot (called below), so a fresh database can be
-  // seeded without starting the API first.
-  for (const systemKey of systemRoleKeys) {
-    const role = await db.role.findUnique({
-      where: { churchId_systemKey: { churchId, systemKey } },
-    });
+  // The roles themselves come from the module definitions, written by the same
+  // sync the API runs at boot (called below), so a fresh database can be seeded
+  // without starting the API first.
+  for (const systemKey of roleKeys) {
+    const role = await db.role.findUnique({ where: { systemKey } });
     if (!role) {
-      console.warn(`no role ${systemKey} in this church: is its portal on?`);
+      console.warn(`no role ${systemKey}: is its portal on?`);
       continue;
     }
-    await db.membershipRole.upsert({
-      where: { membershipId_roleId: { membershipId: membership.id, roleId: role.id } },
+    await db.userRole.upsert({
+      where: { userId_roleId: { userId: person.id, roleId: role.id } },
       update: {},
-      create: { churchId, membershipId: membership.id, roleId: role.id },
+      create: { userId: person.id, roleId: role.id },
     });
   }
-  return membership;
+  return person;
 }
 
-const irca = await church('IRCA', 'irca', 'International Revival Church Arusha');
-const test = await church('TEST', 'test', 'Test Church');
+/** A portal this church uses. */
+async function portal(moduleKey: string) {
+  await db.moduleState.upsert({
+    where: { moduleKey },
+    update: { enabled: true },
+    create: { moduleKey, enabled: true, enabledAt: new Date() },
+  });
+}
 
-// IRCA runs Finance; TEST does not, so a test can prove a portal that is off
-// is off, and that the two churches number their entries independently.
-await portal(irca.id, 'finance');
-await portal(irca.id, 'membership');
+// The one church. A check constraint in the migration keeps it the only one.
+await db.church.upsert({
+  where: { id: 1 },
+  update: {},
+  create: { id: 1, code: 'IRCA', name: 'International Revival Church Arusha' },
+});
+
+await portal('finance');
+await portal('membership');
+await portal('admin');
+await portal('dev');
 
 // The permissions and built-in roles the code defines, written before anyone
 // is given one.
 await new RegistrySync(db as unknown as PrismaDb).sync();
 
-await user('dev@irca.local', 'Dev Account', 'dev-password-123', 'DEV');
-await member(irca.id, (await user('admin@irca.local', 'IRCA Admin', 'admin-password-123')).id, [
+// The developer is this church's developer: an ordinary role, not a rank above.
+await user('dev@irca.local', 'Dev Account', 'dev-password-123', [
   'admin.administrator',
+  'dev.developer',
 ]);
+await user('admin@irca.local', 'IRCA Admin', 'admin-password-123', ['admin.administrator']);
 // A second administrator, because nobody decides their own change request,
 // and the pastor who decides membership applications.
-await member(irca.id, (await user('pastor@irca.local', 'Pastor Sarah', 'pastor-password-123')).id, [
+await user('pastor@irca.local', 'Pastor Sarah', 'pastor-password-123', [
   'admin.administrator',
   'membership.pastor',
 ]);
 // The office, and the follow-up team, who must not read prayer requests.
-await member(irca.id, (await user('office@irca.local', 'Grace Office', 'office-password-123')).id, [
-  'membership.secretary',
+await user('office@irca.local', 'Grace Office', 'office-password-123', ['membership.secretary']);
+await user('followup@irca.local', 'Daniel Followup', 'followup-password-123', [
+  'membership.followup',
 ]);
-await member(
-  irca.id,
-  (await user('followup@irca.local', 'Daniel Followup', 'followup-password-123')).id,
-  ['membership.followup'],
-);
-await member(irca.id, (await user('clerk@irca.local', 'Neema Mollel', 'clerk-password-123')).id, [
-  'finance.clerk',
-]);
-await member(
-  irca.id,
-  (await user('mhazini@irca.local', 'Joyce Mhazini', 'manager-password-123')).id,
-  ['finance.manager'],
-);
-await member(test.id, (await user('admin@test.local', 'Test Admin', 'admin-password-123')).id, [
-  'admin.administrator',
-]);
+await user('clerk@irca.local', 'Neema Mollel', 'clerk-password-123', ['finance.clerk']);
+await user('mhazini@irca.local', 'Joyce Mhazini', 'manager-password-123', ['finance.manager']);
 
 // The registration form's key, for development and the browser tests. A known
 // value only because this seed refuses to run anywhere else: production keys
@@ -142,9 +109,8 @@ const LOCAL_FORM_KEY = 'irk_local_registration_form_key_not_for_production';
 const keyHash = createHash('sha256').update(LOCAL_FORM_KEY).digest('hex');
 await db.apiClient.upsert({
   where: { keyHash },
-  update: { revokedAt: null, churchId: irca.id },
+  update: { revokedAt: null },
   create: {
-    churchId: irca.id,
     name: 'Registration form (local)',
     kind: 'REGISTRATION',
     keyPrefix: LOCAL_FORM_KEY.slice(0, 12),
@@ -153,6 +119,6 @@ await db.apiClient.upsert({
 });
 
 console.log(
-  'seeded: IRCA (with Membership and Finance) and TEST, with dev@, admin@, pastor@, office@, followup@, clerk@ and mhazini@irca.local, admin@test.local',
+  'seeded IRCA, with dev@, admin@, pastor@, office@, followup@, clerk@ and mhazini@irca.local',
 );
 await db.$disconnect();

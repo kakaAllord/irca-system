@@ -153,10 +153,9 @@ const audit: Record<string, unknown>[] = [];
 const usage = new Map<string, bigint>();
 
 /** One line in the activity log. */
-function logged(churchId: string, at: Date, actorUserId: string, action: string, entityType: string, entityId: string, summary: string) {
+function logged(at: Date, actorUserId: string, action: string, entityType: string, entityId: string, summary: string) {
   audit.push({
     id: uuid7(at),
-    churchId,
     source: 'feature',
     actorUserId,
     action,
@@ -167,26 +166,23 @@ function logged(churchId: string, at: Date, actorUserId: string, action: string,
     ip: `41.${int(50, 90)}.${int(0, 255)}.${int(1, 254)}`,
     requestId: uuid7(at).slice(0, 32),
   });
-  count(churchId, at, 'audit.events');
+  count(at, 'audit.events');
 }
 
-function count(churchId: string, at: Date, metric: string, by = 1) {
-  const key = `${churchId}|${ymd(at)}|${metric}`;
+function count(at: Date, metric: string, by = 1) {
+  const key = `${ymd(at)}|${metric}`;
   usage.set(key, (usage.get(key) ?? 0n) + BigInt(by));
 }
 
-function gauge(churchId: string, at: Date, metric: string, value: number) {
-  usage.set(`${churchId}|${ymd(at)}|${metric}`, BigInt(Math.max(0, Math.round(value))));
+function gauge(at: Date, metric: string, value: number) {
+  usage.set(`${ymd(at)}|${metric}`, BigInt(Math.max(0, Math.round(value))));
 }
 
-async function demoChurch(code: string, scale: number, staff: Staff) {
-  const church = await db.church.findUnique({ where: { code } });
-  if (!church) {
-    console.warn(`no church ${code}; skipping`);
-    return;
-  }
-  const cid = church.id;
+async function writeHistory(staff: Staff) {
+  const church = await db.church.findFirstOrThrow();
+  const code = church.code;
   const currency = church.currency;
+  const scale = 1;
 
   // -- registrations and the people behind them -----------------------------
 
@@ -213,7 +209,6 @@ async function demoChurch(code: string, scale: number, staff: Staff) {
 
       registrations.push({
         id: regId,
-        churchId: cid,
         token: uuid7(at).replace(/-/g, '').slice(0, 32),
         lang,
         status: submitted ? 'submitted' : 'in_progress',
@@ -248,8 +243,8 @@ async function demoChurch(code: string, scale: number, staff: Staff) {
         submittedAt: submitted ? new Date(at.getTime() + int(4, 40) * 60_000) : null,
       });
 
-      count(cid, at, 'registrations.started');
-      if (submitted) count(cid, at, 'registrations.submitted');
+      count(at, 'registrations.started');
+      if (submitted) count(at, 'registrations.submitted');
       if (!submitted) continue;
 
       // How far along the journey they got depends on how long ago they came.
@@ -260,7 +255,6 @@ async function demoChurch(code: string, scale: number, staff: Staff) {
 
       peopleRows.push({
         id: pid,
-        churchId: cid,
         registrationId: regId,
         fullName: name,
         gender,
@@ -283,7 +277,6 @@ async function demoChurch(code: string, scale: number, staff: Staff) {
         if (when > today) break;
         stageEvents.push({
           id: uuid7(when),
-          churchId: cid,
           personId: pid,
           fromStage: STAGES[s - 1],
           toStage: STAGES[s],
@@ -310,7 +303,6 @@ async function demoChurch(code: string, scale: number, staff: Staff) {
       const kind = pick(['CALL', 'VISIT', 'NOTE'] as const);
       notes.push({
         id: uuid7(at),
-        churchId: cid,
         personId: p.id,
         kind,
         body: pick({
@@ -345,7 +337,6 @@ async function demoChurch(code: string, scale: number, staff: Staff) {
 
     applications.push({
       id: uuid7(submittedAt),
-      churchId: cid,
       personId: p.id,
       status,
       source: chance(0.7) ? 'FORM' : 'OFFICE',
@@ -357,31 +348,31 @@ async function demoChurch(code: string, scale: number, staff: Staff) {
       confirmedById: confirmedAt && confirmedAt <= today ? staff.pastor : null,
       confirmedAt: confirmedAt && confirmedAt <= today ? confirmedAt : null,
     });
-    count(cid, submittedAt, 'membership.applications.submitted');
+    count(submittedAt, 'membership.applications.submitted');
     if (confirmedAt && confirmedAt <= today) {
       confirmed.push({ id: p.id, at: confirmedAt });
-      count(cid, confirmedAt, 'membership.members.confirmed');
-      logged(cid, confirmedAt, staff.pastor, 'membership.application.confirmed', 'person', p.id, `Confirmed ${p.name} as a member`);
+      count(confirmedAt, 'membership.members.confirmed');
+      logged(confirmedAt, staff.pastor, 'membership.application.confirmed', 'person', p.id, `Confirmed ${p.name} as a member`);
     }
   }
   await db.membershipApplication.createMany({ data: applications as never });
 
   // Member numbers are given out in the order people were confirmed.
   confirmed.sort((a, b) => a.at.getTime() - b.at.getTime());
-  const highest = await db.person.aggregate({ where: { churchId: cid }, _max: { memberNumber: true } });
+  const highest = await db.person.aggregate({ where: {}, _max: { memberNumber: true } });
   let memberNumber = highest._max.memberNumber ?? 0;
   for (const c of confirmed) {
     memberNumber++;
     await db.person.update({
-      where: { churchId_id: { churchId: cid, id: c.id } },
+      where: { id: c.id },
       data: { memberNumber, confirmedAt: c.at },
     });
   }
   if (confirmed.length) {
-    await db.churchSequence.upsert({
-      where: { churchId_key: { churchId: cid, key: 'membership:member_number' } },
+    await db.sequence.upsert({
+      where: { key: 'membership:member_number' },
       update: { lastValue: memberNumber },
-      create: { churchId: cid, key: 'membership:member_number', lastValue: memberNumber },
+      create: { key: 'membership:member_number', lastValue: memberNumber },
     });
   }
   console.log(`  ${code}: ${applications.length} applications, ${confirmed.length} confirmed members`);
@@ -392,9 +383,9 @@ async function demoChurch(code: string, scale: number, staff: Staff) {
   const groups: { id: string; name: string }[] = [];
   for (const name of groupNames.slice(0, scale > 0.5 ? 4 : 2)) {
     const row = await db.foundationGroup.upsert({
-      where: { churchId_name: { churchId: cid, name } },
+      where: { name },
       update: {},
-      create: { id: uuid7(start), churchId: cid, name },
+      create: { id: uuid7(start), name },
     });
     groups.push({ id: row.id, name });
   }
@@ -413,7 +404,6 @@ async function demoChurch(code: string, scale: number, staff: Staff) {
 
     enrollments.push({
       id: eid,
-      churchId: cid,
       personId: p.id,
       groupId: pick(groups).id,
       enrolledAt,
@@ -425,14 +415,13 @@ async function demoChurch(code: string, scale: number, staff: Staff) {
       const markedAt = addDays(enrolledAt, s * 7);
       if (markedAt > today) break;
       attendance.push({
-        churchId: cid,
         enrollmentId: eid,
         sessionNo: s,
         mark: chance(0.86) ? 'ATTENDED' : 'MISSED',
         markedById: pick([staff.office, staff.followup]),
         markedAt,
       });
-      count(cid, markedAt, 'membership.attendance.marked');
+      count(markedAt, 'membership.attendance.marked');
     }
   }
   await db.foundationEnrollment.createMany({ data: enrollments as never });
@@ -473,17 +462,17 @@ async function demoChurch(code: string, scale: number, staff: Staff) {
 
   for (const [name, description] of INCOME) {
     const row = await db.financeIncomeSource.upsert({
-      where: { churchId_nameKey: { churchId: cid, nameKey: key(name) } },
+      where: { nameKey: key(name) },
       update: {},
-      create: { id: uuid7(start), churchId: cid, name, nameKey: key(name), description, createdById: staff.mhazini, createdAt: start },
+      create: { id: uuid7(start), name, nameKey: key(name), description, createdById: staff.mhazini, createdAt: start },
     });
     incomeIds[name] = row.id;
   }
   for (const [name, description] of EXPENSE) {
     const row = await db.financeExpenseItem.upsert({
-      where: { churchId_nameKey: { churchId: cid, nameKey: key(name) } },
+      where: { nameKey: key(name) },
       update: {},
-      create: { id: uuid7(start), churchId: cid, name, nameKey: key(name), description, createdById: staff.mhazini, createdAt: start },
+      create: { id: uuid7(start), name, nameKey: key(name), description, createdById: staff.mhazini, createdAt: start },
     });
     expenseIds[name] = row.id;
   }
@@ -491,12 +480,12 @@ async function demoChurch(code: string, scale: number, staff: Staff) {
   // Entry numbers continue from what the church has already used, so this can
   // be run over a database somebody has been clicking around in.
   const seqs = new Map<string, number>();
-  for (const row of await db.churchSequence.findMany({ where: { churchId: cid, key: { startsWith: 'finance:' } } })) {
+  for (const row of await db.sequence.findMany({ where: { key: { startsWith: 'finance:' } } })) {
     seqs.set(row.key, row.lastValue);
   }
   for (const row of await db.financeTransaction.groupBy({
     by: ['kind', 'periodYear', 'periodMonth'],
-    where: { churchId: cid },
+    where: {},
     _max: { seq: true },
   })) {
     const k = sequenceKey(row.kind, row.periodYear, row.periodMonth);
@@ -518,7 +507,6 @@ async function demoChurch(code: string, scale: number, staff: Staff) {
 
     txns.push({
       id,
-      churchId: cid,
       code: txCode,
       kind,
       status: 'POSTED',
@@ -540,7 +528,7 @@ async function demoChurch(code: string, scale: number, staff: Staff) {
       updatedAt: at,
     });
     posted.push({ id, code: txCode, at, amount: value, label: opts.source ?? opts.item ?? txCode });
-    count(cid, at, 'finance.transactions.created');
+    count(at, 'finance.transactions.created');
     return { id, code: txCode, at };
   }
 
@@ -588,10 +576,10 @@ async function demoChurch(code: string, scale: number, staff: Staff) {
 
   await db.financeTransaction.createMany({ data: txns as never });
   for (const [k, v] of seqs) {
-    await db.churchSequence.upsert({
-      where: { churchId_key: { churchId: cid, key: k } },
+    await db.sequence.upsert({
+      where: { key: k },
       update: { lastValue: v },
-      create: { churchId: cid, key: k, lastValue: v },
+      create: { key: k, lastValue: v },
     });
   }
   console.log(`  ${code}: ${txns.length} finance entries`);
@@ -607,7 +595,6 @@ async function demoChurch(code: string, scale: number, staff: Staff) {
     const approved = settled && chance(0.6);
     requests.push({
       id: uuid7(askedAt),
-      churchId: cid,
       moduleKey: 'finance',
       entityType: 'finance_transaction',
       entityId: t.id,
@@ -624,15 +611,15 @@ async function demoChurch(code: string, scale: number, staff: Staff) {
       decisionNote: settled && !approved ? 'Bring the receipt and ask again.' : null,
       appliedAt: approved ? decidedAt : null,
     });
-    count(cid, askedAt, 'change_requests.created');
-    if (settled) count(cid, decidedAt, approved ? 'change_requests.applied' : 'change_requests.rejected');
+    count(askedAt, 'change_requests.created');
+    if (settled) count(decidedAt, approved ? 'change_requests.applied' : 'change_requests.rejected');
   }
   await db.changeRequest.createMany({ data: requests as never });
 
   // -- the activity log, and the numbers the dev console draws --------------
 
   for (const t of some(posted, 200, 260)) {
-    logged(cid, t.at, staff.clerk, 'finance.transaction.created', 'finance_transaction', t.id, `Recorded ${t.code} for ${t.amount}`);
+    logged(t.at, staff.clerk, 'finance.transaction.created', 'finance_transaction', t.id, `Recorded ${t.code} for ${t.amount}`);
   }
 
   const activity: unknown[] = [];
@@ -644,53 +631,53 @@ async function demoChurch(code: string, scale: number, staff: Staff) {
     if (!working) continue;
 
     const requestsToday = Math.round(int(140, 520) * busy * scale);
-    count(cid, day, 'api.requests', requestsToday);
-    count(cid, day, 'api.errors.4xx', int(0, Math.max(1, Math.round(requestsToday * 0.03))));
-    count(cid, day, 'api.errors.403', int(0, 4));
-    count(cid, day, 'api.errors.5xx', chance(0.08) ? int(1, 3) : 0);
-    count(cid, day, 'api.throttled', chance(0.1) ? int(1, 6) : 0);
-    count(cid, day, 'api.latency_ms.sum', requestsToday * int(35, 120));
-    usage.set(`${cid}|${ymd(day)}|api.latency_ms.max`, BigInt(int(300, 2400)));
+    count(day, 'api.requests', requestsToday);
+    count(day, 'api.errors.4xx', int(0, Math.max(1, Math.round(requestsToday * 0.03))));
+    count(day, 'api.errors.403', int(0, 4));
+    count(day, 'api.errors.5xx', chance(0.08) ? int(1, 3) : 0);
+    count(day, 'api.throttled', chance(0.1) ? int(1, 6) : 0);
+    count(day, 'api.latency_ms.sum', requestsToday * int(35, 120));
+    usage.set(`${ymd(day)}|api.latency_ms.max`, BigInt(int(300, 2400)));
 
     const signedIn = some(signInUsers, 2, 6);
-    count(cid, day, 'auth.logins', signedIn.length);
-    count(cid, day, 'auth.sessions_created', signedIn.length);
-    if (chance(0.25)) count(cid, day, 'auth.login_failures', int(1, 4));
-    if (chance(0.04)) count(cid, day, 'auth.lockouts', 1);
-    if (chance(0.05)) count(cid, day, 'auth.password_resets', 1);
-    gauge(cid, day, 'users.active', signedIn.length);
-    gauge(cid, day, 'auth.sessions.active', signedIn.length + int(0, 3));
+    count(day, 'auth.logins', signedIn.length);
+    count(day, 'auth.sessions_created', signedIn.length);
+    if (chance(0.25)) count(day, 'auth.login_failures', int(1, 4));
+    if (chance(0.04)) count(day, 'auth.lockouts', 1);
+    if (chance(0.05)) count(day, 'auth.password_resets', 1);
+    gauge(day, 'users.active', signedIn.length);
+    gauge(day, 'auth.sessions.active', signedIn.length + int(0, 3));
 
     for (const userId of signedIn) {
-      activity.push({ churchId: cid, userId, day: new Date(`${ymd(day)}T00:00:00Z`), requests: Math.round(requestsToday / signedIn.length) });
+      activity.push({ userId, day: new Date(`${ymd(day)}T00:00:00Z`), requests: Math.round(requestsToday / signedIn.length) });
     }
 
-    if (chance(0.15)) count(cid, day, 'admin.invitations.sent', 1);
-    if (chance(0.1)) count(cid, day, 'admin.role_changes', int(1, 2));
-    if (chance(0.3)) count(cid, day, 'email.sent', int(1, 9));
-    if (chance(0.05)) count(cid, day, 'email.failed', 1);
-    if (chance(0.06)) count(cid, day, 'impersonation.started', 1);
-    if (chance(0.06)) count(cid, day, 'impersonation.views', int(2, 14));
-    if (chance(0.06)) count(cid, day, 'impersonation.minutes', int(2, 25));
-    if (chance(0.12)) count(cid, day, 'finance.exports', 1);
-    if (chance(0.08)) count(cid, day, 'membership.people.added', int(1, 3));
-    if (chance(0.1)) count(cid, day, 'membership.reminders.sent', int(1, 5));
+    if (chance(0.15)) count(day, 'admin.invitations.sent', 1);
+    if (chance(0.1)) count(day, 'admin.role_changes', int(1, 2));
+    if (chance(0.3)) count(day, 'email.sent', int(1, 9));
+    if (chance(0.05)) count(day, 'email.failed', 1);
+    if (chance(0.06)) count(day, 'impersonation.started', 1);
+    if (chance(0.06)) count(day, 'impersonation.views', int(2, 14));
+    if (chance(0.06)) count(day, 'impersonation.minutes', int(2, 25));
+    if (chance(0.12)) count(day, 'finance.exports', 1);
+    if (chance(0.08)) count(day, 'membership.people.added', int(1, 3));
+    if (chance(0.1)) count(day, 'membership.reminders.sent', int(1, 5));
 
     // Gauges are a snapshot: what was true at the end of that day.
     const peopleSoFar = people.filter((p) => p.at <= day).length;
     const membersSoFar = confirmed.filter((c) => c.at <= day).length;
     const txnsSoFar = posted.filter((t) => t.at <= day).length;
-    gauge(cid, day, 'entities.people', peopleSoFar);
-    gauge(cid, day, 'entities.members.confirmed', membersSoFar);
-    gauge(cid, day, 'entities.finance.transactions', txnsSoFar);
-    gauge(cid, day, 'entities.finance.items', INCOME.length + EXPENSE.length);
-    gauge(cid, day, 'entities.registrations.submitted', peopleSoFar);
-    gauge(cid, day, 'entities.registrations.in_progress', Math.round(peopleSoFar * 0.2));
-    gauge(cid, day, 'entities.users.active', signInUsers.length);
-    gauge(cid, day, 'entities.modules.enabled', code === 'IRCA' ? 2 : 1);
-    gauge(cid, day, 'db.bytes.total', 4_000_000 + peopleSoFar * 5_400 + txnsSoFar * 2_900);
-    gauge(cid, day, 'db.share_pct', code === 'IRCA' ? int(6400, 7200) : int(400, 900));
-    gauge(cid, day, 'change_requests.pending', requests.filter((r) => (r as { status: string }).status === 'PENDING').length);
+    gauge(day, 'entities.people', peopleSoFar);
+    gauge(day, 'entities.members.confirmed', membersSoFar);
+    gauge(day, 'entities.finance.transactions', txnsSoFar);
+    gauge(day, 'entities.finance.items', INCOME.length + EXPENSE.length);
+    gauge(day, 'entities.registrations.submitted', peopleSoFar);
+    gauge(day, 'entities.registrations.in_progress', Math.round(peopleSoFar * 0.2));
+    gauge(day, 'entities.users.active', signInUsers.length);
+    gauge(day, 'entities.modules.enabled', code === 'IRCA' ? 2 : 1);
+    gauge(day, 'db.bytes.total', 4_000_000 + peopleSoFar * 5_400 + txnsSoFar * 2_900);
+    gauge(day, 'db.share_pct', code === 'IRCA' ? int(6400, 7200) : int(400, 900));
+    gauge(day, 'change_requests.pending', requests.filter((r) => (r as { status: string }).status === 'PENDING').length);
   }
   await db.userActivityDaily.createMany({ data: activity as never, skipDuplicates: true });
 }
@@ -701,9 +688,9 @@ const staff = await staffOf();
 
 // Running this twice would double every chart, so it leaves a mark and refuses
 // to run again without being told to. Anything already in the database is kept:
-// entry numbers and member numbers carry on from where the church had got to.
+// entry numbers and member numbers carry on from where they had got to.
 const AGAIN = process.argv.includes('--again');
-const marks = await db.churchSetting.findMany({ where: { key: 'demo.generatedAt' } });
+const marks = await db.setting.findMany({ where: { key: 'demo.generatedAt' } });
 if (marks.length && !AGAIN) {
   const when = (marks[0]!.value as { at?: string }).at ?? 'earlier';
   console.error(
@@ -715,14 +702,11 @@ if (marks.length && !AGAIN) {
 }
 
 console.log(`Writing ${MONTHS} months of demo history, ${ymd(start)} to ${ymd(today)}.`);
-await demoChurch('IRCA', 1, staff);
-// TEST keeps a little of everything, so a leak between churches still shows up
-// as a wrong row rather than an empty page.
-await demoChurch('TEST', 0.25, staff);
+await writeHistory(staff);
 
 const usageRows = [...usage].map(([k, value]) => {
-  const [churchId, day, metric] = k.split('|');
-  return { churchId: churchId!, day: new Date(`${day}T00:00:00Z`), metric: metric!, value };
+  const [day, metric] = k.split('|');
+  return { day: new Date(`${day}T00:00:00Z`), metric: metric!, value };
 });
 for (let i = 0; i < usageRows.length; i += 5000) {
   await db.usageDaily.createMany({ data: usageRows.slice(i, i + 5000), skipDuplicates: true });
@@ -744,18 +728,16 @@ for (const day of allDays) {
     finishedAt: new Date(startedAt.getTime() + int(1500, 9000)),
     ok,
     error: ok ? null : 'timed out reading table sizes',
-    stats: { churches: 2 },
+    stats: { people: 1 },
   });
 }
 await db.jobRun.createMany({ data: jobs as never });
 
-for (const c of await db.church.findMany({ select: { id: true } })) {
-  await db.churchSetting.upsert({
-    where: { churchId_key: { churchId: c.id, key: 'demo.generatedAt' } },
-    update: { value: { at: new Date().toISOString() } },
-    create: { churchId: c.id, key: 'demo.generatedAt', value: { at: new Date().toISOString() } },
-  });
-}
+await db.setting.upsert({
+  where: { key: 'demo.generatedAt' },
+  update: { value: { at: new Date().toISOString() } },
+  create: { key: 'demo.generatedAt', value: { at: new Date().toISOString() } },
+});
 
 console.log(`done: ${usageRows.length} usage rows, ${audit.length} activity lines, ${jobs.length} job runs.`);
 await db.$disconnect();

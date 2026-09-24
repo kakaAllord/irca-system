@@ -2,7 +2,6 @@ import { Global, Module } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { RequestAuth } from './context/request-auth.js';
-import { PlacementService } from './database/placement.service.js';
 import { PasswordService } from './auth/password.service.js';
 import { SessionService } from './auth/session.service.js';
 import { MeService } from './auth/me.service.js';
@@ -47,7 +46,6 @@ import { ScheduledJobs } from './jobs/scheduled-jobs.service.js';
     // object rather than making a second, empty one.
     { provide: LogBufferService, useValue: logBuffer },
     RequestAuth,
-    PlacementService,
     PasswordService,
     SessionService,
     MeService,
@@ -80,7 +78,6 @@ import { ScheduledJobs } from './jobs/scheduled-jobs.service.js';
   exports: [
     LogBufferService,
     RequestAuth,
-    PlacementService,
     PasswordService,
     SessionService,
     MeService,

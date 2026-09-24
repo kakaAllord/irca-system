@@ -29,8 +29,8 @@ describe('signing in and out', () => {
     portal(app, ip).post('/v1/auth/login', { email, password });
 
   it('signs in with the right password and sets a safe cookie', async () => {
-    const church = await createChurch(db);
-    const u = await createUser(db, { churchId: church.id });
+    await createChurch(db);
+    const u = await createUser(db);
     const res = await login(u.email, u.password).expect(200);
 
     expect(res.body.user.email).toBe(u.email);
@@ -111,15 +111,6 @@ describe('signing in and out', () => {
     await portal(app).get('/v1/auth/me', cookie).expect(401);
   });
 
-  it('drops a church the person no longer belongs to, but keeps them signed in', async () => {
-    const church = await createChurch(db);
-    const u = await createUser(db, { churchId: church.id });
-    const cookie = sessionCookie(await login(u.email, u.password).expect(200));
-    await db.query(`update church_memberships set status = 'DISABLED' where user_id = $1`, [u.id]);
-    const me = await portal(app).get('/v1/auth/me', cookie).expect(200);
-    expect(me.body.church).toBeNull();
-    expect(me.body.churches).toEqual([]);
-  });
 
   it('refuses writes without the portal header, or from another origin', async () => {
     const server = request(app.getHttpServer());

@@ -35,7 +35,7 @@ export class UsageInterceptor implements NestInterceptor {
       // bound and would store entry numbers and tokens in the usage table.
       const template = (req.route as { path?: string } | undefined)?.path;
       if (template) this.usage.inc(`api.route.${req.method} ${template.replace(/^\/v1/, '')}`);
-      this.usage.inc('api.latency_ms.sum', ms);
+      this.usage.inc('api.latency_ms.sum');
       this.usage.max('api.latency_ms.max', ms);
       if (status >= 500) this.usage.inc('api.errors.5xx');
       else if (status === 403) this.usage.inc('api.errors.403');

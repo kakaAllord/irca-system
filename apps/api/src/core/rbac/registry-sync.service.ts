@@ -43,26 +43,23 @@ export class RegistrySync implements OnApplicationBootstrap {
         data: { retiredAt: new Date() },
       });
 
-      const churches = await tx.church.findMany({ select: { id: true } });
-      for (const church of churches) {
-        await this.ensureCoreModules(tx, church.id);
-        const enabled = await tx.churchModule.findMany({
-          where: { id, enabled: true },
-          select: { moduleKey: true },
-        });
-        for (const { moduleKey } of enabled) await this.ensureModuleRoles(tx, church.id, moduleKey);
-      }
+      await this.ensureCoreModules(tx);
+      const enabled = await tx.moduleState.findMany({
+        where: { enabled: true },
+        select: { moduleKey: true },
+      });
+      for (const { moduleKey } of enabled) await this.ensureModuleRoles(tx, moduleKey);
 
       this.logger.log(
-        `permissions: ${keys.length} in code, ${retired.count} newly retired; churches: ${churches.length}`,
+        `permissions: ${keys.length} in code, ${retired.count} newly retired; portals: ${enabled.length}`,
       );
     });
   }
 
-  /** Core modules (admin) are on for every church and cannot be turned off. */
-  private async ensureCoreModules(tx: TxLike, churchId: string): Promise<void> {
+  /** Core portals (admin, the dev console) are always on and cannot be turned off. */
+  private async ensureCoreModules(tx: TxLike): Promise<void> {
     for (const m of CHURCH_MODULES.filter((m) => m.kind === 'core')) {
-      await tx.churchModule.upsert({
+      await tx.moduleState.upsert({
         where: { moduleKey: m.key },
         update: { enabled: true },
         create: { moduleKey: m.key, enabled: true, enabledAt: new Date() },
@@ -71,22 +68,20 @@ export class RegistrySync implements OnApplicationBootstrap {
   }
 
   /**
-   * The module's system roles exist for this church, with exactly the
-   * permissions the code gives them. Called at boot, and again whenever a
-   * church turns a module on.
+   * A portal's system roles exist, with exactly the permissions the code gives
+   * them. Called at boot, and again whenever a portal is turned on.
    */
-  /** The same, for one church and one portal, in its own transaction. */
-  async syncModuleRoles(churchId: string, moduleKey: string): Promise<void> {
+  async syncModuleRoles(moduleKey: string): Promise<void> {
     await this.db.$transaction((tx) => this.ensureModuleRoles(tx, moduleKey));
   }
 
-  async ensureModuleRoles(tx: TxLike, churchId: string, moduleKey: string): Promise<void> {
+  async ensureModuleRoles(tx: TxLike, moduleKey: string): Promise<void> {
     const module = moduleByKey(moduleKey);
     if (!module) return;
 
     for (const def of module.systemRoles) {
       const role = await tx.role.upsert({
-        where: { churchId_systemKey: { systemKey: def.key } },
+        where: { systemKey: def.key },
         update: { name: def.name, description: def.description, moduleKey, deletedAt: null },
         create: {
           moduleKey,

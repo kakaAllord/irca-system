@@ -52,71 +52,59 @@ export async function truncateAll(db: pg.Client): Promise<void> {
 
 const passwords = new PasswordService();
 
+/** The one church, and the portals a test needs switched on. */
 export async function createChurch(db: pg.Client, code = 'IRCA', modules = ['admin']) {
-  const id = randomUUID();
   await db.query(
-    `insert into churches (id, code, slug, name, updated_at) values ($1, $2, $3, $4, now())`,
-    [id, code, code.toLowerCase(), `${code} Church`],
+    `insert into church (id, code, name, updated_at) values (1, $1, $2, now())
+     on conflict (id) do update set code = excluded.code`,
+    [code, `${code} Church`],
   );
-  await db.query(`insert into church_placements (church_id) values ($1)`, [id]);
   for (const moduleKey of modules) {
     await db.query(
-      `insert into church_modules (church_id, module_key, enabled, enabled_at) values ($1, $2, true, now())`,
-      [id, moduleKey],
+      `insert into module_state (module_key, enabled, enabled_at) values ($1, true, now())
+       on conflict (module_key) do update set enabled = true`,
+      [moduleKey],
     );
   }
-  return { id, code };
+  return { id: 1, code };
 }
 
 /** A role with exactly these permissions, as an administrator would make one. */
 export async function createRole(
   db: pg.Client,
-  churchId: string,
   opts: { name?: string; moduleKey?: string; permissions: string[]; systemKey?: string },
 ) {
   const id = randomUUID();
   await db.query(
-    `insert into roles (id, church_id, module_key, name, system_key, updated_at)
-     values ($1, $2, $3, $4, $5, now())`,
-    [
-      id,
-      churchId,
-      opts.moduleKey ?? 'admin',
-      opts.name ?? `Role ${id.slice(0, 6)}`,
-      opts.systemKey ?? null,
-    ],
+    `insert into roles (id, module_key, name, system_key, updated_at)
+     values ($1, $2, $3, $4, now())`,
+    [id, opts.moduleKey ?? 'admin', opts.name ?? `Role ${id.slice(0, 6)}`, opts.systemKey ?? null],
   );
   for (const permissionKey of opts.permissions) {
-    await db.query(
-      `insert into role_permissions (church_id, role_id, permission_key) values ($1, $2, $3)`,
-      [churchId, id, permissionKey],
-    );
+    await db.query(`insert into role_permissions (role_id, permission_key) values ($1, $2)`, [
+      id,
+      permissionKey,
+    ]);
   }
   return { id };
 }
 
-export async function grantRole(db: pg.Client, churchId: string, userId: string, roleId: string) {
-  const { rows } = await db.query<{ id: string }>(
-    `select id from church_memberships where church_id = $1 and user_id = $2`,
-    [churchId, userId],
-  );
+export async function grantRole(db: pg.Client, userId: string, roleId: string) {
   await db.query(
-    `insert into membership_roles (church_id, membership_id, role_id) values ($1, $2, $3)
-     on conflict do nothing`,
-    [churchId, rows[0]!.id, roleId],
+    `insert into user_roles (user_id, role_id) values ($1, $2) on conflict do nothing`,
+    [userId, roleId],
   );
 }
 
-/** Someone who belongs to a church and holds a role with these permissions. */
+/** Someone who holds a role with these permissions. */
 export async function createUserWithPermissions(
   db: pg.Client,
-  churchId: string,
   permissions: string[],
   opts: { moduleKey?: string; email?: string } = {},
 ) {
-  const user = await createUser(db, { churchId, email: opts.email });
-  const role = await createRole(db, churchId, { permissions, moduleKey: opts.moduleKey });
-  await grantRole(db, churchId, user.id, role.id);
+  const user = await createUser(db, { email: opts.email });
+  const role = await createRole(db, { permissions, moduleKey: opts.moduleKey });
+  await grantRole(db, user.id, role.id);
   return { ...user, roleId: role.id };
 }
 
@@ -126,48 +114,32 @@ export async function createUser(
     email?: string;
     password?: string;
     status?: 'ACTIVE' | 'INVITED' | 'DISABLED';
-    platformRole?: 'NONE' | 'DEV';
-    churchId?: string;
   } = {},
 ) {
   const id = randomUUID();
   const email = opts.email ?? `user-${id.slice(0, 8)}@example.com`;
   const password = opts.password ?? 'a long enough password';
   await db.query(
-    `insert into users (id, email, full_name, password_hash, platform_role, status, updated_at)
-     values ($1, $2, $3, $4, $5, $6, now())`,
-    [
-      id,
-      email,
-      'Neema Mollel',
-      await passwords.hash(password),
-      opts.platformRole ?? 'NONE',
-      opts.status ?? 'ACTIVE',
-    ],
+    `insert into users (id, email, full_name, password_hash, status, updated_at)
+     values ($1, $2, $3, $4, $5, now())`,
+    [id, email, 'Neema Mollel', await passwords.hash(password), opts.status ?? 'ACTIVE'],
   );
-  if (opts.churchId) {
-    await db.query(
-      `insert into church_memberships (id, church_id, user_id, status, joined_at, updated_at)
-       values ($1, $2, $3, 'ACTIVE', now(), now())`,
-      [randomUUID(), opts.churchId, id],
-    );
-  }
   return { id, email, password };
 }
 
-/** A key a church's own app can call the public API with. */
-export async function createApiClient(db: pg.Client, churchId: string, kind = 'REGISTRATION') {
+/** A key the registration form can call the public API with. */
+export async function createApiClient(db: pg.Client, kind = 'REGISTRATION') {
   const key = `irk_${randomUUID().replaceAll('-', '')}`;
   const keyHash = createHash('sha256').update(key).digest('hex');
   await db.query(
-    `insert into api_clients (id, church_id, name, kind, key_prefix, key_hash)
-     values ($1, $2, 'Test form', $3, $4, $5)`,
-    [randomUUID(), churchId, kind, key.slice(0, 12), keyHash],
+    `insert into api_clients (id, name, kind, key_prefix, key_hash)
+     values ($1, 'Test form', $2, $3, $4)`,
+    [randomUUID(), kind, key.slice(0, 12), keyHash],
   );
   return key;
 }
 
-/** A request as a church's registration form sends it: a key, and no session. */
+/** A request as the registration form sends it: a key, and no session. */
 export function asForm(app: NestExpressApplication, key: string, ip = `41.0.${rand()}.${rand()}`) {
   const agent = request(app.getHttpServer());
   const withHeaders = (t: request.Test) =>

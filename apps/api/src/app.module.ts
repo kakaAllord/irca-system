@@ -12,7 +12,7 @@ import { InvitationsModule } from './core/invitations/invitations.module.js';
 import { AdminModule } from './modules/admin/admin.module.js';
 import { FinanceModule } from './modules/finance/finance.module.js';
 import { MembershipModule } from './modules/membership/membership.module.js';
-import { PlatformModule } from './modules/platform/platform.module.js';
+import { DevModule } from './modules/dev/dev.module.js';
 import { AllExceptionsFilter } from './core/http/all-exceptions.filter.js';
 import { NoStoreInterceptor } from './core/http/no-store.interceptor.js';
 import { HealthController } from './core/health/health.controller.js';
@@ -48,7 +48,7 @@ import { UsageInterceptor } from './core/usage/usage.interceptor.js';
     AdminModule,
     FinanceModule,
     MembershipModule,
-    PlatformModule,
+    DevModule,
   ],
   controllers: [
     HealthController,

@@ -17,7 +17,7 @@ export const metadata: Metadata = { title: 'Logs' };
  */
 export default async function LogsPage() {
   const me = await serverApi<MeResponse>('/auth/me');
-  if (!can(me, 'platform.logs.read')) return <ForbiddenState what="the logs" />;
+  if (!can(me, 'dev.logs.read')) return <ForbiddenState what="the logs" />;
 
   return (
     <>
@@ -25,7 +25,7 @@ export default async function LogsPage() {
         title="Logs"
         subtitle="What the server wrote, and what people did. Newest first."
       />
-      <LogsView timezone={me.church?.timezone ?? 'UTC'} isDev={me.user.platformRole === 'DEV'} />
+      <LogsView timezone={me.church?.timezone ?? 'UTC'} isDev={can(me, 'dev.impersonations.read')} />
     </>
   );
 }

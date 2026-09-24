@@ -76,10 +76,10 @@ export class DashboardService {
         thisMonth: registrations.filter((r) => r.createdAt >= month).length,
       },
       applications: this.auth.has('membership.applications.read')
-        ? await this.openApplications(churchId)
+        ? await this.openApplications()
         : null,
       followUp: this.auth.has('membership.discipleship.read')
-        ? await this.newConverts(churchId)
+        ? await this.newConverts()
         : null,
       heard: tally(registrations.flatMap((r) => r.heard)),
       heardOtherCount: registrations.filter((r) => r.heardOtherText.trim()).length,
@@ -145,7 +145,7 @@ export class DashboardService {
     };
   }
 
-  private async openApplications(churchId: string) {
+  private async openApplications() {
     const rows = await this.db.client.membershipApplication.findMany({
       where: { status: 'UNDER_REVIEW' },
       orderBy: { submittedAt: 'desc' },
@@ -168,7 +168,7 @@ export class DashboardService {
     };
   }
 
-  private async newConverts(churchId: string) {
+  private async newConverts() {
     const sessions = await this.db.tx((tx) =>
       setting(tx, 'membership.foundationSessions'),
     );

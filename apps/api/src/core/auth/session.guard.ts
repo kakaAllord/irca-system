@@ -46,12 +46,9 @@ export class SessionGuard implements CanActivate {
 
       const impersonation = await this.impersonation.forSession(session);
       if (impersonation) {
-        const subject = await this.sessions.userById(impersonation.subjectUserId);
         this.cls.set('userId', impersonation.subjectUserId);
-        this.cls.set('churchId', impersonation.churchId);
         this.cls.set('impersonationId', impersonation.id);
-        // A dev viewing as a clerk is a clerk: no platform powers come along.
-        this.cls.set('platformRole', subject?.platformRole ?? 'NONE');
+        // Viewing as a clerk is being a clerk, with reading only.
         this.cls.set(
           'permissions',
           this.permissions.readOnly(
@@ -60,8 +57,6 @@ export class SessionGuard implements CanActivate {
         );
       } else {
         this.cls.set('userId', user.id);
-        this.cls.set('churchId', session.activeChurchId);
-        this.cls.set('platformRole', user.platformRole);
         this.cls.set(
           'permissions',
           await this.permissions.forUser(user.id),

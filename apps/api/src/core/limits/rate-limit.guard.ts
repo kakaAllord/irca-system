@@ -9,7 +9,6 @@ const SAFE_WINDOW_MS = 60_000;
 /** One person cannot flood their own church. */
 const PER_USER = 300;
 /** One church cannot use up the capacity every church shares. */
-const PER_CHURCH = 1_200;
 
 type Window = { count: number; resetAt: number };
 
@@ -38,13 +37,6 @@ export class RateLimitGuard implements CanActivate {
     const userId = this.auth.actorUserId;
     if (userId)
       this.hit(`u:${userId}`, PER_USER, 'You are making too many requests. Wait a minute.');
-    if (churchId) {
-      this.hit(
-        `c:${churchId}`,
-        PER_CHURCH,
-        'Your church is making too many requests at once. Wait a minute and try again.',
-      );
-    }
     return true;
   }
 

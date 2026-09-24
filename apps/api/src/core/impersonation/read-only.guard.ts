@@ -4,32 +4,25 @@ import type { Request } from 'express';
 import { ErrorCode } from '@irca/shared';
 import { AppError } from '../http/app-error.js';
 import { RequestAuth } from '../context/request-auth.js';
-import { PlacementService } from '../database/placement.service.js';
 import { ALLOW_WHILE_IMPERSONATING } from './decorators.js';
 
 const SAFE = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 /**
- * Refuses changes when the request must not make any.
+ * Refuses changes while the request is viewing as someone else.
  *
- * Two reasons: the request is impersonating (viewing as someone is always
- * read-only), or the church's records are being moved to another database and
- * are paused for a few minutes.
- *
- * This is the middle of the three layers that keep impersonation read-only.
- * Above it, the portal never shows the buttons, because an impersonated
- * request is given only read permissions. Below it, the database connection
- * itself can only read.
+ * Viewing as someone is always read-only. This is the second of the two layers
+ * that keep it so: above it, the portal never shows the buttons, because an
+ * impersonated request is given only read permissions.
  */
 @Injectable()
 export class ReadOnlyGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly auth: RequestAuth,
-    private readonly placements: PlacementService,
   ) {}
 
-  async canActivate(ctx: ExecutionContext): Promise<boolean> {
+  canActivate(ctx: ExecutionContext): boolean {
     const req = ctx.switchToHttp().getRequest<Request>();
     if (SAFE.has(req.method)) return true;
 
@@ -49,16 +42,6 @@ export class ReadOnlyGuard implements CanActivate {
       );
     }
 
-    if (churchId) {
-      const placement = await this.placements.forChurch(churchId);
-      if (placement.state === 'MOVING') {
-        throw new AppError(
-          503,
-          ErrorCode.SERVICE_UNAVAILABLE,
-          "Your church's data is being moved. Changes are paused for a few minutes.",
-        );
-      }
-    }
     return true;
   }
 }

@@ -167,7 +167,7 @@ export class ApplicationsService {
       });
       // Back to wherever they were before they applied, as the journey says.
       if (person.stage === 'MEMBERSHIP_REVIEW') {
-        const back = (await previousStage(tx, person.person.id)) ?? 'VISITOR';
+        const back = (await previousStage(tx, person.id)) ?? 'VISITOR';
         await moveStage(tx, person, back, this.auth.userId, `Application not approved: ${reason}`);
       }
       return `Did not approve ${person.fullName}'s membership application`;
@@ -213,7 +213,7 @@ export class ApplicationsService {
     await this.decide(id, OPEN, 'withdrawn', async (tx, _app, person) => {
       await tx.membershipApplication.update({ where: { id }, data: { status: 'WITHDRAWN' } });
       if (person.stage === 'MEMBERSHIP_REVIEW') {
-        const back = (await previousStage(tx, person.person.id)) ?? 'VISITOR';
+        const back = (await previousStage(tx, person.id)) ?? 'VISITOR';
         await moveStage(tx, person, back, this.auth.userId, 'Application withdrawn');
       }
       return `Withdrew ${person.fullName}'s membership application`;

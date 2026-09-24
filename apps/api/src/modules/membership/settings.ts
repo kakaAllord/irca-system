@@ -13,8 +13,8 @@ export const DEFAULTS = {
 
 export type SettingKey = keyof typeof DEFAULTS;
 
-export async function setting(tx: Tx, churchId: string, key: SettingKey): Promise<number> {
-  const row = await tx.churchSetting.findUnique({ where: { key } });
+export async function setting(tx: Tx, key: SettingKey): Promise<number> {
+  const row = await tx.setting.findUnique({ where: { key } });
   const value = typeof row?.value === 'number' ? row.value : Number(row?.value);
   return Number.isFinite(value) && value > 0 ? value : DEFAULTS[key];
 }

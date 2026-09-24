@@ -52,7 +52,7 @@ export function checkManualMove(from: PersonStage, to: PersonStage, note?: strin
  */
 export async function moveStage(
   tx: Tx,
-  person: { id: string; churchId: string; stage: PersonStage },
+  person: { id: string; stage: PersonStage },
   to: PersonStage,
   by: string | null,
   note?: string,
@@ -64,6 +64,7 @@ export async function moveStage(
   });
   await tx.personStageEvent.create({
     data: {
+      personId: person.id,
       fromStage: person.stage,
       toStage: to,
       byId: by,

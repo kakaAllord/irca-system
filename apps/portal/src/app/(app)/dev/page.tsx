@@ -6,16 +6,16 @@ import { PageHeader } from '@/components/shell/PageHeader';
 import { ForbiddenState } from '@/components/shell/States';
 import { Badge } from '@/components/ui/Badge';
 import { Table, Row, Cell } from '@/components/ui/Table';
-import { BarList, LineChart } from '@/modules/platform/components/Charts';
-import { ago, bytes, number, type Health } from '@/modules/platform/types';
+import { BarList, LineChart } from '@/modules/dev/components/Charts';
+import { ago, bytes, number, type Health } from '@/modules/dev/types';
 
 export const metadata: Metadata = { title: 'Health' };
 
 export default async function HealthPage() {
   const me = await serverApi<MeResponse>('/auth/me');
-  if (!can(me, 'platform.health.read')) return <ForbiddenState what="platform health" />;
+  if (!can(me, 'dev.health.read')) return <ForbiddenState what="platform health" />;
 
-  const health = await serverApi<Health>('/platform/health');
+  const health = await serverApi<Health>('/dev/health');
   const requests = health.errors.reduce((sum, d) => sum + d.requests, 0);
   const failures = health.errors.reduce((sum, d) => sum + d.errors, 0);
   const rate = requests ? (failures / requests) * 100 : 0;
