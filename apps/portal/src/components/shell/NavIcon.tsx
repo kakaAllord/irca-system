@@ -124,4 +124,21 @@ const PATHS: Record<Name, React.ReactNode> = {
   ),
   // A pulse.
   health: <path d="M2 12h4l2.5-6 4 13L15.5 12H22" />,
+  // A dial with its needle: how much of everything is being used.
+  usage: (
+    <>
+      <path d="M3.5 17a8.5 8.5 0 1 1 17 0" />
+      <path d="m12 17 4.2-5.2" />
+      <path d="M3 20h18" />
+    </>
+  ),
+  // Three sliders, each set somewhere: the settings made once and left.
+  settings: (
+    <>
+      <path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1" />
+      <circle cx="15" cy="6" r="2" />
+      <circle cx="9" cy="12" r="2" />
+      <circle cx="17" cy="18" r="2" />
+    </>
+  ),
 };

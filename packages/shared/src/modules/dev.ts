@@ -35,8 +35,8 @@ export const devModule = defineModule({
     },
     'dev.church.manage': {
       kind: 'write',
-      label: 'Edit the church code, clock and currency',
-      hint: 'The code is frozen once there are finance entries.',
+      label: "Change the church's settings and the registration form's keys",
+      hint: 'Its name, code, clock and currency. The code is frozen once there are finance entries.',
     },
   },
   systemRoles: [
@@ -62,6 +62,7 @@ export const devModule = defineModule({
   ],
   nav: [
     { label: 'Health', href: '/dev', icon: 'health', permission: 'dev.health.read' },
+    { label: 'Usage', href: '/dev/usage', icon: 'usage', permission: 'dev.usage.read' },
     { label: 'Logs', href: '/dev/logs', icon: 'terminal', permission: 'dev.logs.read' },
     {
       label: 'View-as log',
@@ -69,5 +70,6 @@ export const devModule = defineModule({
       icon: 'activity',
       permission: 'dev.impersonations.read',
     },
+    { label: 'Settings', href: '/dev/settings', icon: 'settings', permission: 'dev.church.manage' },
   ],
 });

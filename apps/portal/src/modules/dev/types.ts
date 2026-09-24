@@ -1,38 +1,4 @@
-/** What the dev console reads from the platform API. */
-
-export type ChurchRow = {
-  id: string;
-  code: string;
-  name: string;
-  status: 'ACTIVE' | 'SUSPENDED';
-  createdAt: string;
-  people: { active: number; invited: number };
-  portals: number;
-  requests: number;
-  errors: number;
-  activeUsers: number;
-  signIns: number;
-  emails: number;
-  registrations: number;
-  entries: number;
-  dbBytes: number;
-  dbSharePct: number;
-  lastActiveAt: string | null;
-  requestsByDay: { day: string; value: number }[];
-};
-
-export type ChurchDetail = {
-  id: string;
-  code: string;
-  slug: string;
-  name: string;
-  timezone: string;
-  currency: string;
-  status: 'ACTIVE' | 'SUSPENDED';
-  createdAt: string;
-  codeLocked: boolean;
-  admins: { id: string; fullName: string; email: string; status: string }[];
-};
+/** What the dev console reads from the API. */
 
 export type Series = { metric: string; points: { day: string; value: number }[] };
 
@@ -48,17 +14,6 @@ export type DatabaseUse = {
   }[];
 };
 
-export type ChurchUser = {
-  userId: string;
-  fullName: string;
-  initials: string;
-  email: string;
-  status: string;
-  roles: string[];
-  lastActiveAt: string | null;
-  canImpersonate: boolean;
-};
-
 export type ApiClient = {
   id: string;
   name: string;
@@ -67,6 +22,28 @@ export type ApiClient = {
   createdAt: string;
   lastUsedAt: string | null;
   revokedAt: string | null;
+};
+
+export type ChurchSettings = {
+  code: string;
+  name: string;
+  timezone: string;
+  currency: string;
+  createdAt: string;
+  codeLocked: boolean;
+};
+
+export type RouteUse = { route: string; calls: number; averageMs: number | null };
+
+export type SentEmail = {
+  id: string;
+  to: string;
+  template: string;
+  status: 'PENDING' | 'SENDING' | 'SENT' | 'FAILED';
+  attempts: number;
+  lastError: string | null;
+  createdAt: string;
+  sentAt: string | null;
 };
 
 export type Health = {
@@ -111,9 +88,14 @@ export function ago(iso: string | null): string {
   return `${days} day${days === 1 ? '' : 's'} ago`;
 }
 
-/** An address enough of which is hidden: ne***@gmail.com. */
-export function maskEmail(email: string): string {
-  const [name, domain] = email.split('@');
-  if (!domain) return '***';
-  return `${name!.slice(0, 2)}***@${domain}`;
-}
+/** The date `n` days before today, as the usage routes take it: 2026-09-24. */
+export const daysAgo = (n: number) =>
+  new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
+
+/** A counter added up over the days asked for. */
+export const total = (series: Series[], metric: string) =>
+  series.find((s) => s.metric === metric)?.points.reduce((sum, p) => sum + p.value, 0) ?? 0;
+
+/** A gauge as it was last measured. */
+export const latest = (series: Series[], metric: string) =>
+  series.find((s) => s.metric === metric)?.points.at(-1)?.value ?? 0;

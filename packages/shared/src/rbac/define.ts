@@ -34,7 +34,9 @@ export type NavIcon =
   | 'portals'
   | 'activity'
   | 'terminal'
-  | 'health';
+  | 'health'
+  | 'usage'
+  | 'settings';
 
 export type NavItem = {
   label: string;
