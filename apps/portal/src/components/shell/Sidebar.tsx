@@ -99,6 +99,19 @@ export function Sidebar({
         ))}
       </div>
 
+      {/* For everyone, whatever they hold: the guides handed out at training. */}
+      <Link
+        href="/help"
+        onClick={onNavigate}
+        title={collapsed ? 'Help' : undefined}
+        className="flex items-center gap-2.5 rounded-[8px] px-2 py-1.5 text-[12px] text-fg3 hover:bg-hover hover:text-fg"
+      >
+        <span aria-hidden="true" className="w-[22px] text-center">
+          ?
+        </span>
+        {!collapsed && 'Help'}
+      </Link>
+
       <button
         type="button"
         onClick={() => {
