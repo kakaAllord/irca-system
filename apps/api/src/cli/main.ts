@@ -134,12 +134,11 @@ async function createApiClient(args: string[]) {
   const { values } = parseArgs({
     args,
     options: {
-      church: { type: 'string' },
       kind: { type: 'string', default: 'REGISTRATION' },
       name: { type: 'string' },
     },
   });
-  if (!values.church || !values.name) {
+  if (!values.name) {
     throw new Error('Usage: api-client:create --name "<what it is>"');
   }
   if (values.kind !== 'REGISTRATION') throw new Error('The only kind today is REGISTRATION.');
@@ -188,11 +187,10 @@ async function importRegistrationsCommand(args: string[]) {
     args,
     options: {
       from: { type: 'string' },
-      church: { type: 'string' },
       'dry-run': { type: 'boolean', default: false },
     },
   });
-  if (!values.from || !values.church) {
+  if (!values.from) {
     throw new Error('Usage: registrations:import --from <url> [--dry-run]');
   }
   await withApp((app) =>
@@ -207,9 +205,9 @@ async function importRegistrationsCommand(args: string[]) {
 async function exportRegistrationsCommand(args: string[]) {
   const { values } = parseArgs({
     args,
-    options: { to: { type: 'string' }, church: { type: 'string' }, since: { type: 'string' } },
+    options: { to: { type: 'string' }, since: { type: 'string' } },
   });
-  if (!values.to || !values.church || !values.since) {
+  if (!values.to || !values.since) {
     throw new Error('Usage: registrations:export-back --to <url> --since <iso time>');
   }
   await withApp((app) =>
@@ -241,12 +239,11 @@ async function erasePersonCommand(args: string[]) {
   const { values } = parseArgs({
     args,
     options: {
-      church: { type: 'string' },
       person: { type: 'string' },
       'dry-run': { type: 'boolean', default: false },
     },
   });
-  if (!values.church || !values.person) {
+  if (!values.person) {
     throw new Error('Usage: person:erase --person <uuid> [--dry-run]');
   }
   const dryRun = values['dry-run'] ?? false;
