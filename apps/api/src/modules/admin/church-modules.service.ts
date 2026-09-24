@@ -15,6 +15,9 @@ import { RegistrySync } from '../../core/rbac/registry-sync.service.js';
  * every record stay, and turning it back on restores the lot. Only portals
  * that exist in the code can be turned on, which is what "they can only be
  * given portals that already exist" means in practice.
+ *
+ * A department portal exists because a department does (D28): it is switched
+ * on only once a department in Admin → Departments has been given it.
  */
 @Injectable()
 export class ChurchModulesService {
@@ -40,6 +43,12 @@ export class ChurchModulesService {
       peoplePerModule.set(role.moduleKey, (peoplePerModule.get(role.moduleKey) ?? 0) + holders);
     }
 
+    const departments = await this.db.client.department.findMany({
+      where: { moduleKey: { not: null }, archivedAt: null },
+      select: { id: true, name: true, moduleKey: true },
+    });
+    const departmentOf = new Map(departments.map((d) => [d.moduleKey!, d]));
+
     return CHURCH_MODULES.map((module) => ({
       key: module.key,
       name: module.name,
@@ -47,6 +56,14 @@ export class ChurchModulesService {
       kind: module.kind,
       enabled: module.kind === 'core' || (state.get(module.key)?.enabled ?? false),
       peopleWithRoles: peoplePerModule.get(module.key) ?? 0,
+      department:
+        module.kind === 'core'
+          ? null
+          : ((departmentOf.get(module.key) && {
+              id: departmentOf.get(module.key)!.id,
+              name: departmentOf.get(module.key)!.name,
+            }) ??
+            null),
     }));
   }
 
@@ -56,6 +73,18 @@ export class ChurchModulesService {
       throw new AppError(404, ErrorCode.NOT_FOUND, 'No such portal.');
     if (module.kind === 'core') {
       throw new AppError(409, ErrorCode.CONFLICT, `${module.name} is always on.`);
+    }
+    if (enabled) {
+      const owner = await this.db.client.department.findFirst({
+        where: { moduleKey, archivedAt: null },
+      });
+      if (!owner) {
+        throw new AppError(
+          409,
+          ErrorCode.NEEDS_DEPARTMENT,
+          `${module.name} belongs to a department. Give it one in Admin → Departments first.`,
+        );
+      }
     }
 
     await this.db.tx(async (tx) => {

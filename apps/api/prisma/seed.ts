@@ -73,8 +73,25 @@ await db.church.upsert({
   create: { id: 1, code: 'IRCA', name: 'International Revival Church Arusha' },
 });
 
-await portal('finance');
-await portal('membership');
+/**
+ * A department, and the portal that belongs to it (D28): a department portal
+ * is only switched on for the department it belongs to.
+ */
+async function department(name: string, description: string, moduleKey: string | null = null) {
+  await db.department.upsert({
+    where: { name },
+    update: { moduleKey },
+    create: { name, description, moduleKey },
+  });
+  if (moduleKey) await portal(moduleKey);
+}
+
+await department(
+  'Membership',
+  'Visitors, members and the foundation class: the office and the follow-up team.',
+  'membership',
+);
+await department('Finance', 'Income and expenses, and the reports the church reads.', 'finance');
 await portal('admin');
 await portal('dev');
 

@@ -251,6 +251,38 @@ describe('departments, their leaders and their members (D28)', () => {
     await portal(app).get('/v1/departments/mine', otherCookie).expect(403);
   });
 
+  it('switches a department portal on only for the department it belongs to', async () => {
+    const cookie = await administrator();
+    const refused = await portal(app)
+      .put('/v1/admin/modules/finance', { enabled: true }, cookie)
+      .expect(409);
+    expect(refused.body.error.code).toBe('NEEDS_DEPARTMENT');
+    expect(refused.body.error.message).toMatch(/Admin → Departments/);
+
+    const { body: finance } = await portal(app)
+      .post('/v1/admin/departments', { name: 'Finance', moduleKey: 'finance' }, cookie)
+      .expect(201);
+    await portal(app).put('/v1/admin/modules/finance', { enabled: true }, cookie).expect(204);
+
+    // A portal belongs to one department, and cannot be taken while it is on.
+    const taken = await portal(app)
+      .post('/v1/admin/departments', { name: 'Treasury', moduleKey: 'finance' }, cookie)
+      .expect(409);
+    expect(taken.body.error.message).toMatch(/already belongs to Finance/);
+    await portal(app)
+      .put(`/v1/admin/departments/${finance.id}`, { name: 'Finance', moduleKey: null }, cookie)
+      .expect(409);
+    await portal(app)
+      .put(`/v1/admin/departments/${finance.id}/archived`, { archived: true }, cookie)
+      .expect(409);
+
+    const listed = await portal(app).get('/v1/admin/modules', cookie).expect(200);
+    expect(listed.body.find((m: { key: string }) => m.key === 'finance').department).toEqual({
+      id: finance.id,
+      name: 'Finance',
+    });
+  });
+
   it('never lets a role hold what leading gives', async () => {
     const cookie = await administrator();
     const res = await portal(app)
