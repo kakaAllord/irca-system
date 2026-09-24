@@ -870,6 +870,21 @@ async function writeHistory(staff: Staff) {
     );
   }
 
+  /** Route template, share of the day's requests, typical milliseconds. */
+  const ROUTES: [string, number, number][] = [
+    ['GET /auth/me', 0.32, 9],
+    ['GET /membership/people', 0.12, 64],
+    ['GET /membership/dashboard', 0.08, 140],
+    ['GET /membership/people/:id', 0.08, 38],
+    ['GET /finance/transactions', 0.1, 72],
+    ['POST /finance/transactions', 0.04, 55],
+    ['GET /finance/overview', 0.06, 180],
+    ['GET /finance/reports/statement', 0.02, 420],
+    ['GET /admin/users', 0.05, 41],
+    ['GET /admin/audit', 0.04, 96],
+    ['GET /admin/requests', 0.05, 33],
+    ['POST /public/registrations', 0.04, 48],
+  ];
   const activity: unknown[] = [];
   const signInUsers = [
     staff.admin,
@@ -891,8 +906,19 @@ async function writeHistory(staff: Staff) {
     count(day, 'api.errors.403', int(0, 4));
     count(day, 'api.errors.5xx', chance(0.08) ? int(1, 3) : 0);
     count(day, 'api.throttled', chance(0.1) ? int(1, 6) : 0);
-    count(day, 'api.latency_ms.sum', requestsToday * int(35, 120));
     usage.set(`${ymd(day)}|api.latency_ms.max`, BigInt(int(300, 2400)));
+    // The day's requests shared out over the routes people actually use, each
+    // with its own typical time, so the API tab has busy and slow ones to show.
+    let spent = 0;
+    for (const [route, share, ms] of ROUTES) {
+      const calls = Math.round(requestsToday * share);
+      const time = calls * int(Math.round(ms * 0.7), Math.round(ms * 1.4));
+      spent += time;
+      count(day, `api.route.${route}`, calls);
+      count(day, `api.route_ms.${route}`, time);
+      count(day, `api.requests.${route.split('/')[1]}`, calls);
+    }
+    count(day, 'api.latency_ms.sum', spent);
 
     const signedIn = some(signInUsers, 2, 6);
     count(day, 'auth.logins', signedIn.length);
@@ -900,7 +926,6 @@ async function writeHistory(staff: Staff) {
     if (chance(0.25)) count(day, 'auth.login_failures', int(1, 4));
     if (chance(0.04)) count(day, 'auth.lockouts', 1);
     if (chance(0.05)) count(day, 'auth.password_resets', 1);
-    gauge(day, 'users.active', signedIn.length);
     gauge(day, 'auth.sessions.active', signedIn.length + int(0, 3));
 
     for (const userId of signedIn) {
@@ -935,7 +960,6 @@ async function writeHistory(staff: Staff) {
     gauge(day, 'entities.users.active', signInUsers.length);
     gauge(day, 'entities.modules.enabled', code === 'IRCA' ? 2 : 1);
     gauge(day, 'db.bytes.total', 4_000_000 + peopleSoFar * 5_400 + txnsSoFar * 2_900);
-    gauge(day, 'db.share_pct', code === 'IRCA' ? int(6400, 7200) : int(400, 900));
     gauge(
       day,
       'change_requests.pending',
