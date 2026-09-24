@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { defineModule } from '../rbac/define';
-import { ALL_MODULES, ALL_PERMISSIONS, CHURCH_MODULES, permissionKind } from './index';
+import {
+  ALL_MODULES,
+  ALL_PERMISSIONS,
+  CHURCH_MODULES,
+  LEADERSHIP_PERMISSIONS,
+  isAssignable,
+  permissionKind,
+} from './index';
 
 describe('module definitions', () => {
   it('refuses a permission belonging to another module', () => {
@@ -60,8 +67,27 @@ describe('module definitions', () => {
 
   it('keeps the core portals last, so they sit at the bottom of the sidebar', () => {
     expect(CHURCH_MODULES.filter((m) => m.kind === 'core').map((m) => m.key)).toEqual([
+      'departments',
       'admin',
       'dev',
     ]);
+  });
+
+  it('never puts a leadership permission in a role', () => {
+    expect(() =>
+      defineModule({
+        key: 'f',
+        name: 'F',
+        description: '',
+        kind: 'department',
+        home: '/f',
+        permissions: { 'f.own.read': { kind: 'read', label: 'x', fromLeadership: true } },
+        systemRoles: [{ key: 'f.r', name: 'R', description: '', permissions: ['f.own.read'] }],
+        nav: [],
+      }),
+    ).toThrow(/comes from leading a department/);
+    expect(LEADERSHIP_PERMISSIONS.map((p) => p.key)).toContain('departments.own.members');
+    expect(isAssignable('departments.own.members')).toBe(false);
+    expect(isAssignable('admin.departments.manage')).toBe(true);
   });
 });

@@ -3,6 +3,7 @@ import { adminModule } from './admin';
 import { financeModule } from './finance';
 import { membershipModule } from './membership';
 import { devModule } from './dev';
+import { departmentsModule } from './departments';
 
 /**
  * Every portal this system has. Order is the sidebar's order, except that
@@ -14,11 +15,12 @@ import { devModule } from './dev';
 export const CHURCH_MODULES: ModuleDef[] = [
   membershipModule,
   financeModule,
+  departmentsModule,
   adminModule,
   devModule,
 ];
 
-export { adminModule, financeModule, membershipModule, devModule };
+export { adminModule, financeModule, membershipModule, devModule, departmentsModule };
 
 export const ALL_MODULES: ModuleDef[] = CHURCH_MODULES;
 
@@ -28,6 +30,21 @@ export const ALL_PERMISSIONS: Record<string, PermissionDef> = Object.assign(
 );
 
 export type PermissionKey = string;
+
+/**
+ * The permissions leading a department holds (D28), with the module each
+ * belongs to, so the resolver can leave out those of a portal that is off.
+ */
+export const LEADERSHIP_PERMISSIONS: { key: string; moduleKey: string }[] = ALL_MODULES.flatMap(
+  (m) =>
+    Object.entries(m.permissions)
+      .filter(([, def]) => def.fromLeadership)
+      .map(([key]) => ({ key, moduleKey: m.key })),
+);
+
+/** Whether a permission can be put in a role. Leadership ones cannot. */
+export const isAssignable = (key: string): boolean =>
+  key in ALL_PERMISSIONS && !ALL_PERMISSIONS[key]!.fromLeadership;
 
 export const moduleByKey = (key: string): ModuleDef | undefined =>
   ALL_MODULES.find((m) => m.key === key);

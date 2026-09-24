@@ -12,6 +12,12 @@ export type PermissionDef = {
   label: string;
   /** A longer note, for permissions that deserve a second thought. */
   hint?: string;
+  /**
+   * Held by leading a department, never by a role (D28). The permission
+   * resolver adds it for as long as someone leads one, and the role editor
+   * does not offer it, so a leader who steps down cannot keep it by accident.
+   */
+  fromLeadership?: true;
 };
 
 /**
@@ -36,7 +42,8 @@ export type NavIcon =
   | 'terminal'
   | 'health'
   | 'usage'
-  | 'settings';
+  | 'settings'
+  | 'departments';
 
 export type NavItem = {
   label: string;
@@ -60,7 +67,11 @@ export type ModuleDef = {
   key: string;
   name: string;
   description: string;
-  /** Core modules cannot be turned off. Only admin is core. */
+  /**
+   * Core modules cannot be turned off and belong to no department: admin,
+   * the dev console, and the leaders' own pages. A department module is
+   * switched on for the department it belongs to (D28).
+   */
   kind: 'core' | 'department';
   /** Where the module opens. */
   home: string;
@@ -78,6 +89,9 @@ export function defineModule<const M extends ModuleDef>(m: M): M {
   for (const role of m.systemRoles) {
     for (const p of role.permissions) {
       if (!(p in m.permissions)) throw new Error(`Role ${role.key} uses unknown permission ${p}`);
+      if (m.permissions[p]!.fromLeadership) {
+        throw new Error(`Role ${role.key} cannot hold ${p}: it comes from leading a department`);
+      }
     }
   }
   for (const item of m.nav) {

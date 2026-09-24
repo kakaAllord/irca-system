@@ -141,4 +141,14 @@ const PATHS: Record<Name, React.ReactNode> = {
       <circle cx="17" cy="18" r="2" />
     </>
   ),
+  // One in front and two behind: a department, its leader and its members.
+  departments: (
+    <>
+      <circle cx="12" cy="9" r="2.8" />
+      <path d="M7 20c0-2.9 2.2-4.8 5-4.8s5 1.9 5 4.8" />
+      <circle cx="5.5" cy="7" r="2.1" />
+      <circle cx="18.5" cy="7" r="2.1" />
+      <path d="M2.5 15.5c.4-1.9 1.6-3 3.2-3.3M21.5 15.5c-.4-1.9-1.6-3-3.2-3.3" />
+    </>
+  ),
 };
