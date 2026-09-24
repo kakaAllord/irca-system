@@ -13,11 +13,23 @@ import { SessionService } from '../auth/session.service.js';
 import { newToken, tokenHash } from '../auth/tokens.js';
 import { PermissionResolver } from '../rbac/permission-resolver.service.js';
 import type { RequestContext } from '../context/request-context.js';
+import type { Tx } from '../database/db.service.js';
 
 const VALID_HOURS = 72;
 const MAX_SENDS_PER_DAY = 5;
 
-export type InviteInput = { email: string; fullName: string; roleIds: string[] };
+export type InviteInput = {
+  email: string;
+  fullName: string;
+  roleIds: string[];
+  /** The person in People the account belongs to: a department leader (D28). */
+  personId?: string;
+  /** What the email says they were invited as, when it is not a role: "Chairperson of the Praise team". */
+  asWhat?: string;
+};
+
+/** Work that must stand or fall with the invitation, run inside its transaction. */
+export type AlsoInTransaction = (tx: Tx, userId: string) => Promise<void>;
 
 /**
  * Invitations, which are how anyone gets access.
@@ -45,7 +57,7 @@ export class InvitationService {
     private readonly cls: ClsService<RequestContext>,
   ) {}
 
-  async invite(input: InviteInput): Promise<{ userId: string }> {
+  async invite(input: InviteInput, also?: AlsoInTransaction): Promise<{ userId: string }> {
     const email = normalizeEmail(input.email);
     const roles = await this.assignableRoles(input.roleIds);
 
@@ -82,8 +94,15 @@ export class InvitationService {
       const user =
         existing ??
         (await tx.user.create({
-          data: { email, fullName: input.fullName.trim(), status: 'INVITED' },
+          data: {
+            email,
+            fullName: input.fullName.trim(),
+            status: 'INVITED',
+            personId: input.personId ?? null,
+          },
         }));
+      const asWhat =
+        roles.map((r) => r.name).join(' and ') || input.asWhat || 'a member of the office';
 
       for (const role of roles) {
         await tx.userRole.create({
@@ -106,7 +125,7 @@ export class InvitationService {
           churchName: church.name,
           inviterName: inviter.fullName,
           personName: input.fullName.trim(),
-          roleSummary: roles.map((r) => r.name).join(' and ') || 'a member of the office',
+          roleSummary: asWhat,
           link: `${this.config.get('PORTAL_ORIGIN')}/accept-invite?token=${token}`,
           expiresOn: formatIn(expiresAt, church.timezone),
           needsPassword: !user.passwordHash,
@@ -119,10 +138,11 @@ export class InvitationService {
         action: 'admin.user.invited',
         entityType: 'user',
         entityId: user.id,
-        summary: `Invited ${email} as ${roles.map((r) => r.name).join(', ') || 'no role yet'}`,
+        summary: `Invited ${email} as ${roles.map((r) => r.name).join(', ') || input.asWhat || 'no role yet'}`,
         after: { email, roles: roles.map((r) => r.name) },
         requestId: null,
       });
+      await also?.(tx as unknown as Tx, user.id);
       return user.id;
     });
 
@@ -222,12 +242,23 @@ export class InvitationService {
     });
     const church = await this.db.church.findFirstOrThrow();
     const inviter = await this.db.user.findUnique({ where: { id: invitation.createdById } });
+    // A leader has no role; what they lead is what they were invited as.
+    const leads = invited.personId
+      ? await this.db.departmentLeader.findMany({
+          where: { personId: invited.personId, endedAt: null, department: { archivedAt: null } },
+          include: { department: true },
+        })
+      : [];
+    const as = [
+      ...invited.roles.map((r) => r.role.name),
+      ...leads.map((l) => `${l.title} of ${l.department.name}`),
+    ];
     return {
       churchName: church.name,
       email: invited.email,
       fullName: invited.fullName,
       inviterName: inviter?.fullName ?? 'Your church administrator',
-      roleSummary: invited.roles.map((r) => r.role.name).join(' and ') || 'a member of the office',
+      roleSummary: as.join(' and ') || 'a member of the office',
       needsPassword: !invited.passwordHash,
     };
   }

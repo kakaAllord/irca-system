@@ -51,6 +51,9 @@ export const USAGE_METRICS: MetricDef[] = [
   // person per day already exists there, and counting them is the answer.
   m('Activity', 'users.active', 'gauge', 'Staff active that day'),
 
+  m('Departments', 'departments.leaders.named', 'counter', 'Department leaders named'),
+  m('Departments', 'departments.members.added', 'counter', 'People added to departments'),
+
   m('API', 'api.requests', 'counter', 'Requests'),
   m('API', 'api.requests.*', 'counter', 'Requests by module'),
   m('API', 'api.route.*', 'counter', 'Requests by route (the template, never the real path)'),
