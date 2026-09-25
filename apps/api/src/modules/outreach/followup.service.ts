@@ -23,8 +23,6 @@ export type FollowUpInput = {
   done?: boolean;
 };
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 const WORDS: Record<Exclude<FollowUpKind, 'ATTENDED_SERVICE'>, string> = {
   CALL: 'Follow-up call',
   VISIT: 'Home visit',
@@ -188,8 +186,6 @@ export class FollowupService {
   /** The person, only when Outreach reached them; everyone else is not Outreach's to see. */
   private async reached(tx: Pick<Tx, 'person'>, personId: string) {
     const nobody = notFound('Outreach has not reached anyone by that id.');
-    // Not an id at all is not someone Outreach reached either.
-    if (!UUID.test(personId)) throw nobody;
     const person = await tx.person.findFirst({
       where: { id: personId, outreachReached: { some: {} } },
     });

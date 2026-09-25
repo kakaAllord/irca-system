@@ -120,4 +120,19 @@ describe('the permission matrix', () => {
     }
     expect(refused).toEqual([]);
   }, 120_000);
+
+  it('answers a path that names no real id with 4xx, never a crash', async () => {
+    const crashed: string[] = [];
+    for (const route of routes.filter((r) => r.path.includes('/:'))) {
+      const needed = route.rule.all ?? [route.rule.any![0]!];
+      const cookie = await holding(needed);
+      const url = route.path.replace(/:[A-Za-z]+/g, 'not-an-id');
+      const res =
+        route.method === 'get' || route.method === 'del'
+          ? await portal(app)[route.method](url, cookie)
+          : await portal(app)[route.method](url, {}, cookie);
+      if (res.status >= 500) crashed.push(`${route.method} ${route.path} → ${res.status}`);
+    }
+    expect(crashed).toEqual([]);
+  }, 120_000);
 });
