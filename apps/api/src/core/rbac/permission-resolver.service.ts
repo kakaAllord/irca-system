@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { ALL_PERMISSIONS, permissionKind } from '@irca/shared';
+import {
+  ALL_PERMISSIONS,
+  LEADERSHIP_PERMISSIONS,
+  PORTAL_LEADER_PERMISSIONS,
+  permissionKind,
+} from '@irca/shared';
 import { PrismaDb } from '../database/prisma-clients.js';
 
 const IMPERSONATE = ['admin.users.impersonate'];
@@ -23,6 +28,17 @@ export class PermissionResolver {
    * A role of a portal that is switched off grants nothing, which is what
    * makes turning a portal off safe: the roles and the data stay, and come
    * back untouched when it is switched on again.
+   *
+   * Leading a department that is not archived adds the leadership permissions
+   * (D28), each only while its own portal is on. The second half of the query
+   * answers that with the portals that are on, prefixed with `@`, and only
+   * for a leader, so it is still one round trip. Ending the leadership ends
+   * them on the very next request.
+   *
+   * The third half answers which portals belong to the departments they
+   * lead, prefixed with `#`, and only portals that are on: leading Outreach
+   * adds what Outreach's leaders may do (D29), and leading the choir adds
+   * nothing there.
    */
   async forUser(userId: string): Promise<Set<string>> {
     const rows = await this.db.$queryRaw<{ permission_key: string }[]>`
@@ -35,9 +51,35 @@ export class PermissionResolver {
       join users u             on u.id = ur.user_id
       where ur.user_id = ${userId}::uuid
         and u.status = 'ACTIVE'
+      union all
+      select '@' || ms.module_key
+      from module_state ms
+      where ms.enabled and exists (
+        select 1
+        from users u
+        join department_leaders dl on dl.person_id = u.person_id and dl.ended_at is null
+        join departments d         on d.id = dl.department_id and d.archived_at is null
+        where u.id = ${userId}::uuid and u.status = 'ACTIVE'
+      )
+      union all
+      select '#' || d.module_key
+      from users u
+      join department_leaders dl on dl.person_id = u.person_id and dl.ended_at is null
+      join departments d         on d.id = dl.department_id and d.archived_at is null
+      join module_state ms       on ms.module_key = d.module_key and ms.enabled
+      where u.id = ${userId}::uuid and u.status = 'ACTIVE'
     `;
+    const on = new Set(
+      rows.filter((r) => r.permission_key.startsWith('@')).map((r) => r.permission_key.slice(1)),
+    );
+    const led = new Set(
+      rows.filter((r) => r.permission_key.startsWith('#')).map((r) => r.permission_key.slice(1)),
+    );
+    const held = rows.map((r) => r.permission_key).filter((key) => !/^[@#]/.test(key));
+    for (const p of LEADERSHIP_PERMISSIONS) if (on.has(p.moduleKey)) held.push(p.key);
+    for (const p of PORTAL_LEADER_PERMISSIONS) if (led.has(p.moduleKey)) held.push(p.key);
     // A permission that no longer exists in code grants nothing.
-    return new Set(rows.map((r) => r.permission_key).filter((key) => key in ALL_PERMISSIONS));
+    return new Set(held.filter((key) => key in ALL_PERMISSIONS));
   }
 
   /**

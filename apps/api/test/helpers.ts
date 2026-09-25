@@ -127,6 +127,139 @@ export async function createUser(
   return { id, email, password };
 }
 
+/** Someone in People, as the office would have them, at this stage. */
+export async function createPerson(
+  db: pg.Client,
+  opts: {
+    fullName?: string;
+    stage?: string;
+    phone?: string;
+    dial?: string;
+    email?: string;
+    lang?: string;
+    /** Filled in the whole registration form, as every department member has. */
+    registered?: boolean;
+  } = {},
+) {
+  const id = randomUUID();
+  await db.query(
+    `insert into people (id, full_name, dial, phone, email, stage, updated_at)
+     values ($1, $2, $3, $4, $5, $6, now())`,
+    [
+      id,
+      opts.fullName ?? 'Baraka Laizer',
+      opts.dial ?? '+255',
+      opts.phone ?? `7${String(Math.floor(Math.random() * 1e8)).padStart(8, '0')}`,
+      opts.email ?? '',
+      opts.stage ?? 'VISITOR',
+    ],
+  );
+  if (opts.lang) await db.query(`update people set lang = $2 where id = $1`, [id, opts.lang]);
+  if (opts.registered) {
+    const registration = randomUUID();
+    await db.query(
+      `insert into registrations (id, token, status, submitted_at, updated_at)
+       values ($1, $2, 'submitted', now(), now())`,
+      [registration, randomUUID().replace(/-/g, '')],
+    );
+    await db.query(`update people set registration_id = $2 where id = $1`, [id, registration]);
+  }
+  return { id };
+}
+
+/** A department, as an administrator would have made it. */
+export async function createDepartment(
+  db: pg.Client,
+  opts: { name?: string; moduleKey?: string | null } = {},
+) {
+  const id = randomUUID();
+  await db.query(
+    `insert into departments (id, name, module_key, updated_at) values ($1, $2, $3, now())`,
+    [id, opts.name ?? `Department ${id.slice(0, 6)}`, opts.moduleKey ?? null],
+  );
+  return { id };
+}
+
+/**
+ * A leader of a department who can sign in: a confirmed member, linked to an
+ * account holding no role at all, which is exactly what naming one makes.
+ */
+export async function createLeader(db: pg.Client, departmentId: string, title = 'Chairperson') {
+  const person = await createPerson(db, { stage: 'CONFIRMED_MEMBER', fullName: 'Rehema Leader' });
+  const user = await createUser(db);
+  await db.query(`update users set person_id = $2 where id = $1`, [user.id, person.id]);
+  const leader = randomUUID();
+  await db.query(
+    `insert into department_leaders (id, department_id, person_id, title) values ($1, $2, $3, $4)`,
+    [leader, departmentId, person.id, title],
+  );
+  return { ...user, personId: person.id, leaderId: leader };
+}
+
+/**
+ * Words Communications has approved, for a department or (null) for itself.
+ * Written as a draft and then made active, because the database refuses to
+ * write the words of anything but a draft.
+ */
+export async function createTemplate(
+  db: pg.Client,
+  opts: {
+    departmentId?: string | null;
+    name?: string;
+    bodies: Record<string, string>;
+    status?: 'ACTIVE' | 'DRAFT';
+    createdById?: string;
+  },
+) {
+  const id = randomUUID();
+  const author = opts.createdById ?? (await createUser(db)).id;
+  const fields = [
+    ...new Set(
+      Object.values(opts.bodies).flatMap((b) =>
+        [...b.matchAll(/\{\{\s*(\w+)\s*\}\}/g)].map((m) => m[1]),
+      ),
+    ),
+  ];
+  await db.query(
+    `insert into comms_templates (id, family_id, department_id, name, fields, created_by_id, updated_at)
+     values ($1, $2, $3, $4, $5, $6, now())`,
+    [id, randomUUID(), opts.departmentId ?? null, opts.name ?? 'Reminder', fields, author],
+  );
+  for (const [lang, body] of Object.entries(opts.bodies)) {
+    await db.query(
+      `insert into comms_template_bodies (template_id, lang, body) values ($1, $2, $3)`,
+      [id, lang, body],
+    );
+  }
+  if ((opts.status ?? 'ACTIVE') === 'ACTIVE') {
+    await db.query(`update comms_templates set status = 'ACTIVE' where id = $1`, [id]);
+  }
+  return { id };
+}
+
+/** Communications' settings, as if saved in Comms → Settings. */
+export async function setCommsSettings(
+  db: pg.Client,
+  settings: {
+    dailyCap?: string | null;
+    pricePerSegment?: string;
+    defaultLang?: string;
+    personCooldownDays?: number;
+  },
+) {
+  for (const [key, value] of Object.entries(settings)) {
+    if (value === null) {
+      await db.query(`delete from settings where key = $1`, [`comms.${key}`]);
+    } else {
+      await db.query(
+        `insert into settings (key, value, updated_at) values ($1, $2, now())
+         on conflict (key) do update set value = excluded.value`,
+        [`comms.${key}`, JSON.stringify(value)],
+      );
+    }
+  }
+}
+
 /** A key the registration form can call the public API with. */
 export async function createApiClient(db: pg.Client, kind = 'REGISTRATION') {
   const key = `irk_${randomUUID().replaceAll('-', '')}`;

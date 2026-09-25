@@ -8,6 +8,7 @@ import { AuditService } from '../../../core/audit/audit.service.js';
 import { UsageService } from '../../../core/usage/usage.service.js';
 import { moveStage } from '../journey.js';
 import { setting } from '../settings.js';
+import { recordInteraction } from '../timeline.js';
 
 /** The five columns of the board, in the order of the journey. */
 const BOARD: PersonStage[] = [
@@ -292,6 +293,38 @@ export class DiscipleshipService {
       where: { enrollmentId_sessionNo: { enrollmentId, sessionNo } },
       update: { mark, markedById: this.auth.userId!, markedAt: new Date() },
       create: { enrollmentId, sessionNo, mark, markedById: this.auth.userId! },
+    });
+    if (mark === 'ATTENDED') await this.onTimeline(tx, enrollmentId, sessionNo);
+  }
+
+  /**
+   * That they came, on their timeline, once per session however often the
+   * mark is changed. A tick taken back later stays written: the timeline is
+   * added to, never tidied, and the register is where the mark is corrected.
+   */
+  private async onTimeline(tx: Tx, enrollmentId: string, sessionNo: number) {
+    const written = await tx.personInteraction.findFirst({
+      where: {
+        kind: 'CLASS_SESSION',
+        AND: [
+          { meta: { path: ['enrollmentId'], equals: enrollmentId } },
+          { meta: { path: ['sessionNo'], equals: sessionNo } },
+        ],
+      },
+      select: { id: true },
+    });
+    if (written) return;
+    const enrollment = await tx.foundationEnrollment.findFirstOrThrow({
+      where: { id: enrollmentId },
+      include: { group: true },
+    });
+    await recordInteraction(tx, {
+      personId: enrollment.personId,
+      kind: 'CLASS_SESSION',
+      moduleKey: 'membership',
+      byId: this.auth.userId,
+      summary: `Foundation class, session ${sessionNo}, ${enrollment.group.name}`,
+      meta: { enrollmentId, sessionNo },
     });
   }
 

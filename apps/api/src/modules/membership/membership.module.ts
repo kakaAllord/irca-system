@@ -9,6 +9,7 @@ import { DiscipleshipService } from './discipleship/discipleship.service.js';
 import { DiscipleshipController } from './discipleship/discipleship.controller.js';
 import { DashboardService } from './dashboard/dashboard.service.js';
 import { DashboardController } from './dashboard/dashboard.controller.js';
+import { MembershipAudiences } from './comms-audiences.js';
 
 /**
  * The people the church cares for: what the visitor typed, and what the
@@ -32,6 +33,7 @@ import { DashboardController } from './dashboard/dashboard.controller.js';
     ApplicationsService,
     DiscipleshipService,
     DashboardService,
+    MembershipAudiences,
   ],
 })
 export class MembershipModule {}

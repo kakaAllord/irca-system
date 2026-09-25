@@ -34,6 +34,13 @@ export const ErrorCode = {
   PROBATION_NOT_OVER: 'PROBATION_NOT_OVER',
   ALREADY_APPLIED: 'ALREADY_APPLIED',
   ALREADY_ENROLLED: 'ALREADY_ENROLLED',
+  NEEDS_DEPARTMENT: 'NEEDS_DEPARTMENT',
+  NOT_CONFIRMED_MEMBER: 'NOT_CONFIRMED_MEMBER',
+  ALREADY_LEADS: 'ALREADY_LEADS',
+  /** Only someone who has filled in the registration form may join a department. */
+  NOT_REGISTERED: 'NOT_REGISTERED',
+  /** Someone recorded on a Saturday may be a person the church already knows. */
+  POSSIBLE_MATCH: 'POSSIBLE_MATCH',
   SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
   INTERNAL: 'INTERNAL',
 } as const;

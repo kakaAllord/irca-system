@@ -56,6 +56,8 @@ export type PersonDetail = PersonRow & {
     status: 'in_progress' | 'submitted';
     submittedAt: string | null;
   } | null;
+  /** The language they are written to in, and whether they want messages (D22). */
+  messaging: { lang: 'en' | 'sw' | 'fr'; optOut: boolean; optOutSource: string | null };
   savedBy: string | null;
   baptisedBy: string | null;
   memberNumber: number | null;

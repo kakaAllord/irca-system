@@ -1,5 +1,5 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import type pg from 'pg';
+import pg from 'pg';
 import { membershipModule } from '@irca/shared';
 import {
   asForm,
@@ -266,6 +266,86 @@ describe('the Membership portal', () => {
     });
   });
 
+  describe('the timeline (D23)', () => {
+    it('is written by what Membership already does, once, and never carries a note', async () => {
+      const { form, cookie } = await church();
+      const { personId } = await registered(form, { interest: ['Joining the church'] });
+      await portal(app)
+        .post(
+          `/v1/membership/people/${personId}/notes`,
+          { kind: 'CALL', body: 'Her mother is unwell' },
+          cookie,
+        )
+        .expect(201);
+      await portal(app)
+        .post(
+          `/v1/membership/people/${personId}/notes`,
+          { kind: 'NOTE', body: 'Likes the choir' },
+          cookie,
+        )
+        .expect(201);
+      const group = await portal(app)
+        .post('/v1/membership/discipleship/groups', { name: 'Thursday group' }, cookie)
+        .expect(201);
+      const enrollment = await portal(app)
+        .post(
+          '/v1/membership/discipleship/enrollments',
+          { personId, groupId: group.body.id },
+          cookie,
+        )
+        .expect(201);
+      // Ticked, taken back and ticked again is still one session on the timeline.
+      for (const mark of ['ATTENDED', 'MISSED', 'ATTENDED']) {
+        await portal(app)
+          .put(
+            '/v1/membership/discipleship/attendance',
+            { enrollmentId: enrollment.body.id, sessionNo: 1, mark },
+            cookie,
+          )
+          .expect(204);
+      }
+
+      const { rows } = await db.query<{ kind: string; summary: string }>(
+        `select kind, summary from person_interactions where person_id = $1 order by at`,
+        [personId],
+      );
+      expect(rows).toEqual([
+        { kind: 'REGISTERED', summary: 'Filled in the registration form' },
+        { kind: 'APPLIED', summary: 'Asked to join the church, on the registration form' },
+        { kind: 'CALL', summary: 'Phone call' },
+        { kind: 'CLASS_SESSION', summary: 'Foundation class, session 1, Thursday group' },
+      ]);
+      expect(JSON.stringify(rows)).not.toContain('mother');
+
+      // The application may add to it and nothing else.
+      const appRole = new pg.Client({ connectionString: process.env.DATABASE_URL });
+      await appRole.connect();
+      try {
+        await expect(appRole.query('delete from person_interactions')).rejects.toThrow(
+          /permission denied/,
+        );
+        await expect(appRole.query(`update person_interactions set summary = 'x'`)).rejects.toThrow(
+          /permission denied/,
+        );
+      } finally {
+        await appRole.end();
+      }
+    });
+    it('says where each person came from: the form, or the office', async () => {
+      const { form, cookie } = await church();
+      const { personId: fromForm } = await registered(form);
+      const byHand = await portal(app)
+        .post('/v1/membership/people', { fullName: 'Added By Hand' }, cookie)
+        .expect(201);
+      const { rows } = await db.query<{ id: string; source: string }>(
+        `select id, source from people`,
+      );
+      const source = (id: string) => rows.find((r) => r.id === id)?.source;
+      expect(source(fromForm)).toBe('FORM');
+      expect(source(byHand.body.id)).toBe('OFFICE');
+    });
+  });
+
   describe('applications', () => {
     it('are the pastors’ to decide, and confirm only after the probation month', async () => {
       const { form, cookie } = await church();
@@ -308,10 +388,17 @@ describe('the Membership portal', () => {
     it('arrive by themselves when the form asks to join', async () => {
       const { form, cookie } = await church();
       await registered(form, { interest: ['Joining the church'] });
+      // Someone else's open application is no reason to drop this one: the
+      // check for one already open is about the same person only.
+      await registered(form, {
+        interest: ['Joining the church'],
+        fullname: 'Baraka Laizer',
+        phone: '754000111',
+      });
 
       const list = await portal(app).get('/v1/membership/applications', cookie).expect(200);
-      expect(list.body.rows).toHaveLength(1);
-      expect(list.body.rows[0].source).toBe('FORM');
+      expect(list.body.rows).toHaveLength(2);
+      expect(list.body.rows.map((r: { source: string }) => r.source)).toEqual(['FORM', 'FORM']);
     });
 
     it('send someone back to where they were when rejected', async () => {

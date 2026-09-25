@@ -4,6 +4,9 @@ How each app is built, where it runs, what it needs, and the order to bring a
 fresh environment up in. The runbooks in `docs/runbooks/` cover what to do when
 something goes wrong after that.
 
+**Deploying to Railway?** `docs/deploy-railway.md` is this page with
+Railway's own settings, step by step, database and portal included.
+
 One deployment serves one church (D27). A second church would get a second copy
 of everything below — its own database, its own apps, its own domain — never a
 row in this one.
@@ -140,6 +143,12 @@ development:
 | `EMAIL_PROVIDER`         | `resend` |
 | `EMAIL_FROM`             | `IRCA <no-reply@<domain>>` |
 | `RESEND_API_KEY`         | from Resend |
+| `BEEM_SETTINGS_KEY`      | 32 random bytes, base64 (`.env.example` says how). Seals the Beem key in the database. Make it once and keep it: a new one makes the saved Beem account unreadable until it is saved again |
+| `BEEM_INBOUND_SECRET`    | at least 24 random characters. The password in the reply URL given to Beem (§6a) |
+| `FILES_DIR`              | where files are kept: the files volume's mount path, such as `/data/files` (§6b). Unset, uploads are refused and nothing else changes |
+
+The Beem key and secret are **not** environment variables: Communications
+types them into Comms → Settings (D26).
 
 The host's environment settings are the only place secrets live. Nothing in
 the repository holds one, and `.env` files are never committed.
@@ -212,6 +221,60 @@ redeploying; its old database stays untouched until the owner retires it.
    before anything else.
 4. Watch **Dev → Usage → Email** for the first week: anything given up on shows
    its reason there.
+
+## 6a. Text messages (Beem)
+
+1. Communications signs in, opens **Comms → Settings**, and saves the Beem key,
+   secret and the sender name Beem registered, then presses **Test
+   connection**. It shows the credit left. Until an account is saved, every
+   message is only written to the API's log. Production sends through Beem
+   once an account is saved; staging and every developer's machine do not,
+   unless `SMS_LIVE=true` is set there on purpose, so a Beem key typed in for
+   a test still texts nobody.
+2. If the church wants spending held to a figure, Communications saves a
+   **daily limit** on the same page; a send that would pass it is refused.
+   With none saved, there is no limit (owner, 25 Sept 2026).
+3. In Beem's dashboard, under two-way SMS, set the callback URL for replies to
+   `https://api.<domain>/v1/public/comms/inbound?key=<BEEM_INBOUND_SECRET>`.
+   Beem signs nothing, so the secret in the URL is what proves the call is
+   Beem's; keep the URL out of screenshots. A reply of STOP (or ACHA, SIMAMA,
+   TOKA, UNSUBSCRIBE) blocks the number for good.
+4. Delivery is not reported to us: the API asks Beem every five minutes about
+   messages sent in the last two days (docs.beem.africa, checked 24 Sept 2026).
+   Nothing to set up.
+5. Send one message to a phone you hold, and watch it become **Delivered** in
+   Comms → History within ten minutes.
+
+## 6b. File storage (a Railway volume)
+
+Files such as Outreach's Saturday reports are kept on a Railway volume
+attached to the API (D24): a disk that survives every deploy and restart.
+Only its own deletion loses what is on it. Files are private: the browser
+sends them to the API and reads them back through it, after the permission
+check, so there is nothing public to configure.
+
+1. **Attach the volume.** Railway → the `api` service → **+ New → Volume**,
+   mount path `/data`. One volume per service; Hobby gives 5 GB, Pro 50 GB,
+   which is years of PDFs at 10 MB each.
+2. **Say where files go.** In the `api` service's variables:
+   `FILES_DIR=/data/files`. The API makes the folders it needs.
+3. **If the files cannot be written**, the image runs as a user other than
+   root: add `RAILWAY_RUN_UID=0` to the same variables (Railway's own advice
+   for volumes).
+4. **What the volume costs you.** The API cannot have replicas while it has a
+   volume, and each deploy stops it for a moment while the new one takes the
+   disk over, so deploy when nobody is using it, never on a Sunday morning.
+5. **Back it up.** The database's backups do not include these files. Turn on
+   the volume's backups in Railway if the plan has them, and keep the Phase 10
+   copy (`10-strengthening.md`, step 10.2) in mind.
+6. **Check it before launch.** Attach a PDF to a Saturday in Outreach, redeploy
+   the API, and open it again: it must still be there. Try a 12 MB PDF and a
+   `.docx`: both are refused, and nothing is kept.
+
+Every night at 03:30 the API removes files more than a day old that no file
+row points at (an upload abandoned half-way) and lists rows whose file has
+gone. Both appear in the dev console's job log as the `files-sweep` result;
+anything under "missing" needs a person to look into it.
 
 ---
 

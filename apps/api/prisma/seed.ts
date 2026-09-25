@@ -73,8 +73,35 @@ await db.church.upsert({
   create: { id: 1, code: 'IRCA', name: 'International Revival Church Arusha' },
 });
 
-await portal('finance');
-await portal('membership');
+/**
+ * A department, and the portal that belongs to it (D28): a department portal
+ * is only switched on for the department it belongs to.
+ */
+async function department(name: string, description: string, moduleKey: string | null = null) {
+  await db.department.upsert({
+    where: { name },
+    update: { moduleKey },
+    create: { name, description, moduleKey },
+  });
+  if (moduleKey) await portal(moduleKey);
+}
+
+await department(
+  'Membership',
+  'Visitors, members and the foundation class: the office and the follow-up team.',
+  'membership',
+);
+await department('Finance', 'Income and expenses, and the reports the church reads.', 'finance');
+await department(
+  'Communications',
+  'The messages the church sends, and the standards they follow.',
+  'comms',
+);
+await department(
+  'Outreach',
+  'Evangelism: the Saturday teams, the people reached, their follow-up and the Friday training.',
+  'outreach',
+);
 await portal('admin');
 await portal('dev');
 
@@ -89,10 +116,12 @@ await user('dev@irca.local', 'Dev Account', 'dev-password-123', [
 ]);
 await user('admin@irca.local', 'IRCA Admin', 'admin-password-123', ['admin.administrator']);
 // A second administrator, because nobody decides their own change request,
-// and the pastor who decides membership applications.
+// and the pastor who decides membership applications and, as the leadership
+// agreed, oversees pledges (docs/modules/pledges-brief.md).
 await user('pastor@irca.local', 'Pastor Sarah', 'pastor-password-123', [
   'admin.administrator',
   'membership.pastor',
+  'finance.pledges_overseer',
 ]);
 // The office, and the follow-up team, who must not read prayer requests.
 await user('office@irca.local', 'Grace Office', 'office-password-123', ['membership.secretary']);
@@ -101,6 +130,9 @@ await user('followup@irca.local', 'Daniel Followup', 'followup-password-123', [
 ]);
 await user('clerk@irca.local', 'Neema Mollel', 'clerk-password-123', ['finance.clerk']);
 await user('mhazini@irca.local', 'Joyce Mhazini', 'manager-password-123', ['finance.manager']);
+// Communications is led by Allord Archard (comms brief, 24 Sept 2026); locally,
+// someone holding that role to sign in as.
+await user('comms@irca.local', 'Allord Archard', 'comms-password-123', ['comms.lead']);
 
 // The registration form's key, for development and the browser tests. A known
 // value only because this seed refuses to run anywhere else: production keys
@@ -119,6 +151,6 @@ await db.apiClient.upsert({
 });
 
 console.log(
-  'seeded IRCA, with dev@, admin@, pastor@, office@, followup@, clerk@ and mhazini@irca.local',
+  'seeded IRCA, with dev@, admin@, pastor@, office@, followup@, clerk@, mhazini@ and comms@irca.local',
 );
 await db.$disconnect();

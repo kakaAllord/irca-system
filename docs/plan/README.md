@@ -12,14 +12,14 @@ file, then `00-decisions.md`, then the phase you are working on.
 
 ## What to do next
 
-**Where the build is (24 September 2026).**
+**Where the build is (25 September 2026).**
 
 | Phase | State |
 | --- | --- |
 | 0–6 | **Built.** What is left of Phase 6 is going live, which is the owner's (`06`, step 6.13). |
-| 7 — Communications | **Next.** Start at step 7.1. |
-| 8 — Outreach | After 7. |
-| 9 — Pledges | After 8, and only once the leadership has answered step 9.0. |
+| 7 — Departments and Communications | **Built** (25 Sept 2026). Left for the owner: the SMS budget, the Beem account at launch, and a second person walking it (`07`, step 7.16). |
+| 8 — Outreach | **Built** (25 Sept 2026), on the recommendations written into each step. Step 8.1's answers are in. Left for the owner: the files volume on Railway (`docs/deployment.md` §6b), and a second person walking it (`08`, step 8.11). |
+| 9 — Pledges | **Built** (25 Sept 2026), after the owner answered step 9.0 the same day. Left for the owner: Communications giving Finance the pledge audience and approving its templates, and a second person walking it (`09`, step 9.4). |
 | 10 — Strengthening | Only when the owner says yes (§3.4a). |
 
 **How to find the very next step.** Open the lowest-numbered phase that is not
@@ -55,11 +55,11 @@ the plan in the same commit and say why (§2).
 | `04-finance-portal.md` | Phase 4 (built) — the Finance portal: income sources, expense items with suggestions, transactions with `IRCA-EXP-2026-09-000001` codes, corrections and voids only through change requests that an admin approves, reports. This is the RBAC test case. |
 | `05-registration-and-membership.md` | Phase 5 (built; cutover is the owner's) — the registration form moved onto the API, live data migrated, and the Membership portal (Dashboard, Members, Applications, Discipleship, Insights) from the design. |
 | `06-dev-console-hardening-launch.md` | Phase 6 (built; launch is the owner's) — the dev console (health, usage, logs, the view-as log, settings and keys), security hardening, the setup and recovery commands, deployment, runbooks and the training guides. Rewritten for D27. Load testing, backups and monitoring are Phase 10. |
-| `07-communications.md` | Phase 7 (next) — the Communication system: SMS through Beem, templates approved once and used weekly, audiences, recurring "beat" messages, opt-out, and what it all costs. Central control, departments sending their own routine messages. |
-| `08-outreach.md` | Phase 8 — the Outreach & Evangelism portal: the team, Saturday sessions, people reached in four fields, follow-up, one timeline per person, Friday training, the dashboard, and the session report as a PDF. |
-| `09-pledges-and-giving-reminders.md` | Phase 9 — pledges: what someone promised, what they have paid, what is left, and reminding them through Communications. Waits for three decisions by the leadership. |
+| `07-communications.md` | Phase 7 (built) — departments with their leaders and members (D28), then the Communication system: SMS through Beem, templates approved once and used weekly, audiences, recurring "beat" messages, opt-out, and what it all costs. Central control, departments sending their own routine messages. |
+| `08-outreach.md` | Phase 8 (built) — the Outreach & Evangelism portal: the team (its department), Saturday sessions, people reached in four fields, follow-up, one timeline per person, Friday training, the dashboard, and the session report as a PDF. |
+| `09-pledges-and-giving-reminders.md` | Phase 9 (built) — pledges: what someone promised, what they have paid, what is left, and reminding them through Communications, after three decisions by the leadership. |
 | `10-strengthening.md` | Phase 10 — strengthening: performance and load, backups and the restore drill, monitoring and alerts. **Starts only when the owner says so**, after every feature phase is done. |
-| `docs/modules/*-brief.md` | What a department actually does, in its own words, filled in before its module is built (step 6.12). `comms-brief.md` and `outreach-brief.md` exist. |
+| `docs/modules/*-brief.md` | What a department actually does, in its own words, filled in before its module is built (step 6.12). `comms-brief.md`, `outreach-brief.md` and `pledges-brief.md` exist. |
 | `multi-tenancy.md` | Retired by D27 (one church, one deployment). Says where each guarantee that outlived it is enforced now. |
 | `appendix-database.md` | Every table in one place, with what owns it and why it exists. |
 
@@ -107,7 +107,8 @@ and conversation. Do not invent synonyms.
 | Word | Meaning |
 | --- | --- |
 | **Church** | The one church this deployment serves (D27): one row of settings, with a short `code` (`IRCA`) used in entry numbers, a name, a timezone and a currency. A second church is a second deployment. |
-| **Module** / **portal** | A department area of the system: `admin`, `membership`, `finance`, later `media`, `outreach`, `comms`, `programs`. A module is *defined in code* (its permissions, default roles, pages). A church admin *enables* modules. They cannot invent new ones — a new module is a code change. "Portal" is the word staff see; "module" is the word in code. They are the same thing. |
+| **Department** | A part of the church's life that the administrators list in Admin → Departments: the praise team, the choir, Outreach, Finance, Communications. It has one or more **leaders** (confirmed members with a title such as Chairperson, named by an administrator) and **members** (anyone in People who has filled in the registration form, added by its leaders). Most departments have no portal (D28). |
+| **Module** / **portal** | A department's area of the system: `membership`, `finance`, later `outreach`, `comms`. **A portal exists because a department does**: it is switched on for the department it belongs to, and a department may have none. Admin and the dev console are the system's own. A module is *defined in code* (its permissions, default roles, pages). A church admin *enables* modules. They cannot invent new ones — a new module is a code change. "Portal" is the word staff see; "module" is the word in code. Every staff account on any portal is made in Admin. |
 | **Permission** | One thing a person may do, such as `finance.transactions.create`. Defined in code by the module that owns it. Each permission is either `read` or `write`. That one flag is what makes read-only impersonation possible. |
 | **Role** | A named bundle of permissions from **one** module, stored in the database, such as "Finance clerk". Each module ships default roles. Admins can later create custom ones. |
 | **Membership** | In the pastoral sense only: `Person.stage = CONFIRMED_MEMBER`. See the glossary note in `05`. (Until D27 the word also meant a user's link to a church, which held their roles; roles now belong to the user.) |

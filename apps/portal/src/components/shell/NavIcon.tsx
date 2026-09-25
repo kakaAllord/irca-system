@@ -141,4 +141,65 @@ const PATHS: Record<Name, React.ReactNode> = {
       <circle cx="17" cy="18" r="2" />
     </>
   ),
+  // One in front and two behind: a department, its leader and its members.
+  departments: (
+    <>
+      <circle cx="12" cy="9" r="2.8" />
+      <path d="M7 20c0-2.9 2.2-4.8 5-4.8s5 1.9 5 4.8" />
+      <circle cx="5.5" cy="7" r="2.1" />
+      <circle cx="18.5" cy="7" r="2.1" />
+      <path d="M2.5 15.5c.4-1.9 1.6-3 3.2-3.3M21.5 15.5c-.4-1.9-1.6-3-3.2-3.3" />
+    </>
+  ),
+  // An envelope: a message to write.
+  messages: (
+    <>
+      <rect x="3" y="5.5" width="18" height="13" rx="2" />
+      <path d="m3.5 7 8.5 6 8.5-6" />
+    </>
+  ),
+  // A page with a star: words that were approved.
+  templates: (
+    <>
+      <path d="M6 3h9l4 4v14H6Z" />
+      <path d="M14 3v4h4" />
+      <path d="m12.5 11 1 2.1 2.3.3-1.7 1.6.4 2.3-2-1.1-2 1.1.4-2.3-1.7-1.6 2.3-.3Z" />
+    </>
+  ),
+  // Two arrows chasing each other: something that comes round again. (Not a
+  // clock: History already is one.)
+  schedule: (
+    <>
+      <path d="m17 2 3 3-3 3" />
+      <path d="M4 11V9a4 4 0 0 1 4-4h12" />
+      <path d="m7 22-3-3 3-3" />
+      <path d="M20 13v2a4 4 0 0 1-4 4H4" />
+    </>
+  ),
+  // A map pin at the end of a winding road: a Saturday out in the area.
+  sessions: (
+    <>
+      <path d="M17 3.5a3.5 3.5 0 0 0-3.5 3.5c0 2.6 3.5 6 3.5 6s3.5-3.4 3.5-6A3.5 3.5 0 0 0 17 3.5Z" />
+      <circle cx="17" cy="7" r="1" />
+      <path d="M17 17H8a2.5 2.5 0 0 1 0-5h2.5a2.5 2.5 0 0 0 0-5H4" />
+      <path d="M4 21h13" />
+    </>
+  ),
+  // A board with someone beside it: the Friday training.
+  training: (
+    <>
+      <path d="M9 4h12v10H9" />
+      <path d="m13 14-1.5 4M17 14l1.5 4" />
+      <circle cx="5" cy="8" r="2" />
+      <path d="M2 20v-4.5A2.5 2.5 0 0 1 4.5 13H7l3-2" />
+    </>
+  ),
+  // An open hand with a coin above it: something promised.
+  pledges: (
+    <>
+      <circle cx="14" cy="6" r="3" />
+      <path d="M2 14h3l4 1.5h3.5a1.5 1.5 0 0 1 0 3H9" />
+      <path d="m12.5 18.5 5.5-2.5a1.8 1.8 0 0 1 2 3l-6.5 3.5H5L2 21" />
+    </>
+  ),
 };

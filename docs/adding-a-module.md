@@ -4,6 +4,13 @@ A "portal" (a **module** in code) is a department's part of the system:
 Finance, Membership, and later Media, Outreach or Comms. This is the recipe.
 Finance (Phase 4) was built with it, and Membership (Phase 5) too.
 
+**The department comes first** (D28). A portal exists because a department
+does: the department is in Admin → Departments, with its leaders and members,
+before anyone builds it a portal, and the portal cannot be switched on until
+that department has been given it. Many departments never need one — the
+choir sends its messages and keeps its members without a portal of its own.
+Every staff account on a portal is still made in Admin.
+
 Before writing anything, fill in `docs/modules/<key>-brief.md` with the
 questions in `docs/plan/06-dev-console-hardening-launch.md`, step 6.12: who
 is in the department, what they do weekly, what they may change, what they

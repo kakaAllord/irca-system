@@ -38,6 +38,8 @@ export interface ChangeRequestHandler {
   validate(
     tx: Tx,
     input: {
+      /** The record's id, for a check that must leave the record itself out. */
+      entityId: string;
       action: ChangeAction;
       proposed: Record<string, unknown>;
       before: Record<string, unknown>;

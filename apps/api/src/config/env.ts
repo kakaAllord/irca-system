@@ -26,6 +26,50 @@ export const EnvSchema = z
     EMAIL_PROVIDER: z.enum(['log', 'memory', 'resend']).default('log'),
     EMAIL_FROM: z.string().default('IRCA Admin <no-reply@example.invalid>'),
     RESEND_API_KEY: z.string().optional(),
+
+    /**
+     * Seals the Beem key and secret in the database (D26): 32 bytes, base64.
+     * Without it, a Beem account cannot be saved, and messages go to the log.
+     * Never the Beem key itself, which lives only in the database.
+     */
+    BEEM_SETTINGS_KEY: z
+      .string()
+      .optional()
+      .transform((v) => v || undefined)
+      .refine((v) => v === undefined || Buffer.from(v, 'base64').length === 32, {
+        message: 'must be 32 bytes, base64 (see .env.example for how to make one)',
+      }),
+    /**
+     * Whether texts really go to Beem once an account is saved. Production
+     * sends unless this says false; anywhere else only when it says true, so
+     * a laptop with a copy of the data and a Beem key typed in for a test
+     * still cannot text a church member by accident (07 step 7.7).
+     */
+    SMS_LIVE: z.enum(['true', 'false']).optional(),
+    /**
+     * The password Beem uses when it calls us with a reply: part of the
+     * callback URL given to Beem, since Beem sends no signature of its own.
+     */
+    BEEM_INBOUND_SECRET: z
+      .string()
+      .optional()
+      .transform((v) => v || undefined)
+      .refine((v) => v === undefined || v.length >= 24, {
+        message: 'must be at least 24 characters',
+      }),
+
+    /**
+     * The folder files are kept in (D24): in production, where the Railway
+     * volume is mounted on the API, so they survive every deploy. Unset, uploads
+     * are refused with a message saying so, and nothing else changes.
+     */
+    FILES_DIR: z
+      .string()
+      .optional()
+      .transform((v) => v || undefined)
+      .refine((v) => v === undefined || v.startsWith('/'), {
+        message: 'must be an absolute path, such as /data/files',
+      }),
   })
   .refine((env) => env.EMAIL_PROVIDER !== 'resend' || !!env.RESEND_API_KEY, {
     message: 'RESEND_API_KEY is required when EMAIL_PROVIDER is resend',

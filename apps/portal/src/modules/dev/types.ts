@@ -50,6 +50,8 @@ export type Health = {
   database: { bytes: number; connections: number; tables: { table: string; bytes: number }[] };
   slowQueries: { query: string; calls: number; meanMs: number; totalMs: number }[] | null;
   outbox: Record<string, number>;
+  /** Text messages waiting or given up on, and the last reading of the Beem credit, in TZS. */
+  sms: { queue: Record<string, number>; credit: { amount: number; day: string } | null };
   jobs: {
     job: string;
     lastRunAt: string;

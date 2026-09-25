@@ -1,10 +1,6 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import type pg from 'pg';
-import { DiscoveryService, MetadataScanner, Reflector } from '@nestjs/core';
-import { RequestMethod, type Type } from '@nestjs/common';
-import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants.js';
 import { ALL_MODULES, moduleByKey } from '@irca/shared';
-import { PERMISSIONS_KEY, type PermissionRule } from '../src/core/rbac/decorators.js';
 import { RegistrySync } from '../src/core/rbac/registry-sync.service.js';
 import {
   createApp,
@@ -17,49 +13,7 @@ import {
   sessionCookie,
   truncateAll,
 } from './helpers.js';
-
-type Route = {
-  method: 'get' | 'post' | 'put' | 'patch' | 'del';
-  path: string;
-  rule: PermissionRule;
-};
-
-const VERBS: Partial<Record<RequestMethod, Route['method']>> = {
-  [RequestMethod.GET]: 'get',
-  [RequestMethod.POST]: 'post',
-  [RequestMethod.PUT]: 'put',
-  [RequestMethod.PATCH]: 'patch',
-  [RequestMethod.DELETE]: 'del',
-};
-
-/** Every route that names the permission it needs, read from the controllers themselves. */
-function guardedRoutes(app: NestExpressApplication): Route[] {
-  const discovery = app.get(DiscoveryService);
-  const scanner = app.get(MetadataScanner);
-  const reflector = app.get(Reflector);
-  const join = (...parts: string[]) =>
-    '/' +
-    parts
-      .map((p) => p.replace(/^\/|\/$/g, ''))
-      .filter(Boolean)
-      .join('/');
-  const routes: Route[] = [];
-  for (const wrapper of discovery.getControllers()) {
-    const cls = wrapper.metatype as Type<object> | undefined;
-    if (!cls?.prototype) continue;
-    const base = reflector.get<string>(PATH_METADATA, cls) ?? '';
-    const classRule = reflector.get<PermissionRule>(PERMISSIONS_KEY, cls);
-    for (const name of scanner.getAllMethodNames(cls.prototype)) {
-      const handler = cls.prototype[name as keyof object] as () => unknown;
-      const method = VERBS[reflector.get<RequestMethod>(METHOD_METADATA, handler)];
-      const rule = reflector.get<PermissionRule>(PERMISSIONS_KEY, handler) ?? classRule;
-      if (!method || !rule) continue;
-      const path = reflector.get<string>(PATH_METADATA, handler) ?? '';
-      routes.push({ method, path: join('v1', base, path), rule });
-    }
-  }
-  return routes;
-}
+import { guardedRoutes, refusedByGuard, type Route } from './routes.js';
 
 /**
  * The permission matrix, generated rather than written out.
@@ -95,8 +49,22 @@ describe('the permission matrix', () => {
     await app.get(RegistrySync).sync();
   });
 
-  /** Signed in as someone holding exactly these permissions, one role per portal. */
-  async function holding(permissions: string[]) {
+  /**
+   * Signed in as someone holding exactly these permissions, one role per
+   * portal. Routes that need the same permission share the one person, within
+   * a test: making a person hashes a password, and doing it once per route
+   * made this test slower with every route added.
+   */
+  let signedIn = new Map<string, Promise<string>>();
+  beforeEach(() => {
+    signedIn = new Map();
+  });
+  function holding(permissions: string[]) {
+    const key = [...permissions].sort().join(' ');
+    if (!signedIn.has(key)) signedIn.set(key, signIn(permissions));
+    return signedIn.get(key)!;
+  }
+  async function signIn(permissions: string[]) {
     const user = await createUser(db);
     for (const m of ALL_MODULES) {
       const own = permissions.filter((p) => moduleByKey(m.key)?.permissions[p]);
@@ -119,9 +87,6 @@ describe('the permission matrix', () => {
       ? portal(app)[route.method](url, cookie)
       : portal(app)[route.method](url, {}, cookie);
   };
-  const refusedByGuard = (res: { status: number; body: { error?: { details?: unknown } } }) =>
-    res.status === 403 &&
-    Array.isArray((res.body.error?.details as { required?: unknown })?.required);
 
   it('covers a route in every portal that has any', () => {
     // So an empty discovery cannot pass the two tests below by checking nothing.
@@ -141,7 +106,9 @@ describe('the permission matrix', () => {
       if (!refusedByGuard(res)) leaks.push(`${route.method} ${route.path} → ${res.status}`);
     }
     expect(leaks).toEqual([]);
-  });
+    // A sweep of every route, which grows with each one added: not a single
+    // request, so not held to the per-test limit meant for one.
+  }, 120_000);
 
   it('lets someone holding only what a route needs past the check', async () => {
     const refused: string[] = [];
@@ -152,5 +119,20 @@ describe('the permission matrix', () => {
       if (refusedByGuard(res)) refused.push(`${route.method} ${route.path}`);
     }
     expect(refused).toEqual([]);
-  });
+  }, 120_000);
+
+  it('answers a path that names no real id with 4xx, never a crash', async () => {
+    const crashed: string[] = [];
+    for (const route of routes.filter((r) => r.path.includes('/:'))) {
+      const needed = route.rule.all ?? [route.rule.any![0]!];
+      const cookie = await holding(needed);
+      const url = route.path.replace(/:[A-Za-z]+/g, 'not-an-id');
+      const res =
+        route.method === 'get' || route.method === 'del'
+          ? await portal(app)[route.method](url, cookie)
+          : await portal(app)[route.method](url, {}, cookie);
+      if (res.status >= 500) crashed.push(`${route.method} ${route.path} → ${res.status}`);
+    }
+    expect(crashed).toEqual([]);
+  }, 120_000);
 });

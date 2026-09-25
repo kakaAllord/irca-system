@@ -63,11 +63,76 @@ describe('erasing one person, at their request', () => {
        values ($1, 1, 'ATTENDED', $2, now())`,
       [enrollmentId, staff.id],
     );
+    const departmentId = randomUUID();
+    await db.query(`insert into departments (id, name, updated_at) values ($1, 'Choir', now())`, [
+      departmentId,
+    ]);
+    await db.query(
+      `insert into department_members (id, department_id, person_id) values ($1, $2, $3)`,
+      [randomUUID(), departmentId, personId],
+    );
+    await db.query(
+      `insert into person_interactions (id, person_id, kind, at, module_key, summary)
+       values (gen_random_uuid(), $1, 'REGISTERED', now(), 'membership', 'Filled in the registration form')`,
+      [personId],
+    );
+    // Reached on a Saturday themselves, and one of the team who reached
+    // someone else, whose timeline names them.
+    const saturday = randomUUID();
+    await db.query(
+      `insert into outreach_sessions (id, held_on, created_by_id) values ($1, '2026-09-19', $2)`,
+      [saturday, staff.id],
+    );
+    await db.query(
+      `insert into outreach_reached (id, person_id, session_id, reached_on, reached_by_ids, recorded_by_id)
+       values (gen_random_uuid(), $1, $3, current_date, '{}', $2)`,
+      [personId, staff.id, saturday],
+    );
+    // The leader's report of that Saturday, which may name them.
+    await db.query(
+      `insert into files (id, module_key, entity_type, entity_id, key, original_name, content_type, bytes, uploaded_by_id)
+       values (gen_random_uuid(), 'outreach', 'outreach_session', $1, $2, 'Sombetini.pdf', 'application/pdf', 10, $3)`,
+      [saturday, `outreach/sessions/${saturday}/report.pdf`, staff.id],
+    );
+    const other = randomUUID();
+    await db.query(
+      `insert into people (id, full_name, updated_at) values ($1, 'Baraka Laizer', now())`,
+      [other],
+    );
+    await db.query(
+      `insert into outreach_reached (id, person_id, reached_on, reached_by_ids, recorded_by_id)
+       values (gen_random_uuid(), $1, current_date, array[$2::uuid], $3)`,
+      [other, personId, staff.id],
+    );
+    await db.query(
+      `insert into person_interactions (id, person_id, kind, at, module_key, summary)
+       values (gen_random_uuid(), $1, 'EVANGELISED', now(), 'outreach',
+               'Evangelised by Neema Mollel, Sombetini')`,
+      [other],
+    );
     await db.query(
       `insert into audit_events (id, source, action, entity_type, entity_id, summary, after)
        values (gen_random_uuid(), 'feature', 'membership.person.added', 'person', $1,
                'Added Neema Mollel to the people', '{"fullName":"Neema Mollel"}')`,
       [personId],
+    );
+    // A pledge and a payment towards it: never deleted, even now.
+    const campaignId = randomUUID();
+    const pledgeId = randomUUID();
+    await db.query(
+      `insert into pledge_campaigns (id, name, starts_on, created_by_id, updated_at)
+       values ($1, 'Ujenzi 2027', '2026-01-01', $2, now())`,
+      [campaignId, staff.id],
+    );
+    await db.query(
+      `insert into pledges (id, campaign_id, person_id, amount, promised_on, recorded_by_id, client_request_id)
+       values ($1, $2, $3, 100000, '2026-09-01', $4, $5)`,
+      [pledgeId, campaignId, personId, staff.id, randomUUID()],
+    );
+    await db.query(
+      `insert into pledge_payments (id, pledge_id, amount, paid_on, recorded_by_id, client_request_id)
+       values ($1, $2, 25000, '2026-09-20', $3, $4)`,
+      [randomUUID(), pledgeId, staff.id, randomUUID()],
     );
     return { personId, registrationId };
   }
@@ -95,14 +160,40 @@ describe('erasing one person, at their request', () => {
       applications: 1,
       enrollments: 1,
       attendance: 1,
+      departments: 1,
+      interactions: 1,
+      outreach: 1,
+      pledgesKept: 1,
+      timelinesRewritten: 1,
+      reports: [
+        {
+          heldOn: '2026-09-19',
+          name: 'Sombetini.pdf',
+          key: expect.stringMatching(/^outreach\/sessions\//),
+          replaced: false,
+        },
+      ],
     });
+    // Baraka, whom they reached, stays; they are gone from his reach and his timeline.
+    expect(await rows('select reached_by_ids from outreach_reached')).toEqual([
+      { reached_by_ids: [] },
+    ]);
+    expect(await rows('select summary from person_interactions')).toEqual([
+      { summary: 'Evangelised by [erased], Sombetini' },
+    ]);
+    expect(await rows('select 1 from people where id = $1', [personId])).toHaveLength(0);
+    // The money stays, belonging to nobody.
+    expect(await rows('select person_id, amount::text as amount from pledges')).toEqual([
+      { person_id: null, amount: '100000.00' },
+    ]);
+    expect(await rows('select 1 from pledge_payments')).toHaveLength(1);
     for (const table of [
-      'people',
       'person_notes',
       'person_stage_events',
       'membership_applications',
       'foundation_enrollments',
       'foundation_attendance',
+      'department_members',
     ]) {
       expect(await rows(`select 1 from ${table}`)).toHaveLength(0);
     }
@@ -134,7 +225,7 @@ describe('erasing one person, at their request', () => {
     const result = await erase(personId, true);
 
     expect(result.notes).toBe(1);
-    expect(await rows('select 1 from people')).toHaveLength(1);
+    expect(await rows('select 1 from people where id = $1', [personId])).toHaveLength(1);
     expect(await rows('select 1 from registrations')).toHaveLength(1);
     expect(await rows(`select 1 from audit_events where action = 'person.erased'`)).toHaveLength(0);
   });
@@ -152,6 +243,6 @@ describe('erasing one person, at their request', () => {
         confirm: async () => 'yes',
       }),
     ).rejects.toThrow(/the id did not match/);
-    expect(await rows('select 1 from people')).toHaveLength(1);
+    expect(await rows('select 1 from people where id = $1', [personId])).toHaveLength(1);
   });
 });

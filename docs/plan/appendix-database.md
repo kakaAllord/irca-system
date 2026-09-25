@@ -9,7 +9,7 @@ hand in the migrations, mostly the init migration.
 | Table | Phase | Owner / purpose | Special rules |
 | --- | --- | --- | --- |
 | `church` | 1 | The church's settings: code, name, timezone, currency. | Exactly one row (`check (id = 1)`). `code` frozen once finance entries exist (trigger `church_code_frozen`). Written by `church:setup`, changed in Dev → Settings. |
-| `users` | 1 | People who can sign in: email, name, phone, password hash, status. | Email stored normalised. |
+| `users` | 1 | People who can sign in: email, name, phone, password hash, status. `person_id` (7) links the account to the person it belongs to. | Email stored normalised. `sms_opt_out` (7) is the Account page's switch. `person_id` unique; set when someone is named a department leader, and what their leadership is found by. |
 | `sessions` | 1 | Signed-in browsers: token hash, address, browser, impersonation link. | Raw token never stored. Revoked, then deleted 90 days later by the nightly job. |
 | `permissions` | 2 | Mirror of the permissions defined in code, with kind. | Written only by the registry sync; retired, not deleted. |
 | `module_state` | 2 | Which portals are turned on. | Turning one off keeps the row, the roles and the data. |
@@ -24,15 +24,17 @@ hand in the migrations, mostly the init migration.
 | `email_outbox` | 3 | Queued and sent emails. | One-time links scrubbed from the payload once sent. |
 | `invitations` | 3 | One-time invitation tokens (hash). | 72 h, single use. |
 | `password_reset_tokens` | 3 | One-time reset tokens (hash). | 1 h, single use. Deleted after 7 days. |
+| `files` | 8 | A file kept on the files volume (D24), for any module: what it belongs to, its key, name, type, size and who uploaded it. Outreach's session reports first. | `delete`, `truncate` and `update` revoked, except `deleted_at`, which marks a version replaced; the object is kept. The nightly `files-sweep` removes files with no row after a day and reports rows whose file is missing. |
 | `sequences` | 4 | Gapless counters: `finance:EXP:2026-09`, `membership:member_number`. | Incremented only inside the transaction that uses the number. |
 | `finance_income_sources` | 4 | The list of income sources. | Unique by normalised name. Turned off, never deleted. |
 | `finance_expense_items` | 4 | The list of expense items. | Same. |
-| `change_requests` | 4 | Requests to change a protected record (first user: finance entries), decided in Admin → Requests. | One pending per record. The decider is never the requester (check constraint). |
+| `change_requests` | 4 | Requests to change a protected record (finance entries; since 9, pledge payments), decided in Admin → Requests. | One pending per record. The decider is never the requester (check constraint). |
 | `finance_transactions` | 4 | Income and expense entries with their codes. | `delete`, `truncate` revoked. **Any** update refused by trigger `finance_txn_guard` unless it applies a newly approved change request. The number never changes, and a void is final. A month move is a void plus a new linked entry. |
 | `registrations` | 5 | Visitors' own answers (moved from the form's first database). | One per phone (partial unique index). Tokens preserved from before. |
-| `people` | 5 | The church's record of a person: stage, confirmed salvation and baptism, member number. | Member number unique. |
+| `people` | 5 | The church's record of a person: stage, confirmed salvation and baptism, member number. `lang`, `sms_opt_out*` (7): the language they are written to in, and whether they want messages. `source` (8): `FORM`, `OFFICE` or `OUTREACH`. | Member number unique. `lang` backfilled from the registration and copied by the form from then on (D22). |
 | `person_stage_events` | 5 | History of stage moves. | |
 | `person_notes` | 5 | Notes, visits and calls. | Sensitive: only with `membership.people.read_sensitive`. |
+| `person_interactions` | 8 | Each person's timeline (D23): everything any portal recorded happening with them, with when, which portal and a one-line summary. Backfilled from registrations, applications, class attendance and logged calls and visits. Since 9: a pledge made and paid (`PLEDGE_PROMISED`, `PLEDGE_PAID`, shown only with `finance.pledges.read_sensitive`), and every text sent (`MESSAGE_SENT`, who from, never the words). | `update`, `delete`, `truncate` revoked: added to, never tidied. Summaries never carry sensitive notes. Erased with the person. |
 | `membership_applications` | 5 | Applications: review, approve, confirm. | One open per person. Confirmed after the probation period. |
 | `foundation_groups` | 5 | Class groups (Thursday, Saturday). | |
 | `foundation_enrollments` | 5 | Who is in which class. | One open per person. |
@@ -40,6 +42,29 @@ hand in the migrations, mostly the init migration.
 | `registration_reminders` | 5 | When someone was sent their link, and how. | |
 | `settings` | 5 | Key–value settings (probation days, sessions, the demo marker). | Defaults in code. |
 | `api_clients` | 5 | Keys for the church's own apps (the registration form). | Hash stored, shown once. Revoked, never deleted. |
+| `departments` | 7 | The church's departments (D28), and the portal that belongs to each, if any (`module_key`). | Name unique; a portal belongs to one department (unique `module_key`), and a department portal is switched on only for its department. Archived, never deleted (`delete`, `truncate` revoked). |
+| `department_leaders` | 7 | Who leads each department, with their title. Named only by an administrator, and only a confirmed member. | One open leadership per person per department (partial unique index). Ended, never deleted (`delete`, `truncate` revoked); erased with the person. What a leader may do is worked out from these rows by the permission resolver, never from a role. |
+| `department_members` | 7 | Who is in each department, added by its leaders. Anyone in People who has filled in the whole registration form (D28). | Same as leaders: one open per person per department, ended, never deleted, erased with the person. |
+| `comms_audience_grants` | 7 | Which church-wide audiences a department may send to. Its own department is never a grant. | Given and taken back by Communications (`comms.audiences.manage`), audited. |
+| `comms_templates` | 7 | The words of a message: versions of one `family_id`, each draft → pending → active or rejected, later retired. | Retired, never deleted (`delete`, `truncate` revoked). Nobody approves their own. |
+| `comms_template_bodies` | 7 | One body per language (`en`, `sw`, `fr`), at most six segments. | Trigger `comms_template_body_guard`: only a draft's words can be written; after that a change is a new version. |
+| `comms_messages` | 7 | One send: the department (null for Communications), the audience as it was named, the template, the words, counts, segments and cost. | `delete`, `truncate` and `update` revoked, except `status`, `started_at`, `finished_at`, `cancelled_by_id`. |
+| `comms_recipients` | 7 | The SMS outbox, one row per number, which is also the delivery record: the number, the language, exactly what was sent, its status and Beem's id. `SKIPPED_RECENT` (9): left alone because a reminding audience reached them within the cooldown. | `delete`, `truncate` revoked; only the sending columns may change. Erased with the person. Numbers are masked unless the reader holds `membership.people.read_sensitive`. |
+| `comms_schedules` | 7 | Beats: an audience, two or more templates, days, which weeks of the month (9: empty for every week, `{1}` for the first), time, jitter, next run. | Archived, never deleted. Sent through the same code as a manual send. |
+| `comms_blocked_numbers` | 7 | Numbers that replied STOP, or that the carrier says are dead. | Never messaged again. Kept, without the person's name, when the person is erased. |
+| `comms_inbound` | 7 | Every reply Beem passed on, exactly as it came. | Append-only for the application. |
+| `comms_beem_account` | 7 | The Beem key and secret, sealed with `BEEM_SETTINGS_KEY` (D26), the last four characters of the key, and the sender name. | Exactly one row (`check (id = 1)`). `select` revoked from `irca_readonly`. Never sent to a browser. |
+| `outreach_groups` | 8 | Partner groups: two or three of the Outreach team who usually go out together. | Name unique. Switched off, never deleted (`delete`, `truncate` revoked), because sessions point at them. |
+| `outreach_group_members` | 8 | Who is in each partner group. People, not staff accounts. | Erased with the person. |
+| `outreach_sessions` | 8 | One Saturday: its date, title, status (planned, completed, cancelled) and notes. | Closed or cancelled, never deleted (`delete`, `truncate` revoked). |
+| `outreach_session_teams` | 8 | A team sent to one area on a Saturday, the group it started from, and how many were spoken to without taking details. | `spoken_to_only` cannot be negative. |
+| `outreach_session_team_members` | 8 | Who went out in each team that day. | Erased with the person. |
+| `outreach_reached` | 8 | A person reached on a Saturday: when, where, by whom (`reached_by_ids`, people), whether they still need following up. Their own details are in `people` (D23). | `delete`, `truncate` and `update` revoked, except `needs_follow_up`, `area` and `note`. Erased with the person; an erased team member is taken out of `reached_by_ids` by hand. |
+| `outreach_trainings` | 8 | A Friday training: topic, trainer, when, venue. | Never deleted (`delete`, `truncate` revoked). |
+| `outreach_training_attendance` | 8 | Who came to each training, with the foundation class's marks. | Erased with the person. |
+| `pledge_campaigns` | 9 | Something the church is raising for: name, optional target, dates, whether it takes new pledges. | Never deleted (`delete`, `truncate` revoked). Closed, not removed. |
+| `pledges` | 9 | One person's promise towards a campaign: amount, how and by when they said they would pay, status (open, paid in full, cancelled). The one place a giver is named against an amount (`docs/modules/pledges-brief.md`). The balance is never stored. | Never deleted (`delete`, `truncate` revoked). Trigger `pledge_guard`: campaign, amount, promised date and who recorded it never change; a cancelled pledge stays cancelled; `person_id` only ever becomes null, when the person is erased (the money stays, the name goes). Names against amounts read only with `finance.pledges.read_sensitive`. |
+| `pledge_payments` | 9 | Money received against a pledge, optionally pointing at the income entry that recorded it. | Never deleted (`delete`, `truncate` revoked). Trigger `pledge_payment_guard`: changes only through a newly approved change request (`entity_type = 'pledge_payment'`), one revision at a time; a void is final. Recorded under a lock on its pledge. Payments linked to one entry never add up to more than it. |
 
 **Database roles:** `irca_owner` owns the schema and runs migrations and
 `person:erase`. `irca_app` is everything the API does, with the revokes above.

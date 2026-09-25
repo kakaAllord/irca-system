@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Header, HttpCode, Param, Post, Query, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Header,
+  HttpCode,
+  Param,
+  Post,
+  Put,
+  Query,
+  Res,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { z } from 'zod';
 import { ZodPipe } from '../../../core/http/zod.pipe.js';
@@ -33,6 +44,11 @@ const ReminderSchema = z.object({ channel: z.enum(['COPY_LINK', 'WHATSAPP']) });
  * What people wrote in confidence is decided in one place, the DTO, from one
  * permission. These routes only ask for the permission their action needs.
  */
+const MessagingSchema = z.object({
+  lang: z.enum(['en', 'sw', 'fr']),
+  optOut: z.boolean(),
+});
+
 @Controller('membership/people')
 export class PeopleController {
   constructor(
@@ -96,6 +112,13 @@ export class PeopleController {
     return this.people.get(id);
   }
 
+  /** Everything that happened with them, from every portal (D23). */
+  @RequirePermission('membership.people.read')
+  @Get(':id/timeline')
+  timeline(@Param('id') id: string) {
+    return this.people.timeline(id);
+  }
+
   @RequirePermission('membership.people.update')
   @Post()
   add(@Body(new ZodPipe(AddSchema)) body: z.infer<typeof AddSchema>) {
@@ -124,6 +147,17 @@ export class PeopleController {
   @HttpCode(204)
   move(@Param('id') id: string, @Body(new ZodPipe(MoveSchema)) body: z.infer<typeof MoveSchema>) {
     return this.people.move(id, body.to as never, body.note);
+  }
+
+  /** The language they are written to in, and "no messages", set by the office. */
+  @RequirePermission('membership.people.update')
+  @Put(':id/messaging')
+  @HttpCode(204)
+  messaging(
+    @Param('id') id: string,
+    @Body(new ZodPipe(MessagingSchema)) body: z.infer<typeof MessagingSchema>,
+  ) {
+    return this.people.setMessaging(id, body);
   }
 
   @RequirePermission('membership.notes.write')

@@ -49,6 +49,13 @@ export function redact(value: unknown): unknown {
   return value;
 }
 
+/** The summary column's width. A longer line keeps its start and says it was cut. */
+const SUMMARY_MAX = 300;
+export function fitSummary(summary: string | null | undefined): string | null {
+  if (summary === undefined || summary === null) return null;
+  return summary.length <= SUMMARY_MAX ? summary : `${summary.slice(0, SUMMARY_MAX - 1)}…`;
+}
+
 function toJsonb(value: unknown): string | null {
   return value === undefined || value === null ? null : JSON.stringify(redact(value));
 }
@@ -72,7 +79,7 @@ export async function insertAuditEvent(tx: Pick<Tx, '$executeRaw'>, row: AuditRo
     values
       (gen_random_uuid(), ${row.source ?? 'core'}, ${row.actorUserId ?? null},
        ${row.subjectUserId ?? null}, ${row.impersonationId ?? null}, ${row.action},
-       ${row.entityType ?? null}, ${row.entityId ?? null}, ${row.summary ?? null},
+       ${row.entityType ?? null}, ${row.entityId ?? null}, ${fitSummary(row.summary)},
        ${toJsonb(row.before)}::jsonb, ${toJsonb(row.after)}::jsonb, ${toJsonb(row.meta)}::jsonb,
        ${row.ip ?? null}, ${row.userAgent ?? null}, ${row.requestId ?? null})
   `;

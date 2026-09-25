@@ -10,10 +10,8 @@ import { Drawer } from '@/components/ui/Drawer';
 import { Input } from '@/components/ui/Input';
 import { SubmitButton } from '@/components/ui/SubmitButton';
 import { Can, useCan } from '@/lib/session';
-import { cn } from '@/lib/cn';
+import { MarkButton, MarkLegend, nextMark } from '@/components/ui/MarkButton';
 import type { RegisterData } from './page';
-
-const GLYPH = { ATTENDED: '✓', MISSED: '✕' } as const;
 
 /**
  * The class register: a tick is a session attended. Tapping a box cycles it
@@ -28,7 +26,7 @@ export function Register({ groupId, data }: { groupId: string; data: RegisterDat
   const [error, setError] = useState<string | null>(null);
 
   async function cycle(enrollmentId: string, sessionNo: number, now: 'ATTENDED' | 'MISSED' | null) {
-    const next = now === null ? 'ATTENDED' : now === 'ATTENDED' ? 'MISSED' : null;
+    const next = nextMark(now);
     try {
       await clientApi('/membership/discipleship/attendance', {
         method: 'PUT',
@@ -103,20 +101,13 @@ export function Register({ groupId, data }: { groupId: string; data: RegisterDat
                   </td>
                   {row.marks.map((mark, i) => (
                     <td key={i} className="py-1 text-center">
-                      <button
-                        type="button"
+                      <MarkButton
+                        mark={mark}
+                        label={`${row.fullName}, session ${i + 1}`}
                         disabled={!editable || row.completed}
+                        empty="not yet held"
                         onClick={() => cycle(row.enrollmentId, i + 1, mark)}
-                        aria-label={`${row.fullName}, session ${i + 1}: ${mark === 'ATTENDED' ? 'attended' : mark === 'MISSED' ? 'missed' : 'not yet held'}`}
-                        className={cn(
-                          'size-7 rounded-[6px] border text-[12px]',
-                          mark === 'ATTENDED' && 'border-pos-br bg-pos-bg text-pos',
-                          mark === 'MISSED' && 'border-danger-br bg-danger-bg text-danger',
-                          !mark && 'border-dashed border-border text-fg3',
-                        )}
-                      >
-                        {mark ? GLYPH[mark] : ''}
-                      </button>
+                      />
                     </td>
                   ))}
                   <td className="py-1.5 pl-3 text-right tabular-nums text-fg2">
@@ -126,15 +117,7 @@ export function Register({ groupId, data }: { groupId: string; data: RegisterDat
               ))}
             </tbody>
           </table>
-          <p className="mt-3 flex gap-4 text-[11.5px] text-fg3">
-            <span>
-              <span className="text-pos">✓</span> Attended
-            </span>
-            <span>
-              <span className="text-danger">✕</span> Missed
-            </span>
-            <span>▢ Not yet held</span>
-          </p>
+          <MarkLegend />
         </div>
       )}
 

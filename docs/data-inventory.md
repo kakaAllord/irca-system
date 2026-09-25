@@ -20,7 +20,8 @@ phone, and the office afterwards.
 | What | Where it lives | Who can read it |
 | --- | --- | --- |
 | Name, gender, age group | `registrations`, `people` | anyone with `membership.people.read` |
-| Phone and email | `registrations`, `people` | `membership.people.read_sensitive` only |
+| Phone | `registrations`, `people` | anyone with `membership.people.read`: the follow-up team calls people. (Corrected 25 Sept 2026: this line said sensitive-only, which the code never did.) |
+| Email | `registrations`, `people` | `membership.people.read_sensitive` only |
 | Where they live: ward, region, country, how long | `registrations` | `membership.people.read` |
 | How they heard of the church, who invited them | `registrations` | `membership.people.read` |
 | Work, school, course, profession | `registrations` | `membership.people.read` |
@@ -33,6 +34,15 @@ phone, and the office afterwards.
 | Application to become a member, and the decision | `membership_applications` | `membership.applications.read` |
 | Foundation class group, and each session attended | `foundation_enrollments`, `foundation_attendance` | `membership.discipleship.read` |
 | Member number, date confirmed | `people` | `membership.people.read` |
+| How they came to be in People: the form, the office, or Outreach | `people.source` | `membership.people.read` |
+| Their timeline: registered, applied, class sessions, confirmed, calls and visits (without what was written), and from Phase 8 what Outreach did with them — each with when and which portal (D23) | `person_interactions` | `membership.people.read`; Outreach sees it for people it reached. Never what Membership keeps behind the sensitive permission. |
+| The language they are written to in; whether they asked for no messages, when and how | `people.lang`, `people.sms_opt_out*` | `membership.people.read` |
+| Which departments they lead or belong to, since when | `department_leaders`, `department_members` | administrators (`admin.departments.read`); a department's own leaders see its members' names, stages and the last three digits of their phone |
+| Every text sent to them: the number, the language and the exact words | `comms_recipients` | Communications (`comms.messages.read`), and the leaders of the department that sent it; the number is masked unless the reader holds `membership.people.read_sensitive` |
+| Replies they sent to a text | `comms_inbound` | Communications, on Comms → Overview; the number cut short unless the reader holds `membership.people.read_sensitive` |
+| That their number asked for no messages | `comms_blocked_numbers` | nobody through the portal; kept so a STOP is honoured for good |
+| Outreach: when and where they were reached, by whom, whether they still need following up, and a note; the Saturdays they went out on and the trainings they came to, if they are on the team | `outreach_reached`, `outreach_session_team_members`, `outreach_group_members`, `outreach_training_attendance` | `outreach.reached.read` (the reached) and `outreach.team.read` (the team) |
+| **Saturday session reports** (PDFs written by the Outreach leader): may contain names, places and what was said | the files volume on the API (`FILES_DIR`), listed in `files` | `outreach.reports.read`, read only through the API. **`person:erase` cannot reach inside a PDF**: it lists the reports of the Saturdays the person was part of, and someone checks them by hand (`docs/runbooks/erasure-request.md`) |
 
 **The sensitive line is enforced, not advisory.** A response for someone
 without `membership.people.read_sensitive` does not contain those fields at
@@ -81,10 +91,31 @@ who may read people, and in the dev console only cut short (`ne***@gmail.com`).
 
 `finance_transactions` records what was received and spent, by category, with
 a reference number, a date and who entered it. **It never names a giver.**
-Envelope numbers, pledges and individual giving are deliberately not in this
-system: the finance portal reports totals by source, not by person. If the
-church ever wants per-giver records, that is a new decision with its own
-consent conversation, not a small feature.
+Envelope numbers, tithes and individual offerings are deliberately not in this
+system: the finance portal reports those totals by source, not by person.
+
+**Pledges are the one exception**, agreed by the leadership on 25 September
+2026 (`docs/modules/pledges-brief.md`). For a pledge, and only a pledge, the
+system holds who promised, how much, towards which campaign, how and by when
+they said they would pay, and each payment they made against it, with who
+recorded it. The balance is worked out from those, never stored.
+
+- **Who sees names against amounts:** only those holding
+  `finance.pledges.read_sensitive` — the finance manager, and the pastors
+  through the Pledges overseer role. Others allowed into Pledges see each
+  campaign's totals and counts. A clerk recording a payment finds the one
+  person in front of them by name and sees that person's pledge, never the
+  list.
+- **On the timeline:** that someone promised and paid is written on their
+  timeline, and shown only to readers holding the same permission.
+- **In a text message:** a reminder names no figure, unless Communications has
+  approved a template that does. What each person was sent is kept like any
+  other text message (section 5). Who a reminder reached is shown in
+  Communications' history only to those holding the same permission; others
+  see how many.
+
+Per-person tithe or offering records would still be a new decision with its
+own consent conversation, not a small feature.
 
 ---
 
@@ -118,9 +149,13 @@ for that reason.
 | Follow-up notes | with the person | — |
 | Activity log (`audit_events`) | **forever** | it is what proves who did what; never edited, never deleted, except by an erasure request, which replaces the name |
 | Finance entries | forever | money must reconcile years later |
+| Pledges and their payments (`pledge_campaigns`, `pledges`, `pledge_payments`) | **forever, never deleted** (leadership, 25 Sept 2026) | a pledge is part of the church's history; the application cannot delete them, and an erased person's pledges stay without their name |
 | Sessions | 90 days after they stop working | support ("was she signed in on Sunday?") |
 | Password reset links | 7 days | they expire long before that |
 | Emails sent (`email_outbox`) | the queue row stays; the body is not kept after sending | |
+| Text messages sent (`comms_messages`, `comms_recipients`) | forever, with each person's number and exact words, until the person is erased | what the church said, to whom, and what it cost; the application cannot edit or delete them. A retention period is a leadership decision, as for registrations |
+| Replies (`comms_inbound`) | forever, as they came | read by Communications; never edited |
+| Blocked numbers | forever, even after the person is erased | a STOP must outlive the record |
 | Usage numbers | forever, as daily totals | they are counts, and name nobody |
 | View-as log | forever | it is the check on a power that is otherwise invisible |
 
@@ -146,7 +181,15 @@ node apps/api/dist/cli/main.js person:erase --church IRCA --person <uuid> [--dry
 It asks for the person's id back before it does anything, and cannot be undone.
 It erases the person, their registration and every answer on it (prayer request
 included), their notes, their journey, their application and their class
-records. It keeps the activity log's lines — the log is what proves who did
+records, the departments they led or belonged to, every text message sent
+to them, their timeline, and what Outreach recorded about them. Their
+pledges and payments are **not** erased — pledges are never deleted — but
+they stop belonging to anyone: the name goes, the money stays, so every
+campaign still adds up. Where they
+were one of the team who reached someone else, they are taken out of that
+record and their name out of the line on that person's timeline. A number that asked for no messages stays blocked, without their
+name, because honouring a STOP outlives the record. It keeps the activity
+log's lines — the log is what proves who did
 what — but replaces their name with `[erased]` wherever it was written into a
 summary, and drops the before-and-after details of their own records. That the
 erasure happened is itself recorded, naming nobody.
@@ -163,25 +206,23 @@ nothing.
 - Backups are taken by the host and kept as the host's plan says; a copy that
   leaves the host is the church's own export.
 - Email goes out through Resend. Recipient addresses and message bodies pass
-  through that service. Nothing else leaves.
+  through that service.
+- Text messages go out through Beem Africa, in production, once
+  Communications has saved the account: each recipient's phone number and the
+  exact words sent to them pass through Beem, and Beem passes replies back.
+  Beem's key is kept sealed in the database (D26). Nothing else leaves.
 - No analytics, no advertising pixels, no third-party scripts: the content
   policy on both web apps refuses them outright.
 
 ---
 
-## 7a. What is coming, and what it will add here
+## 7a. What each phase added here
 
-Two phases add personal data, and this page is rewritten in the same pull
-request as each:
-
-- **Phase 7, the Communication system.** SMS through Beem Africa. It adds: the
-  language a person answered the form in (`people.lang`), so messages are
-  written in their own language; whether they have asked for no messages
-  (`sms_opt_out`); a record of every message sent, to which audience, at what
-  cost; and the replies that come back. Recipient phone numbers pass through
-  Beem, as email addresses pass through Resend today. Every message carries
-  the way to stop, and a STOP is honoured permanently (`00-decisions.md` D22).
-- **Phase 9, pledges.** Per-person promises and payments — see section 3.
+Phase 7, the Communication system, is built, and is described in the tables
+above. Phase 8, Outreach, adds the people reached on a doorstep: they join
+People, and are texted only once Communications deliberately gives Outreach
+that audience (D22). Phase 9, pledges, adds per-person promises and payments,
+described in section 3.
 
 ## 8. Before launch
 
@@ -190,3 +231,4 @@ request as each:
       taken on it.
 - [ ] A retention decision made for old registrations (section 5).
 - [ ] Someone named as the person who answers erasure and access requests.
+- [ ] A retention decision made for text messages and their replies (section 5).

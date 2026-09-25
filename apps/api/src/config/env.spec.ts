@@ -35,4 +35,10 @@ describe('validateEnv', () => {
       validateEnv({ ...valid, NODE_ENV: 'production', SESSION_COOKIE_NAME: '__Host-irca_session' }),
     ).not.toThrow();
   });
+
+  it('takes the files folder as an absolute path, or none', () => {
+    expect(validateEnv({ ...valid, FILES_DIR: '/data/files' }).FILES_DIR).toBe('/data/files');
+    expect(validateEnv({ ...valid, FILES_DIR: '' }).FILES_DIR).toBeUndefined();
+    expect(() => validateEnv({ ...valid, FILES_DIR: 'data/files' })).toThrow(/absolute path/);
+  });
 });

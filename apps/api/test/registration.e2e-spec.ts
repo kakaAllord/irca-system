@@ -56,9 +56,10 @@ describe('the registration form, served by the API', () => {
     expect(registration.lang).toBe('sw');
     expect(registration.currentStep).toBe('who');
     // The office should see somebody from the first tap, finished or not.
-    const { rows } = await db.query(`select stage from people`);
+    // And they are written to in the language they answered in (D22).
+    const { rows } = await db.query(`select stage, lang from people`);
     expect(rows).toHaveLength(1);
-    expect(rows[0].stage).toBe('VISITOR');
+    expect(rows[0]).toEqual({ stage: 'VISITOR', lang: 'sw' });
   });
 
   it('falls back to English for a language it does not know', async () => {

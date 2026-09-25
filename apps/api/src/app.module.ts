@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppConfigModule } from './config/config.module.js';
 import { RequestContextModule } from './core/context/context.module.js';
@@ -7,13 +7,19 @@ import { LoggingModule } from './core/logging/logging.module.js';
 import { DatabaseModule } from './core/database/database.module.js';
 import { CoreModule } from './core/core.module.js';
 import { EmailModule } from './core/email/email.module.js';
+import { SmsModule } from './core/sms/sms.module.js';
+import { FilesModule } from './core/files/files.module.js';
 import { TestEmailController } from './core/email/test-email.controller.js';
 import { InvitationsModule } from './core/invitations/invitations.module.js';
 import { AdminModule } from './modules/admin/admin.module.js';
 import { FinanceModule } from './modules/finance/finance.module.js';
 import { MembershipModule } from './modules/membership/membership.module.js';
 import { DevModule } from './modules/dev/dev.module.js';
+import { DepartmentsModule } from './modules/departments/departments.module.js';
+import { CommsModule } from './modules/comms/comms.module.js';
+import { OutreachModule } from './modules/outreach/outreach.module.js';
 import { AllExceptionsFilter } from './core/http/all-exceptions.filter.js';
+import { IdParamPipe } from './core/http/id-param.pipe.js';
 import { HealthController } from './core/health/health.controller.js';
 import { AuthModule } from './core/auth/auth.module.js';
 import { SessionGuard } from './core/auth/session.guard.js';
@@ -40,6 +46,8 @@ import { UsageInterceptor } from './core/usage/usage.interceptor.js';
       errorMessage: 'Too many requests. Wait a minute and try again.',
     }),
     EmailModule,
+    SmsModule,
+    FilesModule,
     CoreModule,
     AuthModule,
     ImpersonationModule,
@@ -47,6 +55,9 @@ import { UsageInterceptor } from './core/usage/usage.interceptor.js';
     AdminModule,
     FinanceModule,
     MembershipModule,
+    DepartmentsModule,
+    CommsModule,
+    OutreachModule,
     DevModule,
   ],
   controllers: [
@@ -56,6 +67,8 @@ import { UsageInterceptor } from './core/usage/usage.interceptor.js';
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
+    // Before any route's own pipes: a path id that is not a UUID names nothing.
+    { provide: APP_PIPE, useClass: IdParamPipe },
     // Guards run in this order: the cheapest refusals first (too many requests
     // from one address, a write without the portal's header), then who is
     // asking, then whether this request may change anything at all, then

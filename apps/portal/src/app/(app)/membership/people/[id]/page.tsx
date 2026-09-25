@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import type { MeResponse } from '@irca/shared';
+import { PLEDGE_STATUS_LABEL, formatMoney, type MeResponse, type PledgeDetail } from '@irca/shared';
 import { serverApi } from '@/lib/api/server';
 import { can } from '@/lib/auth/guards';
 import { PageHeader } from '@/components/shell/PageHeader';
@@ -12,6 +12,8 @@ import { RemindMenu } from '@/modules/membership/components/RemindMenu';
 import { EnrollDrawer } from '@/modules/membership/components/EnrollDrawer';
 import { STAGE_LABEL, day, when, type PersonDetail } from '@/modules/membership/types';
 import { StageActions } from './StageActions';
+import { MessagingSettings } from '@/modules/membership/components/MessagingSettings';
+import { Timeline, type TimelineLine } from '@/modules/membership/Timeline';
 
 export const metadata: Metadata = { title: 'Person' };
 
@@ -24,7 +26,17 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
   if (!can(me, 'membership.people.read')) return <ForbiddenState what="this person's record" />;
 
   const { id } = await params;
-  const person = await serverApi<PersonDetail>(`/membership/people/${id}`);
+  // Names against amounts are Finance's sensitive permission, whoever reads
+  // this page (docs/modules/pledges-brief.md).
+  const seesPledges = can(me, 'finance.pledges.read_sensitive');
+  const [person, timeline, pledges] = await Promise.all([
+    serverApi<PersonDetail>(`/membership/people/${id}`),
+    serverApi<TimelineLine[]>(`/membership/people/${id}/timeline`),
+    seesPledges
+      ? serverApi<PledgeDetail[]>(`/finance/pledges/people/${id}`)
+      : Promise.resolve([] as PledgeDetail[]),
+  ]);
+  const currency = me.church?.currency ?? 'TZS';
   const s = person.sensitive;
 
   const fact = (label: string, value: string | null | undefined) => (
@@ -103,6 +115,12 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
               <EnrollDrawer personId={person.id} name={person.fullName} />
             </div>
           )}
+          <MessagingSettings
+            personId={person.id}
+            lang={person.messaging.lang}
+            optOut={person.messaging.optOut}
+            optOutSource={person.messaging.optOutSource}
+          />
           <ol className="mt-1 flex flex-col gap-1 border-t border-border2 pt-3 text-[12px]">
             {person.history.length === 0 && <li className="text-fg3">No moves yet.</li>}
             {person.history.map((event, i) => (
@@ -150,6 +168,50 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
               </p>
             </section>
           </>
+        )}
+
+        <section className="rounded-[10px] border border-border bg-surface p-4 md:col-span-2">
+          <h2 className="mb-1 text-[13px] font-semibold text-fg">Timeline</h2>
+          <p className="mb-3 text-[12px] text-fg3">
+            Everything that happened with them, from every portal: Outreach&apos;s calls and visits
+            too.
+          </p>
+          <Timeline lines={timeline} />
+        </section>
+
+        {seesPledges && pledges.length > 0 && (
+          <section className="rounded-[10px] border border-border bg-surface p-4 md:col-span-2">
+            <h2 className="mb-1 text-[13px] font-semibold text-fg">Pledges</h2>
+            <p className="mb-3 text-[12px] text-fg3">
+              What they promised and what they have paid. Only the finance manager and the pastors
+              see this.
+            </p>
+            <ul className="flex flex-col text-[12.5px]">
+              {pledges.map((p) => (
+                <li
+                  key={p.id}
+                  className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-t border-border2 py-2 first:border-0 first:pt-0"
+                >
+                  <Link
+                    href={`/finance/pledges/${p.campaign.id}/${p.id}`}
+                    className="font-medium text-accent"
+                  >
+                    {p.campaign.name}
+                  </Link>
+                  <span className="text-fg2 tabular-nums">
+                    {formatMoney(p.paid, currency)} of {formatMoney(p.amount, currency)} paid
+                  </span>
+                  <span className="text-fg3">
+                    {p.overdue
+                      ? 'Overdue'
+                      : p.status === 'OPEN'
+                        ? `${formatMoney(p.balance, currency)} left`
+                        : PLEDGE_STATUS_LABEL[p.status]}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
 
         {person.notes && (

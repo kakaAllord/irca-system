@@ -5,8 +5,12 @@
 > in their own language, at most once a fortnight — through the Communication
 > system.
 
-**Status:** not started, and **must not start until step 9.0 is settled** —
-three decisions only the church's leadership can make. **Comes after:**
+**Status:** **built** (25 September 2026), after step 9.0 was answered the
+same day (all three as recommended; records kept forever, not "campaign plus
+seven years"). Left for the owner: Communications giving Finance the pledge
+audience and approving its templates, and a second person walking it (9.4).
+Where the build differs from the steps below, each step ends with **As
+built**. **Comes after:**
 Phase 7 (which sends the reminders) and Phase 8 (whose person timeline this
 phase writes to).
 
@@ -32,7 +36,7 @@ The owner asked for this on 22 September 2026:
 | `00-decisions.md`, D17 | Money records are never edited directly — only through an approved change request. Pledge payments follow the same rule. |
 | `00-decisions.md`, Q8 and Q10 | Why pledges exist, why per-person tithe tracking still does not, and why a reminder names no figure by default. |
 | `apps/api/src/modules/finance/transaction-change.handler.ts` | How a finance record is changed by approval. You will write one like it for payments. |
-| Phase 7, steps 7.5, 7.6 and 7.8 | Audiences, templates and beats — the reminder is built from these, not from new code. |
+| Phase 7, steps 7.8, 7.9 and 7.11 | Audiences, templates and beats — the reminder is built from these, not from new code. |
 
 **3. Get your machine ready**, as in every phase:
 
@@ -111,7 +115,7 @@ Each has a recommendation; they may accept it or change it.
 3. **What may a reminder say?** *Recommended (Q10): no figure by default.* The
    default template is *"Salamu {{first_name}}, tunakukumbusha ahadi yako ya
    {{campaign_name}}. Karibu ofisini kwa maelezo."* A template containing
-   `{{balance}}` is allowed, but — like every template (7.6) — needs
+   `{{balance}}` is allowed, but — like every template (7.9) — needs
    Communications' approval, and the leadership should say whether it wants
    one at all.
 
@@ -133,6 +137,14 @@ qualification.
 
 **If it goes wrong.** No answer from the leadership? Stop here. Build nothing
 in this phase, and say so to the owner.
+
+**Answered, 25 September 2026.** The owner gave all three answers on the
+leadership's behalf, each as recommended above. On how long pledges are kept,
+the owner refused the recommended "for as long as the campaign runs, plus
+seven years": **pledge records are never deleted**. The answers are in
+`docs/modules/pledges-brief.md`; `docs/data-inventory.md` sections 3, 5 and 6
+say what is held, who sees it, that it is kept forever, and that erasing a
+person leaves their pledges in place without their name.
 
 ---
 
@@ -246,7 +258,11 @@ always right.
    | `finance.pledges.read_sensitive` | read | manager, overseer — names against amounts |
    | `finance.pledges.manage` | write | manager — campaigns, pledges, cancelling |
    | `finance.pledges.record_payment` | write | clerk, manager |
-   | `finance.comms.send` | write | manager — sending reminders (Phase 7) |
+
+   Sending the reminders needs no Finance permission: it is the Finance
+   department's leaders who send, from My departments → Finance → Messages,
+   with the leadership permissions of 07 step 7.3 (D28), once Communications
+   has granted the Finance department the pledge audience.
 
    And a new system role, **`finance.pledges_overseer`** — "Pledges overseer",
    holding the first two — for the pastors. (A role holds one module's
@@ -263,6 +279,30 @@ always right.
 
 **Commit.** "Record what people promised, and what they have paid"; "Correct a
 pledge payment only through an approved request".
+
+**As built.**
+
+- The schema grew what the sketch left out: `rhythm` is an enum
+  (`PledgeRhythm`); a pledge keeps `completed_at`, `cancelled_at`,
+  `cancelled_by_id` and `cancel_reason`; a payment keeps its `method`, a
+  `status` (posted or voided) with `voided_*`, `revision` and
+  `applied_request_id`, like a finance entry; both keep a `client_request_id`
+  so a retried submit is not a second pledge or payment. `person_id` is
+  nullable, and set to null only when the person is erased: pledges are never
+  deleted (9.0), so the money stays and the name goes.
+- Beyond the revokes, triggers `pledge_guard` and `pledge_payment_guard`
+  keep a promise's amount, campaign and date fixed and a payment unchanged
+  except through an approved request. The migration was written by hand and
+  checked with `prisma migrate diff`.
+- The Finance clerk also holds `finance.pledges.read`: without it there is no
+  Pledges in their sidebar and no way to record a payment. It shows totals
+  only. A clerk reaches one pledge through `GET /finance/pledges/lookup?q=`,
+  a search by name or number, never the list.
+- Asking to correct a payment needs `finance.pledges.record_payment`; the
+  change-request hook `validate` is now told the record's id, so a link to an
+  income entry can be checked leaving the payment itself out.
+- A payment may point at an income entry; the payments pointing at one never
+  add up to more than it holds.
 
 ---
 
@@ -294,6 +334,16 @@ overseer role (reads, cannot change), and someone with only
 
 **Commit.** "The pledge pages"; "Show a person's promises on their own page".
 
+**As built.** One more page than planned: **one pledge**
+(`/finance/pledges/[campaignId]/[pledgeId]`), with its payments and the
+"Ask to change" on each, for the manager, the pastors and a clerk who found
+it by name. Admin → Requests links to it. The clerk's "Record a payment"
+starts with a search for the person paying, and clears itself after each
+payment for the next person. The pledge lines on the timeline, which every
+portal reads, are shown only to readers holding
+`finance.pledges.read_sensitive`, and the Membership person page lists
+pledges for the same readers.
+
 ---
 
 ## 9.3 — The reminder
@@ -303,7 +353,7 @@ anyone each time — and nobody is texted twice in a fortnight.
 
 **Do.** Almost everything here is Phase 7, used — not new machinery.
 
-1. **An audience provider** (7.5), registered by the Finance module:
+1. **An audience provider** (7.8), registered by the Finance module:
 
    | Key | Parameters | Who is in it |
    | --- | --- | --- |
@@ -312,12 +362,12 @@ anyone each time — and nobody is texted twice in a fortnight.
    It fills the blanks `first_name`, `campaign_name`, `amount`, `balance` and
    `due_date`, **already formatted for a text** (`200,000 TZS`, `12 Oktoba`),
    because formatting in a template is how someone gets texted `200000.00`.
-   Add the four new blanks to the list in 7.6.
+   Add the four new blanks to the list in 7.9.
 
 2. **Templates** in all three languages, drafted by Finance and approved by
-   Communications (7.6). The default one names no figure (9.0, question 3).
+   Communications (7.9). The default one names no figure (9.0, question 3).
 
-3. **A beat** (7.8): the first Monday of each month at 10:00, two or three
+3. **A beat** (7.11): the first Monday of each month at 10:00, two or three
    variants. Set it up in **Finance → Messages → Recurring**; no new screen.
 
 4. **At most once a fortnight per person**, whatever beats exist. Add a setting
@@ -340,16 +390,46 @@ exactly.
 **Commit.** "Remind people who still owe on a pledge, once a fortnight at
 most".
 
+**As built.**
+
+- **The cooldown belongs to the audience, not the department.** Checked on
+  every message from a department, as point 4 says, it would have halved
+  every weekly beat Phase 7 made for (the choir's Tuesday reminder would skip
+  every other week). An audience that reminds declares `cooldown`; a message
+  to it leaves alone anyone that same audience reached within
+  `comms.personCooldownDays`, by number or by person, whoever sent it and
+  with whatever parameters, a message already scheduled included. Every
+  other audience is unchanged. The setting is in Comms → Settings as "Days
+  between reminders"; 0 turns it off.
+- **Beats could only send weekly.** A beat now also has `weeks_of_month`
+  (empty: every week; `{1}`: the first of its days in each month), which is
+  how "the first Monday of each month" is set up.
+- An audience fills its blanks for each person through a function of the
+  language the person is sent in, so `{{due_date}}` is "12 Oktoba" in
+  Swahili and "12 October" in English. Someone with two open pledges is in
+  the audience once, about the pledge due soonest, then the one with most
+  left.
+- `MESSAGE_SENT` is written when the carrier accepts the text, in the same
+  transaction, and says who it was from, never the words: a reminder that
+  names a figure would otherwise show it on a timeline everyone reads.
+- The composer offers "Which campaign" and "Only those past the date they
+  were to pay by"; `minBalance` has no field yet.
+- **Who a reminder reached is who owes**, so the pledge audience names
+  `finance.pledges.read_sensitive` as the permission needed to see it:
+  without it, Communications' history of a reminder shows counts, not names,
+  and the composer's sample shows the words as written rather than one
+  person's name and figure.
+
 ---
 
 ## 9.4 — Phase check
 
-- [ ] The leadership's written answers to 9.0 are in `docs/modules/pledges-brief.md`.
-- [ ] `docs/data-inventory.md` section 3 is rewritten, and section 5 says how long pledges are kept.
-- [ ] Names against amounts need `finance.pledges.read_sensitive`.
-- [ ] A payment is never edited or deleted, only corrected through an approved request.
-- [ ] The balance is calculated, never stored, and ten payments at once cannot break it.
-- [ ] A reminder goes in the person's own language, names a figure only if an approved template does, and carries the way to stop.
-- [ ] Nobody is texted twice in a fortnight.
-- [ ] `appendix-database.md`, `what-works-now.md` and the metric list are updated.
-- [ ] Someone other than the builder has walked it in a browser from a fresh database.
+- [x] The leadership's written answers to 9.0 are in `docs/modules/pledges-brief.md`.
+- [x] `docs/data-inventory.md` section 3 is rewritten, and section 5 says how long pledges are kept (forever).
+- [x] Names against amounts need `finance.pledges.read_sensitive`.
+- [x] A payment is never edited or deleted, only corrected through an approved request.
+- [x] The balance is calculated, never stored, and ten payments at once cannot break it (twelve at once, in `pledges.e2e-spec.ts`).
+- [x] A reminder goes in the person's own language, names a figure only if an approved template does, and carries the way to stop.
+- [x] Nobody is texted twice in a fortnight.
+- [x] `appendix-database.md`, `what-works-now.md` and the metric list are updated.
+- [ ] Someone other than the builder has walked it in a browser from a fresh database. (The builder walked it as the manager, a clerk, an administrator, a pastor, someone who only reads transactions and a Finance leader, at desktop and phone width; `e2e/pledges.spec.ts` keeps the main path walked.)

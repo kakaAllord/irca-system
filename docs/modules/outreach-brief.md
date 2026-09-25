@@ -1,21 +1,33 @@
 # Outreach & Evangelism — department brief
 
-Filled in from the owner's notes of 22 September 2026. **Sections 1 and 3 need
-the Outreach leader's own answers before Phase 8 starts**
-(`docs/plan/08-outreach.md`, step 8.1).
+Filled in from the owner's notes of 22 September 2026, and the answers given on
+25 September 2026 (`docs/plan/08-outreach.md`, step 8.1). What is still open is
+marked **open**.
 
 ## 1. Who is in the department, and who leads it?
 
-- Leader: _TBC._
-- Team size today: _TBC._ Everyone in it is a person in the church's People
-  list; Outreach never creates a second record for them.
-- Partner groups of two or three go out together. Whether these hold for a
-  season or change weekly: _TBC — it decides what the Saturday screen shows
-  first._
+- Leader: named by an administrator in Admin → Departments → Outreach, from
+  the confirmed members. Who it is was not given here (**open**, and not
+  needed by the code).
+- Team size: *"can just be big and more big … even if it is 100 or 200"*
+  (25 Sept 2026). Built and tested for a team of 150 and more: every list of
+  the team can be searched by name.
+- Everyone in the team has **already registered on the registration form**
+  (25 Sept 2026). A leader can add only people who have filled in the whole
+  form; Outreach never creates a second record for them.
+- Partner groups of two or three go out together. They are **not bound by
+  time**, but **who was with whom, from when until when, is kept**
+  (25 Sept 2026): a change to a group ends and starts dated memberships, and
+  the Team page shows each group's history.
+- Areas: **every team goes to a different place**, and types it in; there is
+  no fixed list (25 Sept 2026). Areas already used are only suggested.
 
-Roles that follow: **Outreach leader** (team, Saturdays, training, messages),
-**Outreach member** (records who was reached and follows them up),
-**Outreach viewer** (a pastor reading the numbers).
+Who does what (D28, D29): the team is the **Outreach department** in Admin →
+Departments. Its **leaders**, named by an administrator, run the portal by
+leading it — partner groups, Saturdays, training, the report — and keep the
+team's members and send its messages like any department's leaders. Those who
+sign in to record hold the **Outreach member** role; a pastor reading the
+numbers holds **Outreach viewer**.
 
 ## 2. What do they do every week?
 
@@ -35,22 +47,30 @@ Roles that follow: **Outreach leader** (team, Saturdays, training, messages),
   details as they are learnt.
 - Approve: nothing internally. Their message templates are approved by
   Comms/Admin once (Phase 7).
-- Report upward: _which figures, and to whom — TBC._
+- Report upward: **how many people were reached, and how many got salvation**
+  (25 Sept 2026). Both are on the dashboard for any period, each opening the
+  list it was counted from; a salvation is ticked when recording someone, or
+  counted by the team for those spoken to without taking details. To whom
+  they report: **open**.
 
 ## 4. What do they need from other portals?
 
-| Need | Permission | From |
+| Need | How | From |
 | --- | --- | --- |
-| Search the church's people, to add to the team | `membership.people.read` | Membership |
-| Phone numbers, to call and to message | `membership.people.read_sensitive` (leader) | Membership |
-| Whether someone attended a service | `membership.people.read` + the shared timeline | Membership |
-| Send training reminders | `outreach.comms.send` + a granted audience | Comms |
+| Pick people for the team | My departments → Outreach: a search showing names and the end of a number | Departments |
+| Know whether someone they reached is already in People | Matched by the API when recording, by phone then name | Membership's `people` table |
+| Phone numbers, to call the people they reached | `outreach.reached.read`, for people Outreach reached only | Outreach itself |
+| Whether someone came to church | The shared timeline (D23) | Every portal |
+| Send training reminders | Being an Outreach department leader (D28) | Comms |
 
 ## 5. What must they never see?
 
 - **Prayer requests** and follow-up notes written by the Membership team:
-  both are behind `membership.people.read_sensitive`, which only the leader
-  holds, and the member role must not be able to reach them.
+  both are behind `membership.people.read_sensitive`, which no Outreach role
+  or leadership holds. The timeline shows that the Membership team called or
+  visited, never what they wrote.
+- **The rest of People.** Outreach sees the people it reached and its own
+  team, not the church's whole list.
 - Finance and Admin.
 
 ## 6. What leaves the system, and who pays?

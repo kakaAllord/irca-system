@@ -59,6 +59,8 @@ export type PersonDetail = PersonRow & {
     status: 'in_progress' | 'submitted';
     submittedAt: string | null;
   } | null;
+  /** The language they are written to in, and whether they want messages (D22). */
+  messaging: { lang: string; optOut: boolean; optOutSource: string | null };
   sensitive?: PersonSensitive;
 };
 
@@ -135,6 +137,11 @@ export function toPersonDetail(person: WithRegistration, canReadSensitive: boole
         : '',
     },
     visit: values?.visit ?? [],
+    messaging: {
+      lang: person.lang,
+      optOut: person.smsOptOut,
+      optOutSource: person.smsOptOutSource,
+    },
     registration: registration && {
       token: registration.token,
       lang: registration.lang as Lang,

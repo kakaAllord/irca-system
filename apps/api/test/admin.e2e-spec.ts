@@ -262,6 +262,9 @@ describe('running a church: people, roles and portals', () => {
     expect(listed.body.map((m: { key: string }) => m.key)).toEqual([
       'membership',
       'finance',
+      'comms',
+      'outreach',
+      'departments',
       'admin',
       'dev',
     ]);

@@ -15,9 +15,13 @@ const MEASURED_TABLES = [
   'foundation_enrollments',
   'impersonation_sessions',
   'membership_applications',
+  'outreach_reached',
   'people',
+  'person_interactions',
   'person_notes',
   'person_stage_events',
+  'pledge_payments',
+  'pledges',
   'registrations',
   'sessions',
   'usage_daily',
@@ -104,6 +108,7 @@ export class UsageSnapshot {
         Prisma.sql`select (select count(*) from finance_income_sources)
                         + (select count(*) from finance_expense_items) as n`,
       ],
+      ['entities.finance.pledges', Prisma.sql`select count(*)::bigint as n from pledges`],
       [
         'entities.users.active',
         Prisma.sql`select count(*)::bigint as n from users where status = 'ACTIVE'`,
@@ -127,6 +132,16 @@ export class UsageSnapshot {
       [
         'change_requests.pending',
         Prisma.sql`select count(*)::bigint as n from change_requests where status = 'PENDING'`,
+      ],
+      [
+        'storage.files',
+        Prisma.sql`select count(*)::bigint as n from files where deleted_at is null`,
+      ],
+      ['storage.bytes', Prisma.sql`select coalesce(sum(bytes), 0)::bigint as n from files`],
+      [
+        'outreach.followups.pending',
+        Prisma.sql`select count(distinct person_id)::bigint as n from outreach_reached
+                   where needs_follow_up`,
       ],
       [
         'auth.sessions.active',

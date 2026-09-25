@@ -1,5 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { CHURCH_MODULES, ErrorCode, moduleByKey, permissionsOfModule } from '@irca/shared';
+import {
+  ALL_PERMISSIONS,
+  CHURCH_MODULES,
+  ErrorCode,
+  isAssignable,
+  moduleByKey,
+  permissionsOfModule,
+} from '@irca/shared';
 import { Db } from '../../core/database/db.service.js';
 import { AppError } from '../../core/http/app-error.js';
 import { RequestAuth } from '../../core/context/request-auth.js';
@@ -40,33 +47,40 @@ export class RolesService {
       orderBy: [{ moduleKey: 'asc' }, { name: 'asc' }],
     });
 
-    return CHURCH_MODULES.filter((m) => !assignableOnly || enabled.has(m.key)).map((module) => ({
-      moduleKey: module.key,
-      moduleName: module.name,
-      enabled: enabled.has(module.key),
-      roles: roles
-        .filter((r) => r.moduleKey === module.key)
-        .map((r) => ({
-          id: r.id,
-          name: r.name,
-          description: r.description,
-          isSystem: r.systemKey !== null,
-          memberCount: r._count.members,
-          permissions: r.permissions.map((p) => p.permissionKey),
-        })),
-    }));
+    // A portal whose every permission comes from leading a department (My
+    // departments) has nothing a role could hold, so it is not listed.
+    const withRoles = CHURCH_MODULES.filter((m) => Object.keys(m.permissions).some(isAssignable));
+    return withRoles
+      .filter((m) => !assignableOnly || enabled.has(m.key))
+      .map((module) => ({
+        moduleKey: module.key,
+        moduleName: module.name,
+        enabled: enabled.has(module.key),
+        roles: roles
+          .filter((r) => r.moduleKey === module.key)
+          .map((r) => ({
+            id: r.id,
+            name: r.name,
+            description: r.description,
+            isSystem: r.systemKey !== null,
+            memberCount: r._count.members,
+            permissions: r.permissions.map((p) => p.permissionKey),
+          })),
+      }));
   }
 
   /** What a portal offers, so the role editor can list it. */
   catalogue(moduleKey: string) {
     const module = moduleByKey(moduleKey);
     if (!module) throw new AppError(404, ErrorCode.NOT_FOUND, 'No such portal.');
-    return permissionsOfModule(moduleKey).map(([key, def]) => ({
-      key,
-      kind: def.kind,
-      label: def.label,
-      hint: def.hint ?? null,
-    }));
+    return permissionsOfModule(moduleKey)
+      .filter(([key]) => isAssignable(key))
+      .map(([key, def]) => ({
+        key,
+        kind: def.kind,
+        label: def.label,
+        hint: def.hint ?? null,
+      }));
   }
 
   async create(input: RoleInput) {
@@ -178,8 +192,22 @@ export class RolesService {
     });
   }
 
-  /** A role may only hold permissions its own portal defines. */
+  /**
+   * A role may only hold permissions its own portal defines, and never one
+   * that comes from leading a department (D28): a role outlives a leadership.
+   */
   private checkPermissions(input: RoleInput): void {
+    const leadership = input.permissionKeys.filter(
+      (key) => key in ALL_PERMISSIONS && !isAssignable(key),
+    );
+    if (leadership.length) {
+      throw new AppError(
+        422,
+        ErrorCode.VALIDATION_FAILED,
+        'Those come from leading a department, so no role can hold them.',
+        { permissionKeys: leadership },
+      );
+    }
     const owned = new Set(permissionsOfModule(input.moduleKey).map(([key]) => key));
     const foreign = input.permissionKeys.filter((key) => !owned.has(key));
     if (foreign.length) {

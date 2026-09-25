@@ -10,6 +10,7 @@ import { AuditService } from '../../../core/audit/audit.service.js';
 import { UsageService } from '../../../core/usage/usage.service.js';
 import { AppConfig } from '../../../config/app-config.js';
 import { checkManualMove, moveStage } from '../journey.js';
+import { readTimeline, recordInteraction } from '../timeline.js';
 import { toPersonDetail, toPersonRow, type PersonRow } from './person.dto.js';
 
 export const TABS = [
@@ -192,6 +193,13 @@ export class PeopleService {
   }
 
   /** Someone who never filled in the form, typed in by the office. */
+  async timeline(id: string) {
+    await this.require(id);
+    return readTimeline(this.db.client, id, {
+      seesPledges: this.auth.has('finance.pledges.read_sensitive'),
+    });
+  }
+
   async add(input: {
     fullName: string;
     gender?: string;
@@ -209,6 +217,7 @@ export class PeopleService {
           dial: input.dial ?? '+255',
           phone: input.phone?.replace(/\D/g, '') ?? '',
           email: input.email?.trim().toLowerCase() ?? '',
+          source: 'OFFICE',
           createdById: this.auth.userId,
         },
       });
@@ -273,6 +282,18 @@ export class PeopleService {
       const created = await tx.personNote.create({
         data: { personId: id, kind, body, authorId: this.auth.userId! },
       });
+      // A call or a visit is on their timeline for everyone who may see them;
+      // what was written stays here, behind the sensitive permission.
+      if (kind !== 'NOTE') {
+        await recordInteraction(tx, {
+          personId: id,
+          kind,
+          moduleKey: 'membership',
+          byId: this.auth.userId,
+          summary: kind === 'CALL' ? 'Phone call' : 'Home visit',
+          meta: { noteId: created.id },
+        });
+      }
       await this.audit.recordIn(tx, {
         action: 'membership.note.added',
         entityType: 'person',
@@ -283,6 +304,41 @@ export class PeopleService {
       return created;
     });
     return { id: note.id };
+  }
+
+  /**
+   * The language they are written to in, and whether they want messages. The
+   * office turning messages off is recorded as the office's doing; turning
+   * them back on is the office's too, and is written down, because it undoes
+   * what may have been someone's own request.
+   */
+  async setMessaging(id: string, input: { lang: string; optOut: boolean }) {
+    const person = await this.require(id);
+    await this.db.tx(async (tx) => {
+      await tx.person.update({
+        where: { id },
+        data: {
+          lang: input.lang,
+          smsOptOut: input.optOut,
+          ...(input.optOut && !person.smsOptOut
+            ? { smsOptOutAt: new Date(), smsOptOutSource: 'office' }
+            : {}),
+          ...(!input.optOut ? { smsOptOutAt: null, smsOptOutSource: null } : {}),
+        },
+      });
+      const changes = [
+        person.lang !== input.lang && `language ${person.lang} → ${input.lang}`,
+        person.smsOptOut !== input.optOut && (input.optOut ? 'no messages' : 'messages back on'),
+      ].filter(Boolean);
+      if (changes.length) {
+        await this.audit.recordIn(tx, {
+          action: 'membership.person.messaging',
+          entityType: 'person',
+          entityId: id,
+          summary: `Changed how ${person.fullName || 'someone'} is messaged: ${changes.join(', ')}`,
+        });
+      }
+    });
   }
 
   /** Their own link, and a WhatsApp message to send it with, in their language. */

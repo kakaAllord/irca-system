@@ -11,7 +11,30 @@ export type EraseResult = {
   applications: number;
   enrollments: number;
   attendance: number;
+  /** The departments they led or belonged to, ended or not. */
+  departments: number;
+  /** The text messages sent to them, with their number and the words. */
+  messages: number;
+  /** Their timeline: everything any portal recorded happening with them. */
+  interactions: number;
+  /** Outreach: their reaches, teams, partner groups and training marks. */
+  outreach: number;
+  /**
+   * Their pledges, which are never deleted (the leadership, 25 Sept 2026):
+   * kept with their payments, belonging to nobody, so a campaign still adds
+   * up.
+   */
+  pledgesKept: number;
+  /**
+   * The Saturday reports that may name them — every version — which erasure
+   * cannot reach inside. Listed for a person to check by hand, and only
+   * findable before the erasure, which takes the rows that say which
+   * Saturdays they were part of.
+   */
+  reports: { heldOn: string; name: string; key: string; replaced: boolean }[];
   summariesRewritten: number;
+  /** Lines on other people's timelines that named them. */
+  timelinesRewritten: number;
   detailsCleared: number;
 };
 
@@ -26,7 +49,13 @@ export type EraseResult = {
  *
  * What goes: the person, their registration and its answers (prayer requests
  * included), their notes, their moves along the journey, their application to
- * join, their class enrolment and attendance.
+ * join, their class enrolment and attendance, and the departments they led or
+ * belonged to (their account, if they had one, stays and loses its link),
+ * the text messages sent to them, their timeline, and everything Outreach
+ * recorded about them. Where they were one of the team who reached someone
+ * else, they are taken out of that reach, and their name out of the line on
+ * the other person's timeline. A number that asked for no messages stays
+ * blocked, without their name: honouring a STOP outlives the record.
  *
  * What stays: the activity log's shape. Lines are kept, because the log is
  * what proves who did what, but the person's name is replaced with "[erased]"
@@ -71,6 +100,27 @@ export async function erasePerson(options: {
     const count = async (sql: string, params: unknown[]) =>
       (await owner.query(sql, params)).rowCount ?? 0;
 
+    const reports = (
+      await owner.query<{ held_on: string; original_name: string; key: string; replaced: boolean }>(
+        `select s.held_on::text as held_on, f.original_name, f.key, f.deleted_at is not null as replaced
+         from files f
+         join outreach_sessions s on f.entity_type = 'outreach_session' and f.entity_id = s.id
+         where s.id in (
+           select session_id from outreach_reached where person_id = $1
+           union
+           select t.session_id from outreach_session_teams t
+           join outreach_session_team_members m on m.team_id = t.id
+           where m.person_id = $1)
+         order by s.held_on, f.uploaded_at`,
+        [person.id],
+      )
+    ).rows.map((r) => ({
+      heldOn: r.held_on,
+      name: r.original_name,
+      key: r.key,
+      replaced: r.replaced,
+    }));
+
     // Counted before they go, so the report says what was actually erased.
     const before = {
       notes: await count('select 1 from person_notes where person_id = $1', [person.id]),
@@ -89,6 +139,23 @@ export async function erasePerson(options: {
          where e.person_id = $1`,
         [person.id],
       ),
+      departments:
+        (await count('select 1 from department_leaders where person_id = $1', [person.id])) +
+        (await count('select 1 from department_members where person_id = $1', [person.id])),
+      messages: await count('select 1 from comms_recipients where person_id = $1', [person.id]),
+      interactions: await count('select 1 from person_interactions where person_id = $1', [
+        person.id,
+      ]),
+      outreach:
+        (await count('select 1 from outreach_reached where person_id = $1', [person.id])) +
+        (await count('select 1 from outreach_session_team_members where person_id = $1', [
+          person.id,
+        ])) +
+        (await count('select 1 from outreach_group_members where person_id = $1', [person.id])) +
+        (await count('select 1 from outreach_training_attendance where person_id = $1', [
+          person.id,
+        ])),
+      pledgesKept: await count('select 1 from pledges where person_id = $1', [person.id]),
     };
 
     // The person goes first; everything that hangs off them follows by cascade.
@@ -96,6 +163,24 @@ export async function erasePerson(options: {
     const registrationErased = person.registrationId
       ? (await count('delete from registrations where id = $1', [person.registrationId])) > 0
       : false;
+
+    await owner.query('update comms_blocked_numbers set person_id = null where person_id = $1', [
+      person.id,
+    ]);
+    // Who reached someone else is a list of ids with no foreign key, and the
+    // line on that person's timeline names the team.
+    await owner.query(
+      `update outreach_reached set reached_by_ids = array_remove(reached_by_ids, $1::uuid)
+       where $1::uuid = any(reached_by_ids)`,
+      [person.id],
+    );
+    const timelinesRewritten = person.fullName.trim()
+      ? await count(
+          `update person_interactions set summary = replace(summary, $1, '[erased]')
+           where summary like '%' || $1 || '%'`,
+          [person.fullName],
+        )
+      : 0;
 
     // The log keeps its lines; the name in them does not.
     const summariesRewritten = person.fullName.trim()
@@ -126,7 +211,9 @@ export async function erasePerson(options: {
       personId: person.id,
       registrationErased,
       ...before,
+      reports,
       summariesRewritten,
+      timelinesRewritten,
       detailsCleared,
     };
   } catch (err) {
@@ -147,8 +234,23 @@ export function reportErasure(result: EraseResult, dryRun: boolean): void {
   console.log(`  applications          ${result.applications}`);
   console.log(`  class enrolments      ${result.enrollments}`);
   console.log(`  attendance marks      ${result.attendance}`);
+  console.log(`  departments           ${result.departments}`);
+  console.log(`  text messages         ${result.messages}`);
+  console.log(`  timeline lines        ${result.interactions}`);
+  console.log(`  outreach records      ${result.outreach}`);
+  console.log(`  pledges kept, unnamed ${result.pledgesKept}`);
   console.log(`  log lines rewritten   ${result.summariesRewritten}`);
+  console.log(`  timelines rewritten   ${result.timelinesRewritten}`);
   console.log(`  log details cleared   ${result.detailsCleared}`);
+  if (result.reports.length) {
+    console.log('');
+    console.log('  Saturday reports that may name them. Erasure cannot reach inside a PDF:');
+    console.log('  check each by hand (docs/runbooks/erasure-request.md, step 5).');
+    for (const r of result.reports) {
+      console.log(`    ${r.heldOn}  ${r.name}${r.replaced ? ' (earlier version)' : ''}`);
+      console.log(`                ${r.key}`);
+    }
+  }
   console.log('');
   console.log(dryRun ? 'Dry run: nothing was changed.' : 'Done. This cannot be undone.');
 }

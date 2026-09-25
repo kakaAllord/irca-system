@@ -363,9 +363,11 @@ Consequences, built in Phase 7:
 - A department reaches only the audiences it has been **granted**; its own
   team is granted when its portal is switched on, and anything wider is an
   administrator's deliberate act.
-- Only the department's leader and **one** delegate may send. It is a row in
-  `comms_senders` with a unique index enforcing "one", not a second role
-  system.
+- ~~Only the department's leader and **one** delegate may send.~~ *Amended
+  by D28 (24 Sept 2026):* every leader of a department may send for it, and
+  there is no delegate. Being a leader is what allows it; an administrator who
+  wants someone else to send names them a leader. There is no
+  `comms_senders` table.
 - Free text needs a separate permission nobody holds by default. Ordinary
   sending uses an approved template.
 - A template edit is a new version needing approval; the old version keeps
@@ -427,21 +429,27 @@ Outreach follow-up page render the same timeline component.
 
 ---
 
-## D24. Files live in object storage, with one table for all of them (22 Sept 2026)
+## D24. Files live on the church's own disk, with one table for all of them (22 Sept 2026; storage corrected 25 Sept 2026)
 
 Outreach asked to attach the Saturday report as a PDF — *"rather than forcing
 them to reproduce their existing reporting process inside the system"*. That
 is the first file the system keeps, and the finance receipts of Q7 are the
 second, so it is decided once:
 
-- S3-compatible object storage (Cloudflare R2 or Backblaze B2), one bucket,
-  keys prefixed by module. Private; read through a short-lived signed URL.
+- ~~S3-compatible object storage (Cloudflare R2 or Backblaze B2)~~ *Corrected
+  25 Sept 2026 by the owner:* a **Railway volume** attached to the API, the
+  folder named by `FILES_DIR`, paths prefixed by module. It survives every
+  deploy. What the owner accepted with it: the API cannot run more than one
+  copy while it has a volume, and a deploy stops it briefly, so deploys are
+  made when nobody is using it. Files are private: read only through the API,
+  after the owning module's permission check.
 - One core `files` table recording the module, what it belongs to, the key,
   the size and who uploaded it — so the next module does not invent a second
   one.
-- The browser uploads straight to storage with a presigned POST; a 10 MB PDF
-  never travels through the API. Type and size are refused by the presign
-  itself.
+- The browser sends the file to the API, which writes it as it arrives,
+  counts it against the limit and cuts it off the moment it passes, and
+  checks it arrived whole and is the kind of file it says before recording
+  it.
 - `storage.bytes` and `storage.files`, charted by the dev console like every
   other metric.
 - **Erasure cannot reach inside a PDF.** `docs/data-inventory.md` and the
@@ -489,6 +497,81 @@ audited, by summary only — never the key, before or after.
 
 ---
 
+## D28. Departments come first; a portal belongs to one (owner, 24 Sept 2026)
+
+**The owner's words:** *"In every department there is a leader, one or more,
+which are only added by admins, and also there are members, which the leader
+can add."* And: *"A department may or may not have a portal, but if it has
+then it has because there is a department."*
+
+Until this decision a "department" was only a portal (Membership, Finance),
+and nothing recorded who led or belonged to one. The church's departments are
+mostly not portals at all: the praise team, the choir, the ushers, the youth.
+They still have a chairperson and a secretary, members, and messages to send.
+
+| Option | What it costs |
+| --- | --- |
+| Departments are the portals | The praise team cannot have a leader, members or a message until someone builds it a portal. |
+| Leaders and members are staff accounts | Every choir member needs a login they will never use. |
+| **Departments are a list the administrators keep; leaders and members are people from People; a portal, where there is one, belongs to a department (taken)** | One new list and two join tables. Everyone is already in People, because everyone came through the registration form, so nobody is typed twice and their phone number and language are already known. |
+
+The rules that follow:
+
+- **Administrators keep the list of departments**, and only they name and
+  remove **leaders**. A department has one or more, each with a title
+  (Chairperson, Secretary). A leader must already be a **confirmed member**,
+  approved by the pastors; a department's ordinary members need not be.
+- **Leaders add and remove members**, from People, for the departments they
+  lead and no other. *Added 25 Sept 2026 by the owner:* a member must have
+  **filled in the whole registration form**. Someone the office typed in, or
+  whom Outreach reached, fills it in first; a form left half way does not
+  count. Leaders are unchanged: confirmed members, named by administrators.
+- **A leader signs in.** Naming a leader links their person record to a staff
+  account (`users.person_id`), and invites them by email if they have none.
+  What a leader may do comes from being one, not from a role an administrator
+  remembers to hand out: the permission resolver adds the leadership
+  permissions for as long as they lead a department that is not archived, and
+  they stop the moment they do not.
+- **A portal belongs to a department.** `departments.module_key` names it, and
+  a department portal cannot be switched on in Admin → Portals until a
+  department has been given it. Every staff account is still made in Admin.
+  Admin and the dev console are the system's own, not a department's.
+- **Communications sends to the whole church, to one or more departments
+  (leaders and members), to every leader at once, or to the leaders of the
+  departments it picks.** A department's leaders send approved templates to
+  their own department (D21, as amended).
+- Leadership and membership are ended, never deleted, so "who led the choir
+  in 2027" keeps an answer.
+
+---
+
+## D29. A portal's own leaders run it, by leading its department (25 Sept 2026)
+
+Found while correcting Phase 8 for D28, which settles it in the spirit of
+that decision. Outreach is the first portal whose department leader is the
+person who uses it most: they plan the Saturdays, keep the partner groups,
+mark the Friday training and attach the report. D28 says what a leader may
+do comes from being one. But the leadership permissions it built
+(`fromLeadership`) are held by the leader of **any** department, because
+they are about "your own department" in general — send to it, keep its
+members. Marking `outreach.sessions.manage` that way would let the choir's
+chairperson plan Outreach's Saturdays.
+
+| Option | What it costs |
+| --- | --- |
+| An `Outreach leader` role the administrator gives the leader as well | Works today, and is exactly the role that outlives the leadership which D28 was written to prevent: two things to remember when a leader changes, and the second is always forgotten. |
+| `fromLeadership` on the portal's permissions | Every department's leaders would hold them, and the portal's service would have to check "leads Outreach" on every route. A viewer role could no longer hold the read permissions, since leadership permissions are never put in a role. |
+| **A portal names what its own department's leaders may do (taken)** | One optional `leaders` list on a module definition and one more line in the resolver's query. The permissions in it are ordinary ones — a viewer or member role can hold them too, and an administrator can still make a custom role for an assistant — but the leaders of the department the portal belongs to hold them without any role, from the day they are named to the day they stop. |
+
+Consequences: `PermissionResolver.forUser` also returns the portals of the
+departments someone leads (still one query) and adds each one's `leaders`
+permissions while that portal is on. Admin → Portals says what a portal's
+leaders get, so nobody wonders where the power came from. Membership,
+Finance and Communications have no `leaders` list: they are run through
+roles, as before, until their departments ask otherwise.
+
+---
+
 ## Open questions (each with a recommendation — proceed on the recommendation unless the owner overrules)
 
 | # | Question | Recommendation and why |
@@ -506,3 +589,4 @@ audited, by summary only — never the key, before or after.
 | Q10 | Does a pledge reminder name the figure someone still owes? | **No by default.** A text saying "you promised 200,000 and have paid 50,000" is readable by whoever picks up the phone. The default template invites them to the office instead; a template carrying `{{balance}}` is possible, and needs the leadership's approval like any other (Phase 7 step 7.6, Phase 9 step 9.0). |
 | Q11 | Who owns a person reached by Outreach who never comes to church? | **The church, as an ordinary person record**, with `source = 'OUTREACH'` and their interactions. They are not a lesser kind of record. The retention question in `docs/data-inventory.md` section 5 covers them: if the church sets a period for never-followed-up registrations, it covers these too. |
 | Q12 | One Beem account for the platform, or one per church? | *Superseded by D26 and D27: there is one church per deployment, and its Beem account is held in the database, set by Communications itself.* |
+| Q13 | Someone Outreach recorded on a doorstep later fills in the registration form. The form makes a person when it starts, so they are now in People twice. Should the form join them to the record Outreach made? | **Not automatically; show the office the likely pair.** The form is public and unauthenticated: joining on a typed phone number would let anyone attach their answers — prayer requests included — to someone else's record. Phase 8 records the doorstep person with `source = 'OUTREACH'`; a later small step can list, in Membership, people whose numbers match a registration made after them, for the office to merge by hand. Until then the Outreach timeline stays on the doorstep record, and the office can see both. |

@@ -67,6 +67,20 @@ export default function FinanceGuidePage() {
           rather than print it, choose &ldquo;Save as PDF&rdquo; as the printer.
         </p>
       </Step>
+
+      <Step n={6} title="Record a payment towards a pledge">
+        <p>
+          When someone brings money they promised, open <strong>Finance → Pledges</strong> and
+          choose <strong>+ Record a payment</strong>. Type part of their name or phone number, pick
+          their pledge, enter the amount, and if you also recorded it as income, choose that entry
+          so the books and the pledge agree. You are told what is left.
+        </p>
+        <p>
+          You never see the list of who owes what: only the finance manager and the pastors do. A
+          payment typed wrongly is corrected like any entry: open the pledge, choose{' '}
+          <strong>Ask to change</strong> beside the payment, and an administrator decides.
+        </p>
+      </Step>
     </Guide>
   );
 }

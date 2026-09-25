@@ -5,9 +5,29 @@
 > four fields on a phone — into the church's one list of people — then follows
 > each person up until they come to church.
 
-**Status:** not started. **Comes after:** Phase 7 (the Friday reminders are
-sent through Communications). **Comes before:** Phase 9, which uses the
-person timeline this phase builds.
+**Status:** built (25 Sept 2026), with step 8.1's answers taken in the same
+day; see "What changed on the way" at the end. **Comes after:** Phase 7 (the department, its
+members and the Friday reminders all come from there). **Comes before:**
+Phase 9, which uses the person timeline this phase builds.
+
+> **Corrected for D28 and D29 on 25 Sept 2026, before the first Phase 8
+> commit.** Outreach is a department (Admin → Departments), and its portal
+> belongs to it. Its **team is the Outreach department's leaders and
+> members**, kept in **My departments → Outreach** like any department's:
+> there is no `outreach_members` table, no team routes and no
+> `outreach.team.manage`. Its **leaders run the portal by leading the
+> department** (D29): the module lists what they may do, and nobody gives
+> them a role. The people who go out and record sign in with the **Outreach
+> member** role, made in Admin like every staff account. **Messages** go from
+> My departments → Outreach → Messages with the leadership permissions of 07
+> step 7.3: there is no `outreach.comms.*` permission and no Outreach
+> audience of its own team — `departments.everyone` already is one. Two more
+> corrections came from reading the code: phone numbers are part of
+> `membership.people.read`, not `read_sensitive` (so the plan's "only the
+> leader sees numbers" never matched Membership), and Outreach does not need
+> any Membership role at all — it shows the people **it** reached, with their
+> numbers, behind its own `outreach.reached.read`, and never the wider People
+> list.
 
 ---
 
@@ -15,20 +35,22 @@ person timeline this phase builds.
 
 **1. What must already be true.**
 
-- Phase 7 is done: templates, audiences and sending work.
-- Step 8.1 needs four answers from the Outreach leader. You can build 8.2–8.4
-  while you wait.
+- Phase 7 is done: departments, leaders, members, templates and sending work.
+- Step 8.1 needs four answers from the Outreach leader. Build 8.2 onwards on
+  the recommendations written into each step while you wait, and correct the
+  step when the answers come.
 
 **2. Read these first** (about 30 minutes):
 
 | Read | Why |
 | --- | --- |
 | `00-decisions.md`, D23 | One person record, and one timeline every portal writes to. The most important idea in this phase. |
+| `00-decisions.md`, D28 and D29 | The team is the department; its leaders run the portal by leading it. |
 | `00-decisions.md`, D22 | Why Outreach may text its team but not, by default, the people it reached. |
 | `00-decisions.md`, D24 | How files are stored. Step 8.9 is the first file upload in the system. |
 | `docs/modules/outreach-brief.md` | What the Outreach department told us it does. |
 | `docs/adding-a-module.md` | The recipe for a new portal. |
-| `apps/api/src/modules/membership/people/people.service.ts` | How people are searched and created today. Outreach reuses it rather than keeping its own list. |
+| `apps/api/src/modules/departments/departments.service.ts` | Who leads and who belongs. Outreach reads its team from here rather than keeping its own. |
 
 **3. Get your machine ready** — the same as every phase:
 
@@ -61,16 +83,25 @@ The department's week, in the order they live it:
 ```
    Team            →   Saturday            →   People reached      →   Follow-up
    ────                ────────                ──────────────          ─────────
-   who is in it        a session               name, phone,            calls, visits,
-   partner groups      teams sent to areas     location, who           invitations,
-   of two or three     counts per team         reached them —          "came to church"
-                       a PDF report after      nothing else required
+   the department's    a session               name, phone,            calls, visits,
+   leaders and         teams sent to areas     location, who           invitations,
+   members; partner    counts per team         reached them —          "came to church"
+   groups of 2 or 3    a PDF report after      nothing else required
                                    Friday training
                                    ───────────────
                                    topic, trainer, venue, who came
 ```
 
 …and one dashboard over all of it.
+
+**Who does what.**
+
+| Who | How they got there | What they do here |
+| --- | --- | --- |
+| An Outreach **leader** | Named by an administrator in Admin → Departments (a confirmed member) | Everything in the portal (D29): partner groups, Saturdays, training, the report; and, as every leader can, keeps the members and sends the department's messages. |
+| An Outreach **member** who signs in | Added to the department by a leader; given a staff account with the *Outreach member* role in Admin | Records who was reached, follows them up, sees the dashboard. |
+| An Outreach member who does not sign in | Added to the department by a leader | Goes out on Saturdays, is picked for teams, is marked at training and receives the reminders. Most of the team. |
+| A pastor or overseer | *Outreach viewer* role in Admin | Reads everything, changes nothing. |
 
 **The rule that shapes the tables (D23):** a person reached on a Saturday
 becomes a row in the church's **existing** `people` table — the same list the
@@ -83,8 +114,8 @@ member, the church doesn't create another duplicate record."*
 
 | Word | Meaning |
 | --- | --- |
-| **Team member** | Someone in the Outreach department. Always a person already in the church's People list. |
-| **Partner group** | Two or three team members who usually go out together. |
+| **Team** | The Outreach department's leaders and members, now. Always people already in the church's People list. |
+| **Partner group** | Two or three of the team who usually go out together. |
 | **Session** | One Saturday's outreach. |
 | **Session team** | A group sent to one area on that Saturday. Its people may differ from the standing group — partners get swapped on the day. |
 | **Reached** | A person the team spoke to, recorded against a session and team. |
@@ -96,12 +127,12 @@ member, the church doesn't create another duplicate record."*
 | Step | What | You are done when |
 | --- | --- | --- |
 | 8.1 | The brief | The Outreach leader's answers are in `outreach-brief.md`. |
-| 8.2 | The module and permissions | Outreach appears in Admin → Portals with three roles. |
-| 8.3 | The tables, and the shared timeline | The migration runs; the timeline cannot be deleted from. |
-| 8.4 | The team | A member is added by searching the People list — never typed. |
+| 8.2 | The module, and what its leaders may do | Outreach appears in Admin → Portals with two roles and its leaders' list; a leader of Outreach holds it, a leader of the choir does not. |
+| 8.3 | The tables, and the shared timeline | The migration runs; the timeline cannot be deleted from; Membership writes to it. |
+| 8.4 | The team and partner groups | The team page lists the department's people; a group can only be made from them. |
 | 8.5 | Saturday, and the people reached | A person is recorded in four fields on a phone, and a known person is matched, not duplicated. |
 | 8.6 | Follow-up and the timeline | Calls, visits and "came to church" show on one timeline, in both portals. |
-| 8.7 | Friday training | Attendance is marked, and the team reminded through Communications. |
+| 8.7 | Friday training | Attendance is marked, and the team reminded through the department's Messages. |
 | 8.8 | The dashboard | Every number matches a hand count and opens the list behind it. |
 | 8.9 | The session report as a PDF | The file is private, limited, and mentioned in the data inventory. |
 | 8.10 | Prove it | The tests below exist and fail when their guard is removed. |
@@ -117,14 +148,18 @@ member, the church doesn't create another duplicate record."*
 settle the *TBC* items:
 
 1. How many are in the team, and who leads it? Are they all in the church's
-   People list already? (If not, they are added through Membership's "Add a
-   person" — Outreach never creates a staff record.)
+   People list already? (If not, they register on the form or the office adds
+   them in Membership — Outreach never creates a team member's record.) The
+   leader must be a confirmed member to be named one (D28).
 2. Do partner groups hold for a season, or change every Saturday? (The tables
-   allow both; the answer decides what the Saturday screen shows first.)
+   allow both; the answer decides what the Saturday screen shows first.
+   *Built meanwhile:* groups are offered first when planning, and a team can
+   always be put together for the day.)
 3. Which areas do they go to, by name? (These become suggestions, not a fixed
-   list: a new estate must never need a developer.)
+   list: a new estate must never need a developer. *Built meanwhile:*
+   suggestions come from the areas already used.)
 4. Which dashboard numbers do they report upward, and to whom? Those must be
-   exact, not roughly right.
+   exact, not roughly right. (*Built meanwhile:* every figure in 8.8.)
 
 Write the answers, with the date, in place of each *TBC*.
 
@@ -135,18 +170,42 @@ sections 1–3.
 
 ---
 
-## 8.2 — The module, its permissions and its roles
+## 8.2 — The module, and what its leaders may do
 
-**Goal.** An `outreach` module, with roles matching how the department is run:
-a leader, the people who go out, and someone who may only look.
+**Goal.** An `outreach` module whose leaders run it by leading the department
+(D29), with a role for the people who go out and one for those who only look.
 
 **Do.**
 
-1. Create `packages/shared/src/modules/outreach.ts` (copy the shape of
+1. **A portal's leaders (D29).** In `packages/shared/src/rbac/define.ts`, a
+   module may carry
+
+   ```ts
+   /**
+    * What the leaders of the department this portal belongs to may do in it,
+    * without any role (D29). Ordinary permissions of this module.
+    */
+   leaders?: { description: string; permissions: string[] };
+   ```
+
+   `defineModule` refuses an unknown permission in it, and a `leaders` list on
+   a `core` module (a core module belongs to no department). In
+   `packages/shared/src/modules/index.ts`, export
+   `PORTAL_LEADER_PERMISSIONS: { moduleKey, key }[]`.
+
+   `PermissionResolver.forUser` (`apps/api/src/core/rbac/`) adds a third part
+   to its one query: the `module_key` of every department the person leads
+   that is not archived, whose portal is on, returned prefixed with `#`. Each
+   such portal's `leaders` permissions are added. The e2e test that proves it:
+   a leader of Outreach holds `outreach.sessions.manage`; a leader of the
+   choir does not; ending the leadership, archiving the department or
+   switching the portal off takes it away on the next request.
+
+2. Create `packages/shared/src/modules/outreach.ts` (copy the shape of
    `finance.ts`):
 
    ```ts
-   // sketch — complete it, keeping these keys exactly
+   // sketch — keep these keys exactly
    export const outreachModule = defineModule({
      key: 'outreach',
      name: 'Outreach',
@@ -154,29 +213,28 @@ a leader, the people who go out, and someone who may only look.
      kind: 'department',
      home: '/outreach',
      permissions: {
-       'outreach.dashboard.read':   { kind: 'read',  label: 'See the Outreach dashboard' },
-       'outreach.team.read':        { kind: 'read',  label: 'See who is in Outreach' },
-       'outreach.team.manage':      { kind: 'write', label: 'Add people to Outreach and make partner groups' },
-       'outreach.sessions.read':    { kind: 'read',  label: 'See the Saturday sessions' },
-       'outreach.sessions.manage':  { kind: 'write', label: 'Plan a Saturday and record what happened' },
-       'outreach.reached.read':     { kind: 'read',  label: 'See the people reached' },
-       'outreach.reached.record':   { kind: 'write', label: 'Record someone reached, and follow them up' },
-       'outreach.training.read':    { kind: 'read',  label: 'See the Friday training' },
-       'outreach.training.manage':  { kind: 'write', label: 'Plan training and mark who came' },
-       'outreach.reports.read':     { kind: 'read',  label: 'See and download session reports' },
-       'outreach.reports.upload':   { kind: 'write', label: 'Attach a session report' },
-       'outreach.comms.send':       { kind: 'write', label: 'Send Outreach messages to its own audiences' },
-       'outreach.comms.send_adhoc': { kind: 'write', label: 'Send Outreach words no template covers',
-                                      hint: 'Off by default. An administrator grants it deliberately.' },
+       'outreach.dashboard.read':  { kind: 'read',  label: 'See the Outreach dashboard' },
+       'outreach.team.read':       { kind: 'read',  label: 'See the team and its partner groups' },
+       'outreach.groups.manage':   { kind: 'write', label: 'Make and change partner groups' },
+       'outreach.sessions.read':   { kind: 'read',  label: 'See the Saturday sessions' },
+       'outreach.sessions.manage': { kind: 'write', label: 'Plan a Saturday, send teams to areas, and close it' },
+       'outreach.reached.read':    { kind: 'read',  label: 'See the people reached, with their phone numbers, and their timelines' },
+       'outreach.reached.record':  { kind: 'write', label: 'Record someone reached, and follow them up' },
+       'outreach.training.read':   { kind: 'read',  label: 'See the Friday training' },
+       'outreach.training.manage': { kind: 'write', label: 'Plan training and mark who came' },
+       'outreach.reports.read':    { kind: 'read',  label: 'See and download session reports' },
+       'outreach.reports.upload':  { kind: 'write', label: 'Attach a session report' },
+     },
+     leaders: {
+       description: 'Leaders of the Outreach department run it: the partner groups, the Saturdays, the training and the reports.',
+       permissions: [/* every permission above */],
      },
      systemRoles: [
-       { key: 'outreach.leader', name: 'Outreach leader',
-         description: 'Runs the department: the team, the Saturdays, the training, the messages.',
-         permissions: [/* everything except outreach.comms.send_adhoc */] },
        { key: 'outreach.member', name: 'Outreach member',
-         description: 'Goes out on Saturdays and records who was reached.',
+         description: 'Goes out on Saturdays, records who was reached and follows them up.',
          permissions: ['outreach.dashboard.read', 'outreach.team.read', 'outreach.sessions.read',
-                       'outreach.reached.read', 'outreach.reached.record', 'outreach.training.read'] },
+                       'outreach.reached.read', 'outreach.reached.record', 'outreach.training.read',
+                       'outreach.reports.read'] },
        { key: 'outreach.viewer', name: 'Outreach viewer',
          description: 'A pastor or overseer who reads the numbers without changing anything.',
          permissions: ['outreach.dashboard.read', 'outreach.team.read', 'outreach.sessions.read',
@@ -189,100 +247,89 @@ a leader, the people who go out, and someone who may only look.
        { label: 'Follow-up', href: '/outreach/followup', icon: 'discipleship', permission: 'outreach.reached.read' },
        { label: 'Team',      href: '/outreach/team',     icon: 'roles',        permission: 'outreach.team.read' },
        { label: 'Training',  href: '/outreach/training', icon: 'training',     permission: 'outreach.training.read' },
-       { label: 'Messages',  href: '/outreach/messages', icon: 'messages',     permission: 'outreach.comms.send' },
      ],
    });
    ```
 
-2. Add `sessions` and `training` to the `NavIcon` type
-   (`packages/shared/src/rbac/define.ts`) and draw them in
+   There is no Messages item: the leader's messages are under **My
+   departments → Outreach → Messages**, which they already have.
+
+3. Add `sessions` and `training` to the `NavIcon` type and draw them in
    `apps/portal/src/components/shell/NavIcon.tsx` (a map pin on a route; a
    board with a person).
-3. Add `outreachModule` to `CHURCH_MODULES` in
-   `packages/shared/src/modules/index.ts`. Because its key ends in
-   `.comms.send`, `outreach.comms.send` joins `SEND_PERMISSIONS` (7.2) on its
-   own.
-4. **What Outreach needs from Membership.** A role holds permissions from one
-   module only, so an Outreach leader who needs to search people also needs a
-   Membership role. Add a Membership system role for it, in
-   `packages/shared/src/modules/membership.ts`:
+4. Add `outreachModule` to `CHURCH_MODULES`, after Communications. The seed
+   creates the **Outreach** department with the `outreach` portal, beside
+   Membership, Finance and Communications.
+5. **Admin → Portals** shows, under a portal with a `leaders` list, *"Leaders
+   of Outreach also: …"* with the permissions' labels, so an administrator
+   can see where a leader's access comes from.
 
-   | Role | Permissions | Given to |
-   | --- | --- | --- |
-   | `membership.outreach_access` — "People, for Outreach" | `membership.people.read` | every Outreach member and leader |
-   | (existing roles) `membership.people.read_sensitive` via a second role, `membership.outreach_contact` — "Phone numbers, for Outreach" | `membership.people.read`, `membership.people.read_sensitive` | **the leader only** |
+**What Outreach does not need from Membership.** The plan once gave every
+Outreach member a Membership role to search people and the leader a second
+one for phone numbers. Neither is needed: the team is picked in My
+departments (whose search shows names and the end of a number, 07 step 7.4);
+matching a person already known happens in the API when recording (8.5); and
+what Outreach shows about a person — name, phone, area, language and
+timeline — is shown by Outreach, for people **it reached**, behind its own
+`outreach.reached.read`. The wider People list, prayer requests and
+everything else Membership keeps stay behind Membership's permissions.
+**Never** copy people's data into Outreach tables to get around this; a copy
+is how a church ends up with the same family three times.
 
-   Prayer requests stay hidden from the member role: they are behind
-   `read_sensitive`, and the person page Outreach shows is the same gated
-   shape the Membership portal serves. **Never** copy people's data into
-   Outreach tables to avoid this; a copy is how a church ends up with the same
-   family three times.
+**Check.** `npm test` passes, including `defineModule` refusing a `leaders`
+list with an unknown permission. In the browser, **Admin → Portals** offers
+Outreach once the seed's department exists, and says what its leaders get;
+turning it on shows its two roles in **Admin → Roles**. The resolver test
+above passes.
 
-**Check.** `npm test` passes. In the browser, **Admin → Portals** offers
-Outreach; turning it on shows its three roles in **Admin → Roles**, and
-Membership now lists the two new roles.
-
-**Commit.** "Describe the Outreach module"; "Let Outreach search the church's
-people, and let its leader see their numbers".
+**Commit.** "Let a portal's own leaders run it"; "Describe the Outreach
+module".
 
 ---
 
 ## 8.3 — The tables, and the shared timeline
 
 **Goal.** Outreach's own tables, plus one timeline table every portal writes
-to. No `church_id` anywhere (D27).
+to. No `church_id` anywhere (D27), and no team table (D28).
 
 **Do.**
 
-1. Add to `apps/api/prisma/schema.prisma`. References to people and users are
-   ordinary relations with foreign keys — write the `@relation` lines.
+1. Add to `apps/api/prisma/schema.prisma`. References to people, users and
+   departments are ordinary relations with foreign keys; references to people
+   cascade, so `person:erase` takes them with the person.
 
    ```prisma
    // sketch
 
-   /// Who is in Outreach. A person from the church's People list, never a new record.
-   model OutreachMember {
-     id        String    @id @default(uuid(7)) @db.Uuid
-     personId  String    @unique @map("person_id") @db.Uuid
-     /// Their standing in the department, in the department's words.
-     role      String    @default("EVANGELIST") @db.VarChar(20)
-     isActive  Boolean   @default(true) @map("is_active")
-     joinedOn  DateTime  @default(now()) @map("joined_on") @db.Date
-     leftOn    DateTime? @map("left_on") @db.Date
-     addedById String    @map("added_by_id") @db.Uuid
-
-     @@map("outreach_members")
-   }
-
-   /// A standing partnership: two or three people who usually go out together.
+   /// A standing partnership: two or three of the team who usually go out together.
    model OutreachGroup {
-     id       String  @id @default(uuid(7)) @db.Uuid
-     name     String  @unique @db.VarChar(60)
-     isActive Boolean @default(true) @map("is_active")
-     members  OutreachGroupMember[]
-
+     id        String   @id @default(uuid(7)) @db.Uuid
+     name      String   @unique @db.VarChar(60)
+     isActive  Boolean  @default(true) @map("is_active")
+     createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+     members   OutreachGroupMember[]
      @@map("outreach_groups")
    }
 
    model OutreachGroupMember {
      groupId  String @map("group_id") @db.Uuid
      personId String @map("person_id") @db.Uuid
-
      @@id([groupId, personId])
      @@map("outreach_group_members")
    }
 
+   enum OutreachSessionStatus { PLANNED  COMPLETED  CANCELLED }
+
    /// One Saturday.
    model OutreachSession {
-     id          String        @id @default(uuid(7)) @db.Uuid
-     heldOn      DateTime      @map("held_on") @db.Date
-     title       String        @default("") @db.VarChar(80)
-     status      SessionStatus @default(PLANNED)   // PLANNED | COMPLETED | CANCELLED
-     notes       String        @default("") @db.VarChar(2000)
-     createdById String        @map("created_by_id") @db.Uuid
-     createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+     id          String                @id @default(uuid(7)) @db.Uuid
+     heldOn      DateTime              @map("held_on") @db.Date
+     title       String                @default("") @db.VarChar(80)
+     status      OutreachSessionStatus @default(PLANNED)
+     notes       String                @default("") @db.VarChar(2000)
+     createdById String                @map("created_by_id") @db.Uuid
+     createdAt   DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
      teams       OutreachSessionTeam[]
-
      @@index([heldOn(sort: Desc)])
      @@map("outreach_sessions")
    }
@@ -298,7 +345,6 @@ to. No `church_id` anywhere (D27).
      spokenToOnly Int     @default(0) @map("spoken_to_only")
      notes        String  @default("") @db.VarChar(1000)
      members      OutreachSessionTeamMember[]
-
      @@index([sessionId])
      @@map("outreach_session_teams")
    }
@@ -306,7 +352,6 @@ to. No `church_id` anywhere (D27).
    model OutreachSessionTeamMember {
      teamId   String @map("team_id") @db.Uuid
      personId String @map("person_id") @db.Uuid
-
      @@id([teamId, personId])
      @@map("outreach_session_team_members")
    }
@@ -319,38 +364,26 @@ to. No `church_id` anywhere (D27).
      teamId        String?  @map("team_id") @db.Uuid
      reachedOn     DateTime @map("reached_on") @db.Date
      area          String   @default("") @db.VarChar(80)
+     /// The team who spoke to them: people, not staff accounts.
+     reachedByIds  String[] @map("reached_by_ids") @db.Uuid
      needsFollowUp Boolean  @default(true) @map("needs_follow_up")
      note          String   @default("") @db.VarChar(1000)
      recordedById  String   @map("recorded_by_id") @db.Uuid
      createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-
      @@index([reachedOn(sort: Desc)])
-     @@index([needsFollowUp])
+     @@index([personId])
      @@map("outreach_reached")
    }
 
    /// A Friday training.
-   model OutreachTraining {
-     id          String   @id @default(uuid(7)) @db.Uuid
-     topic       String   @db.VarChar(120)
-     trainer     String   @default("") @db.VarChar(80)
-     heldAt      DateTime @map("held_at") @db.Timestamptz(6)
-     venue       String   @default("") @db.VarChar(80)
-     notes       String   @default("") @db.VarChar(2000)
-     createdById String   @map("created_by_id") @db.Uuid
-     attendance  OutreachTrainingAttendance[]
-
-     @@index([heldAt(sort: Desc)])
-     @@map("outreach_trainings")
-   }
+   model OutreachTraining { /* topic, trainer, heldAt, venue, notes, createdById */ }
 
    model OutreachTrainingAttendance {
      trainingId String         @map("training_id") @db.Uuid
      personId   String         @map("person_id") @db.Uuid
-     mark       AttendanceMark                   // ATTENDED | MISSED — the enum the foundation class uses
+     mark       AttendanceMark // the enum the foundation class uses
      markedById String         @map("marked_by_id") @db.Uuid
      markedAt   DateTime       @default(now()) @map("marked_at") @db.Timestamptz(6)
-
      @@id([trainingId, personId])
      @@map("outreach_training_attendance")
    }
@@ -367,7 +400,7 @@ to. No `church_id` anywhere (D27).
      personId  String          @map("person_id") @db.Uuid
      kind      InteractionKind
      // EVANGELISED | CALL | VISIT | INVITED | ATTENDED_SERVICE | TRAINING |
-     // REGISTERED | CLASS_SESSION | APPLIED | CONFIRMED | MESSAGE_SENT | NOTE
+     // REGISTERED | CLASS_SESSION | APPLIED | CONFIRMED | NOTE
      at        DateTime        @db.Timestamptz(6)
      /// Which portal recorded it, for the timeline's small labels.
      moduleKey String          @map("module_key") @db.VarChar(30)
@@ -375,20 +408,24 @@ to. No `church_id` anywhere (D27).
      byId      String?         @map("by_id") @db.Uuid
      /// One line in plain words: "Evangelised by Peter and John, Sombetini".
      summary   String          @db.VarChar(200)
-     /// Whatever the recording portal wants back later: session id, message id.
+     /// Whatever the recording portal wants back later: session id, enrolment id.
      meta      Json            @default("{}")
      createdAt DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
-
      @@index([personId, at(sort: Desc)])
      @@index([kind, at(sort: Desc)])
      @@map("person_interactions")
    }
    ```
 
+   A summary is read by everyone who may see the person in **either**
+   portal, so it never carries what Membership keeps behind
+   `read_sensitive`: a Membership note becomes *"Home visit, by Grace"*, never
+   the note itself.
+
    And on `people`: `source String @default("FORM") @db.VarChar(10)` — one of
    `FORM`, `OFFICE`, `OUTREACH` — so the dashboard can say how many people
    came from evangelism. Backfill: `OFFICE` where `registration_id is null`,
-   else `FORM`.
+   else `FORM`. `sms_opt_out_source` gains the value `outreach`.
 
 3. Create the migration without applying it (`cd apps/api && npx prisma
    migrate dev --create-only --name outreach`) and add:
@@ -401,17 +438,24 @@ to. No `church_id` anywhere (D27).
    revoke delete, truncate on table outreach_reached from irca_app;
    revoke update on table outreach_reached from irca_app;
    grant update (needs_follow_up, area, note) on table outreach_reached to irca_app;
+   -- Sessions and groups are closed or switched off, never deleted: what
+   -- happened on last year's Saturdays keeps its answer.
+   revoke delete, truncate on table outreach_sessions, outreach_groups from irca_app;
    ```
 
    Then `npx prisma migrate dev`.
 
-4. **Write the timeline from what already happens.** In the same commit,
-   make the existing Membership code add an interaction when it already
-   records an event: a registration submitted (`REGISTERED`), a class session
-   ticked (`CLASS_SESSION`), an application entered (`APPLIED`), a member
-   confirmed (`CONFIRMED`). Use one helper,
-   `apps/api/src/modules/membership/timeline.ts`, `recordInteraction(tx,
-   {...})`, called inside the same `db.tx()` as the change it describes.
+4. **Write the timeline from what already happens.** In the same commit
+   series, make the existing Membership code add an interaction when it
+   already records an event: a registration submitted (`REGISTERED`), a class
+   session marked attended (`CLASS_SESSION`, once per enrolment and session,
+   so marking it twice does not write it twice), an application entered, from
+   the office or from the form (`APPLIED`), a member confirmed (`CONFIRMED`),
+   and a call or visit logged as a note (`CALL`, `VISIT`, without the note).
+   Use one helper, `apps/api/src/modules/membership/timeline.ts`,
+   `recordInteraction(tx, {...})`, called inside the same `db.tx()` as the
+   change it describes. `person:erase` counts and removes them with the
+   person.
 
 5. Add the new tables to `docs/plan/appendix-database.md`.
 
@@ -424,35 +468,39 @@ portal".
 
 ---
 
-## 8.4 — The team
+## 8.4 — The team and partner groups
 
-**Goal.** Adding someone to Outreach is searching the People list and pressing
-a button — never typing a name twice.
+**Goal.** Outreach sees its team without keeping one, and makes partner
+groups from it.
 
 **Do.**
 
-1. API, in `apps/api/src/modules/outreach/team.controller.ts`:
-   `GET /v1/outreach/team`, `POST /v1/outreach/team { personId, role }`,
-   `PATCH /v1/outreach/team/:id` (role, or leave with `isActive: false` and
-   `leftOn`). Anyone qualifies, whatever their stage — the owner: *"regardless
-   of their current membership/visitor status"*.
-2. **The search is Membership's**, reached with `membership.people.read`
-   (8.2). The portal's "Add to team" drawer calls
-   `GET /v1/membership/people?search=…`. If the person isn't there at all, the
-   drawer offers Membership's own "Add a person" form, with a note saying that
-   is what is happening.
-3. Partner groups: `POST /v1/outreach/groups { name, personIds }` (two or three
-   people), rename, deactivate. A group that has ever gone out is never
+1. **The team is the department** (D28). `GET /v1/outreach/team`
+   (`outreach.team.read`) returns the Outreach department's leaders (with
+   their titles) and members, now, each with their partner group, how many
+   Saturdays they went out on in the last three months, and their training
+   attendance (8.7). The page's **Add or remove people** link opens **My
+   departments → Outreach**, shown only to its leaders. Anyone who has filled in the
+   registration form can be a member, whatever their stage — the owner:
+   *"regardless of their current membership/visitor status"*, and (25 Sept
+   2026) *"every member of a department should have already registered"*.
+2. Someone who left the team keeps every row that names them: last year's
+   Saturdays still say who was there, because sessions point at people, not at
+   memberships.
+3. **Partner groups** (`outreach.groups.manage`):
+   `POST /v1/outreach/groups { name, personIds }` (two or three people, each
+   on the team now), `PUT /v1/outreach/groups/:id` (rename, change people),
+   `PUT /v1/outreach/groups/:id/active`. A group is switched off, never
    deleted, because sessions point at it.
-4. Leaving the team keeps the row (`isActive = false`), so last year's
-   Saturdays still say who was there.
 
-**Check.** An e2e test (`apps/api/test/outreach.e2e-spec.ts`): adding the same
-person twice is refused with `ALREADY_EXISTS`; someone who left still appears
-on their old sessions; a member without `outreach.team.manage` gets 403.
+**Check.** An e2e test (`apps/api/test/outreach.e2e-spec.ts`): the team lists
+the department's leaders and members and nobody else; a group of one, or of
+four, is refused; a group with someone not on the team is refused, and the
+message names them; the same group name twice is refused with
+`ALREADY_EXISTS`; a member without `outreach.groups.manage` gets 403.
 
-**Commit.** "Pick the Outreach team from the church's own people"; "Partner
-groups that hold for a season".
+**Commit.** "The Outreach team is its department"; "Partner groups that hold
+for a season".
 
 ---
 
@@ -463,35 +511,47 @@ person in **four fields**: name, phone, location, who reached them.
 
 **Do.**
 
-1. **Plan the session** (the leader, before the day): date and title, then a
-   team per area — pick a standing group or put people together for the day,
-   and type the area, with suggestions from areas already used.
-2. **Record who was reached** (any member, during the day or after):
-   `POST /v1/outreach/reached` with `{ sessionId?, teamId?, fullName, dial,
-   phone, area, reachedByIds, lang?, needsFollowUp? }`. Only the first four
-   ideas are required. In one `db.tx()`:
+1. **Plan the session** (`outreach.sessions.manage`, before the day): date and
+   title, then a team per area — pick a standing group or put people together
+   for the day, from the team, and type the area, with suggestions from areas
+   already used. Mark it **Completed** or **Cancelled** afterwards; a session
+   is never deleted.
+2. **Record who was reached** (`outreach.reached.record`, during the day or
+   after): `POST /v1/outreach/reached` with `{ sessionId?, teamId?, fullName,
+   dial, phone, area, reachedByIds?, lang?, mayMessage, needsFollowUp?,
+   note?, samePersonId?, notSamePerson? }`. Choosing a team fills the area and
+   who reached them from it, so on the day three fields are typed. In one
+   `db.tx()`:
    - find the person (next point) or create one in `people` with
      `source = 'OUTREACH'`, `stage = 'VISITOR'`, `lang` as ticked (default the
      church's default language);
    - add an `outreach_reached` row joining them to the session and team;
    - add a `person_interactions` row, kind `EVANGELISED`, summary like
      *"Evangelised by Peter and John, Sombetini"*;
-   - `audit.recordIn(tx, …)` and `usage.inc('outreach.reached')`.
+   - `audit.recordIn(tx, …)` (never the phone number) and
+     `usage.inc('outreach.reached')`.
 3. **Match, don't duplicate.** Before creating anyone, look for a person with
-   the same phone (normalised with `libphonenumber-js`, comparing `dial +
-   phone`), or — only when no phone was given — a close name (Postgres
-   `similarity()`, as the finance item suggestions already use). Return the
-   match to the recorder instead of saving: *"Neema Mollel, reached 3 Aug in
-   Kaloleni. Same person?"* Choosing **Same person** saves a second interaction
-   on her; **Someone else** saves a new person. This must be in the first
+   the same phone (compared on digits of `dial + phone`, with a leading `0`
+   read as the dialling code, the way `libphonenumber-js` normalises it), or —
+   only when no phone was given — a close name (Postgres `similarity()`, as
+   the finance item suggestions already use). Answer `409 POSSIBLE_MATCH`
+   with the candidates instead of saving: *"Neema Mollel, reached 3 Aug in
+   Kaloleni. Same person?"* — name, when and where they were last reached or
+   registered, nothing else. **Same person** resends with `samePersonId` and
+   adds a second reach and interaction on her; **Someone else** resends with
+   `notSamePerson: true` and saves a new person. This must be in the first
    version — it is the whole reason the People list is shared.
-4. **Consent (D22).** The record form carries one tick box, ticked by default
-   only after the evangelist has asked: *"May the church send them messages?"*
-   Unticked sets `sms_opt_out` on the new person.
-5. **Filled in later.** Everything is editable afterwards: the team often
-   records *"after the team returns, when they meet and discuss the people
-   they reached"*. The Reached list marks records that are still thin (no
-   phone, no area), so the team can see what is worth finishing.
+4. **Consent (D22).** The form carries one tick box, *"May the church send
+   them messages?"*, which the evangelist ticks after asking. Unticked sets
+   `sms_opt_out` on a new person, with `sms_opt_out_source = 'outreach'`. On a
+   person already known it only ever turns messages off, never back on.
+5. **Filled in later.** The area, the note and whether they still need
+   following up are editable afterwards (`PATCH /v1/outreach/reached/:id`):
+   the team often records *"after the team returns, when they meet and
+   discuss the people they reached"*. The Reached list marks records that are
+   still thin (no phone, no area), so the team can see what is worth
+   finishing. The person's own name and number are corrected in Membership,
+   by the office, where the rest of their record is.
 6. **The counts.** A team's number reached is the rows recorded for it,
    counted — plus `spokenToOnly`, a number the team may type for people spoken
    to without taking details, shown separately as "spoken to, no details".
@@ -501,7 +561,8 @@ person in **four fields**: name, phone, location, who reached them.
 
 - e2e: recording with only the four fields works; recording the same phone
   number twice returns the match, and accepting it leaves one person with two
-  interactions; a viewer gets 403 on every write.
+  interactions; a viewer gets 403 on every write; unticking consent opts the
+  new person out.
 - In the browser at phone width (360 px wide in Chrome's device toolbar): the
   record form can be filled and saved scrolling at most once.
 - Time yourself recording five people: under a minute each.
@@ -519,14 +580,17 @@ reached ever come to church?*
 
 **Do.**
 
-1. **The Follow-up page:** people with `needs_follow_up`, oldest first, each
-   with the last thing that happened and a call button (a `tel:` link; the
-   number is shown only to those with `membership.people.read_sensitive`).
-2. **Recording a follow-up** adds one `person_interactions` row — `CALL`,
-   `VISIT` or `INVITED` — with a note, and optionally clears
+1. **The Follow-up page:** people Outreach reached who still need following
+   up, oldest first, each with the last thing that happened and a call button
+   (a `tel:` link). The number is Outreach's to show here, to anyone with
+   `outreach.reached.read`: following up by phone is the member's job.
+2. **Recording a follow-up** (`POST /v1/outreach/people/:personId/followups`,
+   `outreach.reached.record`) adds one `person_interactions` row — `CALL`,
+   `VISIT` or `INVITED` — with a short note, and optionally clears
    `needs_follow_up`. **As many as it takes, in any order** — the owner:
    *"every interaction is recorded separately, so someone can be contacted or
-   visited multiple times."* It is not a pipeline.
+   visited multiple times."* It is not a pipeline. The note is read by
+   everyone who can see the person, in either portal, and the form says so.
 3. **"Came to church"** is an `ATTENDED_SERVICE` interaction. Nothing in the
    system records Sunday attendance yet, so this page has a **Came on Sunday**
    button that writes one, with the date. When Membership gains attendance
@@ -544,8 +608,11 @@ reached ever come to church?*
    Sept 27  Attended again                                Membership
    ```
 
-   `GET /v1/membership/people/:id/timeline` serves it, behind
-   `membership.people.read`.
+   Served twice, from one query: `GET /v1/membership/people/:id/timeline`
+   behind `membership.people.read`, and inside
+   `GET /v1/outreach/people/:personId` behind `outreach.reached.read` — which
+   answers only for someone Outreach has reached (404 otherwise), so it
+   cannot be used to read the rest of People.
 5. **Stage and timeline must agree.** `people.stage` is a one-word summary of
    the timeline, never a separate truth. Attending does not change a stage;
    Membership's own actions (saved, class, confirmed) still do, and now also
@@ -553,7 +620,8 @@ reached ever come to church?*
 
 **Check.** e2e: three calls and two visits on one person all appear, in order,
 with who did each; a Membership user sees Outreach's interactions on the
-person page, and an Outreach leader sees Membership's.
+person page, and an Outreach member sees Membership's; an Outreach member
+asking for a person Outreach never reached gets 404.
 
 **Commit.** "Follow someone up as many times as it takes"; "One timeline, from
 the doorstep to membership".
@@ -567,30 +635,36 @@ the leader asking anyone.
 
 **Do.**
 
-1. Training pages: topic, trainer, date and time, venue; then mark each team
-   member present or absent with the same marking control the foundation class
+1. Training pages: topic, trainer, date and time, venue; then mark each of the
+   team present or absent with the same marking control the foundation class
    register uses (`apps/portal/src/app/(app)/membership/discipleship/`), so
-   nobody learns it twice.
-2. Each mark also writes a `TRAINING` interaction on that member's timeline.
+   nobody learns it twice. `outreach.training.manage`.
+2. Each mark of *attended* also writes a `TRAINING` interaction on that
+   person's timeline, once per training.
 3. **The reminder uses Phase 7 — nothing about sending is built here.**
-   - Register an audience provider `outreach.team` (7.5): active team members.
-     It is granted to Outreach automatically.
-   - Register `outreach.reached` too: people reached who have not opted out.
-     It is **not** granted automatically (D22).
-   - The leader drafts a template `outreach.training.reminder`, in each
-     language, and Communications approves it.
-   - **Remind the team** on the training page opens the Phase 7 composer with
-     the audience and template already chosen. Or the leader sets up a beat in
-     Messages → Recurring (Thursdays at 18:00, two variants).
-4. **History:** each member's attendance over the last twelve trainings, so
+   - The team is `departments.everyone` for the Outreach department, which
+     its leaders can already reach (07 step 7.8).
+   - Register one audience provider, `outreach.reached` (church-wide): people
+     Outreach reached who have not opted out. It is **not** granted
+     automatically (D22); Communications grants it in Comms → Audiences if the
+     church decides to.
+   - The leader drafts a training-reminder template, in each language, under
+     My departments → Outreach → Templates, and Communications approves it.
+   - **Remind the team** on the training page opens **My departments →
+     Outreach → Messages** with the department's everyone-audience chosen,
+     shown only to its leaders. Or the leader sets up a beat there
+     (Thursdays at 18:00, two variants).
+4. **History:** each person's attendance over the last twelve trainings, so
    the leader can see who has stopped coming.
 
-**Check.** e2e: create a training, mark nine present and one absent; **Remind
-the team** queues nine messages, each in the member's own language; a member
-who is not the leader's sender cannot send it (403).
+**Check.** e2e: create a training, mark nine present and one absent; nine
+`TRAINING` interactions exist; a leader sending an approved template to
+`departments.everyone` for Outreach queues one message per team member, each
+in their own language; an Outreach member who is not a leader cannot send it
+(403); `outreach.reached` is refused to the Outreach leader until granted.
 
-**Commit.** "Friday training and who came"; "Remind the team through
-Communications".
+**Commit.** "Friday training and who came"; "Remind the team through their
+department's messages".
 
 ---
 
@@ -605,13 +679,13 @@ month or a year.
 | Figure | How it is counted |
 | --- | --- |
 | People reached | `outreach_reached` rows in the period; "spoken to, no details" shown separately |
-| Awaiting follow-up | people with `needs_follow_up` |
-| Follow-ups done | `CALL`, `VISIT` and `INVITED` interactions in the period |
+| Awaiting follow-up | people with a reach still marked `needs_follow_up` |
+| Follow-ups done | `CALL`, `VISIT` and `INVITED` interactions recorded by Outreach in the period |
 | People visited | distinct people with a `VISIT` in the period |
 | First-time attenders from Outreach | people with an `EVANGELISED` and a later **first** `ATTENDED_SERVICE` in the period |
 | Sessions held | sessions `COMPLETED` in the period |
 | Areas covered | distinct areas on the period's teams |
-| Team participation | distinct members on a team, and each member's count |
+| Team participation | distinct people on a session team, and each person's count |
 | Training attendance | `ATTENDED` marks ÷ marks, over trainings held |
 | Trends | each figure by week, using the chart components in `apps/portal/src/modules/dev/components/Charts.tsx` |
 
@@ -642,42 +716,49 @@ will use the same thing).
 
 **Do.**
 
-1. **Storage.** An S3-compatible bucket — Cloudflare R2 or Backblaze B2 (both
-   cheap for a few hundred PDFs a year, and the code does not care which).
-   Private. Add `STORAGE_ENDPOINT`, `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY`,
-   `STORAGE_SECRET_KEY` to `env.ts` (optional; uploads are refused with a clear
-   message when unset) and `.env.example`, and a section to
-   `docs/deployment.md` on creating the bucket.
+*Corrected 25 Sept 2026 (D24): the files live on a Railway volume, not in a
+bucket. The steps below are as built.*
+
+1. **Storage.** A folder on a disk that outlives deploys: in production a
+   Railway volume attached to the API, named by `FILES_DIR` in `env.ts`
+   (optional; uploads are refused with a clear message when unset) and
+   `.env.example`, with a section in `docs/deployment.md` on attaching the
+   volume. Behind a `FileStorage` interface in `apps/api/src/core/files/`; tests
+   use a throwaway folder.
 2. **One `files` table** in core, for every module:
    `id, module_key, entity_type, entity_id, key, original_name, content_type,
    bytes, uploaded_by_id, uploaded_at, deleted_at`. Keys look like
-   `outreach/sessions/<session-id>/<uuid>.pdf`.
-3. **The browser uploads straight to storage.** `POST /v1/files/presign` (the
-   API checks `outreach.reports.upload` for that session) returns a
-   **presigned POST** that itself refuses anything but `application/pdf` and
-   anything over 10 MB. The browser uploads, then calls
-   `POST /v1/outreach/sessions/:id/report { key }`, and the API records the row.
-   A 10 MB file never passes through the API.
-4. **Reading** is `GET /v1/outreach/sessions/:id/report`, which checks
-   `outreach.reports.read` and answers with a signed link valid for five
-   minutes.
+   `outreach/sessions/<session-id>/<uuid>.pdf`, and are the file's path under
+   `FILES_DIR`.
+3. **The browser sends the file to the API.**
+   `PUT /v1/outreach/sessions/:id/report?name=&bytes=` (`outreach.reports.upload`)
+   with the PDF as the body. The API refuses anything declared as another
+   type, writes the body as it arrives, cuts it off the moment it passes 10 MB,
+   and refuses one that did not arrive at the size declared or does not start
+   like a PDF — removing what it wrote — before recording the row. (The route
+   lives with the session rather than as a general `/v1/files`: which
+   permission covers an upload is the owning module's to say.)
+4. **Reading** is `GET /v1/outreach/sessions/:id/report` (and `?file=<id>` for
+   an earlier version), which checks `outreach.reports.read` and streams the
+   PDF, not to be cached.
 5. One report per session; uploading again keeps the old one as a previous
-   version (`deleted_at` set, object kept).
-6. A nightly job reports and removes storage objects with no row (an upload
-   abandoned half-way), and reports rows with no object.
+   version (`deleted_at` set, file kept).
+6. A nightly job removes files older than a day with no row (an upload
+   abandoned half-way), and reports rows with no file.
 7. Metrics `storage.bytes` and `storage.files`.
 8. **Say plainly what erasure cannot do.** Add a row to
    `docs/data-inventory.md`: session reports may contain names and places, live
-   in object storage, and `person:erase` cannot reach inside a PDF. Add a step
-   to `docs/runbooks/erasure-request.md` telling the operator to check the
-   reports of the months the person was reached, by hand.
+   on the files volume, and `person:erase` cannot reach inside a PDF. Add a
+   step to `docs/runbooks/erasure-request.md` telling the operator to check the
+   reports of the Saturdays the person was part of, by hand.
 
-**Check.** A 12 MB file is refused before it uploads; a `.docx` is refused;
-the signed link stops working after five minutes; someone without
-`outreach.reports.read` gets 403 for the link; the orphan job lists what it
-removed.
+**Check.** A 12 MB file is refused, and nothing is kept; a `.docx` is refused;
+someone without `outreach.reports.read` gets 403; the orphan job lists what it
+removed; and before launch, a report attached, the API redeployed, and the
+report opened again.
 
-**Commit.** "Keep files in object storage, once, for every module"; "Attach the
+**Commit.** "Keep files in object storage, once, for every module"; "Keep files on
+the church's own disk instead of a bucket"; "Attach the
 Saturday report to its session".
 
 ---
@@ -685,18 +766,20 @@ Saturday report to its session".
 ## 8.10 — Prove it
 
 **What you get for free:** the generated permission matrix and the
-impersonation sweep cover every new route (see 7.12).
+impersonation sweep cover every new route (see 7.15).
 
 **Do**, in `apps/api/test/outreach.e2e-spec.ts` and `e2e/outreach.spec.ts`:
 
 1. **Member and leader.** A member records people and follow-ups, and cannot
-   add team members, plan a session, mark training, send a message, or see
-   phone numbers.
+   make a partner group, plan a session, mark training, upload a report or
+   send the department's messages. The Outreach leader can, with no role.
 2. **Viewer.** A viewer can open every page and every write answers 403.
 3. **No duplicate people.** Fifty records with overlapping phone numbers and
    names produce exactly the number of distinct people the test expects, and
    every reach points at one of them.
-4. **Journey (Playwright).** Plan a Saturday with two teams; at phone width,
+4. **The wall around People.** An Outreach member cannot open a person
+   Outreach never reached, nor anything under `/v1/membership`.
+5. **Journey (Playwright).** Plan a Saturday with two teams; at phone width,
    record four people; match one against a person already known; follow one
    up twice; mark the training; see the dashboard's numbers change.
 
@@ -709,15 +792,54 @@ test fail.
 
 ## 8.11 — Phase check
 
-- [ ] Outreach can be turned on in Admin → Portals, and its three roles work.
-- [ ] Team members come from the church's People list; nobody is typed twice.
-- [ ] A Saturday can be planned, teams sent to areas, and numbers recorded.
-- [ ] A person is recorded in four fields, on a phone, in under a minute.
-- [ ] A person already known is matched, not duplicated.
-- [ ] One timeline shows the doorstep, the calls, the visits and the first Sunday — in both portals.
-- [ ] Follow-up can happen many times, in any order.
-- [ ] Friday training is recorded, and the team reminded through Communications.
-- [ ] Every dashboard number opens the list behind it.
-- [ ] The session PDF is attached, limited, private, and named in the data inventory and the erasure runbook.
-- [ ] `appendix-database.md`, `what-works-now.md` and the metric list are updated.
-- [ ] Someone other than the builder has walked it in a browser, at phone width.
+- [x] Outreach can be turned on in Admin → Portals for its department, and its two roles and its leaders' list work.
+- [x] The team is the Outreach department; nobody is typed twice.
+- [x] A Saturday can be planned, teams sent to areas, and numbers recorded.
+- [x] A person is recorded in four fields, on a phone, in under a minute. *(Three typed; saving took under two seconds in the browser. The five-person stopwatch test is for the second walker.)*
+- [x] A person already known is matched, not duplicated.
+- [x] One timeline shows the doorstep, the calls, the visits and the first Sunday — in both portals.
+- [x] Follow-up can happen many times, in any order.
+- [x] Friday training is recorded, and the team reminded through the department's Messages.
+- [x] Every dashboard number opens the list behind it.
+- [x] The session PDF is attached, limited, private, and named in the data inventory and the erasure runbook. *(Walked in a browser on a disk folder; attaching the Railway volume and the redeploy check are `docs/deployment.md` §6b, before launch.)*
+- [x] `appendix-database.md`, `what-works-now.md` and the metric list are updated.
+- [ ] Someone other than the builder has walked it in a browser, at phone width. *(The owner's: `what-works-now.md` §11, steps 24–27.)*
+- [x] Step 8.1: the answers are in `outreach-brief.md` (25 Sept 2026): a team of any size, all registered on the form; partner groups not bound by time, with their history kept; areas typed per team; reached and salvations reported upward. *(Still open, and not needed by the code: the leader's name, and to whom they report.)*
+
+---
+
+## What changed on the way
+
+Built on 25 Sept 2026. Where the code differs from the steps above, the code
+is right, and this is why.
+
+- **Reports are routes of their own too.** Besides the three in 8.9,
+  `GET …/report/versions` lists the current report and its earlier versions,
+  and `GET …/report?file=<id>` opens an earlier one: a version kept but never
+  openable would be kept for nothing.
+- **The dashboard's lists are one route.** `GET /v1/outreach/dashboard/:figure`
+  answers each figure's list, from the same SQL definition the figure is added
+  up from, so the two cannot disagree; the portal shows it at
+  `/outreach/figures/<figure>`.
+- **"Came on Sunday" is a follow-up.** `ATTENDED_SERVICE` goes through the same
+  route as calls and visits, and writes "First time at church" once and "Came
+  to church again" after. Only calls, visits and invitations count as
+  follow-ups on the dashboard.
+- **Nobody is reached before the day.** Recording against a Saturday still to
+  come is refused, and the pages offer only Saturdays that have come;
+  marking a training more than twelve hours before it is refused the same way.
+- **The Saturday page takes the "spoken to" count**, behind
+  `outreach.reached.record` rather than `sessions.manage`, because the team
+  that spoke to people types it.
+- **Numbers go out ready to ring**: `+255712345678`, not the dialling code
+  followed by what was typed, which made call buttons dial nobody.
+- **Erasure lists the reports.** `person:erase --dry-run` lists every report of
+  the Saturdays the person was part of, since erasing removes the rows that
+  say which those were; the runbook has the operator check them first.
+- **Where the office adds someone by hand, `people.source` says `OFFICE`.** It
+  had said `FORM` since 8.3; a migration corrected those saved in between.
+- **Files live on a Railway volume** (owner, 25 Sept 2026), not in an R2 or
+  B2 bucket as first built: uploads and downloads go through the API, and
+  `FILES_DIR` replaces the five `STORAGE_` variables and the AWS SDK. The
+  browser sends the file's size with it, so a body cut short on the way is
+  refused rather than kept.

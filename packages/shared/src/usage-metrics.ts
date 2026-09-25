@@ -41,6 +41,7 @@ export const USAGE_METRICS: MetricDef[] = [
   m('Entities', 'entities.members.confirmed', 'gauge', 'Confirmed members'),
   m('Entities', 'entities.finance.transactions', 'gauge', 'Finance entries'),
   m('Entities', 'entities.finance.items', 'gauge', 'Income sources and expense items'),
+  m('Entities', 'entities.finance.pledges', 'gauge', 'Pledges'),
   m('Entities', 'entities.users.active', 'gauge', 'Staff who can sign in'),
   m('Entities', 'entities.users.invited', 'gauge', 'Staff still invited'),
   m('Entities', 'entities.users.disabled', 'gauge', 'Staff disabled'),
@@ -50,6 +51,37 @@ export const USAGE_METRICS: MetricDef[] = [
   // Read from user_activity_daily rather than written here: one row per
   // person per day already exists there, and counting them is the answer.
   m('Activity', 'users.active', 'gauge', 'Staff active that day'),
+
+  m('Departments', 'departments.leaders.named', 'counter', 'Department leaders named'),
+  m('Departments', 'departments.members.added', 'counter', 'People added to departments'),
+
+  m('Storage', 'storage.files', 'gauge', 'Files kept (current versions)'),
+  m('Storage', 'storage.bytes', 'gauge', 'Size of every file kept, older versions too', 'bytes'),
+
+  m('Outreach', 'outreach.reached', 'counter', 'People recorded as reached'),
+  m('Outreach', 'outreach.followups', 'counter', 'Calls, visits and invitations'),
+  m('Outreach', 'outreach.visits', 'counter', 'Home visits'),
+  m('Outreach', 'outreach.sessions', 'counter', 'Saturdays marked completed'),
+  m('Outreach', 'outreach.training.attendance', 'counter', 'People marked present at training'),
+  m('Outreach', 'outreach.followups.pending', 'gauge', 'People awaiting follow-up'),
+
+  m('Messages', 'sms.queued', 'counter', 'Messages queued'),
+  m('Messages', 'sms.sent', 'counter', 'Messages sent'),
+  m('Messages', 'sms.delivered', 'counter', 'Messages delivered'),
+  m('Messages', 'sms.failed', 'counter', 'Messages that failed'),
+  m('Messages', 'sms.skipped_opt_out', 'counter', 'People left alone because they asked'),
+  m(
+    'Messages',
+    'sms.skipped_recent',
+    'counter',
+    'People left alone because a reminder reached them lately',
+  ),
+  m('Messages', 'sms.segments', 'counter', 'Segments sent (what the carrier bills)'),
+  m('Messages', 'sms.cost', 'counter', 'What messages cost, in TZS'),
+  m('Messages', 'sms.balance', 'gauge', 'Beem credit left, in TZS'),
+  m('Messages', 'sms.replies', 'counter', 'Replies kept for Communications to read'),
+  m('Messages', 'sms.replies.stop', 'counter', 'Replies that said STOP'),
+  m('Messages', 'comms.templates.approved', 'counter', 'Templates approved'),
 
   m('API', 'api.requests', 'counter', 'Requests'),
   m('API', 'api.requests.*', 'counter', 'Requests by module'),
@@ -96,6 +128,11 @@ export const USAGE_METRICS: MetricDef[] = [
   m('Finance', 'finance.transactions.replaced', 'counter', 'Entries moved to another month'),
   m('Finance', 'finance.catalog.created', 'counter', 'Items added'),
   m('Finance', 'finance.exports', 'counter', 'Downloads'),
+  m('Finance', 'finance.pledges.campaigns', 'counter', 'Pledge campaigns opened'),
+  m('Finance', 'finance.pledges.created', 'counter', 'Pledges recorded'),
+  m('Finance', 'finance.pledges.cancelled', 'counter', 'Pledges cancelled'),
+  m('Finance', 'finance.pledges.payments', 'counter', 'Payments towards pledges recorded'),
+  m('Finance', 'finance.pledges.payments.voided', 'counter', 'Payments towards pledges voided'),
 
   m('Change requests', 'change_requests.created', 'counter', 'Changes asked for'),
   m('Change requests', 'change_requests.applied', 'counter', 'Changes approved and applied'),
