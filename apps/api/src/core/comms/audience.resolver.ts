@@ -15,6 +15,8 @@ export type Resolved = {
   phone: string;
   lang: SmsLang;
   status: 'PENDING' | Skip;
+  /** What the audience fills in for them, in a given language. */
+  blanks?: (lang: SmsLang) => Record<string, string>;
 };
 
 /**
@@ -66,6 +68,7 @@ export class AudienceResolver {
         name: m.name,
         phone: phone ?? '',
         lang,
+        blanks: m.blanks,
       };
       if (!phone) return { ...base, status: 'SKIPPED_NO_PHONE' as const };
       if (m.optedOut || blocked.has(phone)) return { ...base, status: 'SKIPPED_OPT_OUT' as const };

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { z } from 'zod';
-import { ErrorCode } from '@irca/shared';
+import { ErrorCode, type SmsLang } from '@irca/shared';
 import type { Tx } from '../database/db.service.js';
 import { AppError } from '../http/app-error.js';
 
@@ -16,6 +16,11 @@ export type AudienceMember = {
   lang?: string | null;
   /** They asked, on their record, not to be messaged. */
   optedOut: boolean;
+  /**
+   * Blanks only this audience knows, for this person, written for a text in
+   * the language they will be sent: {{balance}} as "150,000 TZS".
+   */
+  blanks?: (lang: SmsLang) => Record<string, string>;
 };
 
 /**
@@ -36,6 +41,8 @@ export interface AudienceProvider<P = unknown> {
    * people, which its leaders can always reach — but only their own.
    */
   readonly scope: 'church' | 'department';
+  /** The audience blanks it fills for each person ({{balance}}), if any. */
+  readonly fills?: readonly string[];
   /** Its parameters, checked before anything else is done with them. */
   readonly params: z.ZodType<P>;
   /** The departments these parameters name, for a 'department' audience. */

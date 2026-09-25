@@ -82,7 +82,10 @@ export const isStop = (reply: string): boolean =>
 
 /**
  * The blanks a template may use. The first four are filled for each person
- * from who they are; the rest the sender types when sending.
+ * from who they are; the sender types the next four when sending; and the
+ * last are filled for each person by the audience that knows them — only
+ * the people who still owe on a pledge, today — already written the way a
+ * text says them ("200,000 TZS", "12 Oktoba"), never as a raw figure.
  */
 export const BLANKS = {
   first_name: { label: 'First name', from: 'recipient' },
@@ -93,6 +96,10 @@ export const BLANKS = {
   date: { label: 'Date', from: 'sender' },
   time: { label: 'Time', from: 'sender' },
   venue: { label: 'Where', from: 'sender' },
+  campaign_name: { label: 'Campaign (pledge reminders only)', from: 'audience' },
+  amount: { label: 'Amount promised (pledge reminders only)', from: 'audience' },
+  balance: { label: 'Amount still owed (pledge reminders only)', from: 'audience' },
+  due_date: { label: 'Date it is due (pledge reminders only)', from: 'audience' },
 } as const;
 export type Blank = keyof typeof BLANKS;
 
@@ -111,6 +118,10 @@ export function blanksOf(body: string): string[] {
 /** The blanks the sender has to type in, for a template using these. */
 export const senderBlanks = (fields: string[]): Blank[] =>
   fields.filter((f): f is Blank => f in BLANKS && BLANKS[f as Blank].from === 'sender');
+
+/** The blanks only an audience can fill, for a template using these. */
+export const audienceBlanks = (fields: string[]): Blank[] =>
+  fields.filter((f): f is Blank => f in BLANKS && BLANKS[f as Blank].from === 'audience');
 
 /** The body with its blanks filled; a blank with no value is left empty. */
 export function fillBlanks(body: string, values: Record<string, string>): string {

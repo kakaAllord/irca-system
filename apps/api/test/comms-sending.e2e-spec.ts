@@ -183,7 +183,7 @@ describe('sending: refused for a reason you can read, whenever it should be (07 
     ]);
   });
 
-  it('refuses another department’s leader, unapproved words, free text, and a missing blank', async () => {
+  it('refuses another department’s leader, unapproved words, free text, and a blank it cannot fill', async () => {
     const { dept, template } = await choir();
     const ushers = await createDepartment(db, { name: 'Ushers' });
     const other = await signIn(await createLeader(db, ushers.id));
@@ -230,6 +230,20 @@ describe('sending: refused for a reason you can read, whenever it should be (07 
       templateId: template.id,
     }).expect(422);
     expect(blank.body.error.message).toBe('Fill in date before sending.');
+
+    // A figure only an audience knows cannot go to one that does not know it.
+    const owed = await createTemplate(db, {
+      departmentId: dept.id,
+      bodies: { sw: 'Salamu {{first_name}}, bado {{balance}}.' },
+    });
+    const unfilled = await send(leader, {
+      departmentId: dept.id,
+      audience: everyone(dept.id),
+      templateId: owed.id,
+    }).expect(422);
+    expect(unfilled.body.error.message).toMatch(
+      /\{\{balance\}\} can only be sent to people who still owe/,
+    );
   });
 
   it('sends with no limit saved, and refuses a send over a saved limit with the figure', async () => {

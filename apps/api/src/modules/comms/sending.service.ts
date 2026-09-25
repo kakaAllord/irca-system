@@ -3,6 +3,7 @@ import {
   BLANKS,
   ErrorCode,
   SMS_LANGS,
+  audienceBlanks,
   blanksOf,
   renderSms,
   segments,
@@ -139,12 +140,21 @@ export class SendingService {
     }
 
     // 4: who, in which language, saying exactly what, and what it costs.
-    const { name, recipients } = await this.resolver.resolve(
+    const { provider, name, recipients } = await this.resolver.resolve(
       tx,
       input.audience.key,
       input.audience.params,
       settings.defaultLang,
     );
+    // {{balance}} to someone the audience knows nothing about would go out
+    // as a blank space where a figure should be.
+    const unfilled = audienceBlanks(fields).filter((f) => !provider.fills?.includes(f));
+    if (unfilled.length) {
+      throw unprocessable(
+        `${unfilled.map((f) => `{{${f}}}`).join(', ')} can only be sent to people who still owe on a pledge. Choose that audience, or another template.`,
+        { fields: unfilled },
+      );
+    }
     const church = await tx.church.findFirst();
     const common = {
       ...typed,
@@ -249,6 +259,7 @@ export class SendingService {
         : (SMS_LANGS.find((l) => bodies[l]) ?? defaultLang);
     if (r.status !== 'PENDING') return { ...r, lang, body: '', segments: 0, encoding: null };
     const body = renderSms(bodies[lang]!, lang, {
+      ...(r.blanks?.(lang) ?? {}),
       ...common,
       first_name: firstNameOf(r.name),
       full_name: r.name,
