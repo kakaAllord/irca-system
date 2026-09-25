@@ -13,9 +13,12 @@ the Outreach leader's own answers before Phase 8 starts**
   season or change weekly: _TBC — it decides what the Saturday screen shows
   first._
 
-Roles that follow: **Outreach leader** (team, Saturdays, training, messages),
-**Outreach member** (records who was reached and follows them up),
-**Outreach viewer** (a pastor reading the numbers).
+Who does what (D28, D29): the team is the **Outreach department** in Admin →
+Departments. Its **leaders**, named by an administrator, run the portal by
+leading it — partner groups, Saturdays, training, the report — and keep the
+team's members and send its messages like any department's leaders. Those who
+sign in to record hold the **Outreach member** role; a pastor reading the
+numbers holds **Outreach viewer**.
 
 ## 2. What do they do every week?
 
@@ -39,18 +42,22 @@ Roles that follow: **Outreach leader** (team, Saturdays, training, messages),
 
 ## 4. What do they need from other portals?
 
-| Need | Permission | From |
+| Need | How | From |
 | --- | --- | --- |
-| Search the church's people, to add to the team | `membership.people.read` | Membership |
-| Phone numbers, to call and to message | `membership.people.read_sensitive` (leader) | Membership |
-| Whether someone attended a service | `membership.people.read` + the shared timeline | Membership |
-| Send training reminders | being an Outreach department leader (D28) | Comms |
+| Pick people for the team | My departments → Outreach: a search showing names and the end of a number | Departments |
+| Know whether someone they reached is already in People | Matched by the API when recording, by phone then name | Membership's `people` table |
+| Phone numbers, to call the people they reached | `outreach.reached.read`, for people Outreach reached only | Outreach itself |
+| Whether someone came to church | The shared timeline (D23) | Every portal |
+| Send training reminders | Being an Outreach department leader (D28) | Comms |
 
 ## 5. What must they never see?
 
 - **Prayer requests** and follow-up notes written by the Membership team:
-  both are behind `membership.people.read_sensitive`, which only the leader
-  holds, and the member role must not be able to reach them.
+  both are behind `membership.people.read_sensitive`, which no Outreach role
+  or leadership holds. The timeline shows that the Membership team called or
+  visited, never what they wrote.
+- **The rest of People.** Outreach sees the people it reached and its own
+  team, not the church's whole list.
 - Finance and Admin.
 
 ## 6. What leaves the system, and who pays?

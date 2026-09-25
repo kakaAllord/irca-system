@@ -536,6 +536,33 @@ The rules that follow:
 
 ---
 
+## D29. A portal's own leaders run it, by leading its department (25 Sept 2026)
+
+Found while correcting Phase 8 for D28, which settles it in the spirit of
+that decision. Outreach is the first portal whose department leader is the
+person who uses it most: they plan the Saturdays, keep the partner groups,
+mark the Friday training and attach the report. D28 says what a leader may
+do comes from being one. But the leadership permissions it built
+(`fromLeadership`) are held by the leader of **any** department, because
+they are about "your own department" in general — send to it, keep its
+members. Marking `outreach.sessions.manage` that way would let the choir's
+chairperson plan Outreach's Saturdays.
+
+| Option | What it costs |
+| --- | --- |
+| An `Outreach leader` role the administrator gives the leader as well | Works today, and is exactly the role that outlives the leadership which D28 was written to prevent: two things to remember when a leader changes, and the second is always forgotten. |
+| `fromLeadership` on the portal's permissions | Every department's leaders would hold them, and the portal's service would have to check "leads Outreach" on every route. A viewer role could no longer hold the read permissions, since leadership permissions are never put in a role. |
+| **A portal names what its own department's leaders may do (taken)** | One optional `leaders` list on a module definition and one more line in the resolver's query. The permissions in it are ordinary ones — a viewer or member role can hold them too, and an administrator can still make a custom role for an assistant — but the leaders of the department the portal belongs to hold them without any role, from the day they are named to the day they stop. |
+
+Consequences: `PermissionResolver.forUser` also returns the portals of the
+departments someone leads (still one query) and adds each one's `leaders`
+permissions while that portal is on. Admin → Portals says what a portal's
+leaders get, so nobody wonders where the power came from. Membership,
+Finance and Communications have no `leaders` list: they are run through
+roles, as before, until their departments ask otherwise.
+
+---
+
 ## Open questions (each with a recommendation — proceed on the recommendation unless the owner overrules)
 
 | # | Question | Recommendation and why |
@@ -553,3 +580,4 @@ The rules that follow:
 | Q10 | Does a pledge reminder name the figure someone still owes? | **No by default.** A text saying "you promised 200,000 and have paid 50,000" is readable by whoever picks up the phone. The default template invites them to the office instead; a template carrying `{{balance}}` is possible, and needs the leadership's approval like any other (Phase 7 step 7.6, Phase 9 step 9.0). |
 | Q11 | Who owns a person reached by Outreach who never comes to church? | **The church, as an ordinary person record**, with `source = 'OUTREACH'` and their interactions. They are not a lesser kind of record. The retention question in `docs/data-inventory.md` section 5 covers them: if the church sets a period for never-followed-up registrations, it covers these too. |
 | Q12 | One Beem account for the platform, or one per church? | *Superseded by D26 and D27: there is one church per deployment, and its Beem account is held in the database, set by Communications itself.* |
+| Q13 | Someone Outreach recorded on a doorstep later fills in the registration form. The form makes a person when it starts, so they are now in People twice. Should the form join them to the record Outreach made? | **Not automatically; show the office the likely pair.** The form is public and unauthenticated: joining on a typed phone number would let anyone attach their answers — prayer requests included — to someone else's record. Phase 8 records the doorstep person with `source = 'OUTREACH'`; a later small step can list, in Membership, people whose numbers match a registration made after them, for the office to merge by hand. Until then the Outreach timeline stays on the doorstep record, and the office can see both. |
