@@ -13,6 +13,7 @@ import { EnrollDrawer } from '@/modules/membership/components/EnrollDrawer';
 import { STAGE_LABEL, day, when, type PersonDetail } from '@/modules/membership/types';
 import { StageActions } from './StageActions';
 import { MessagingSettings } from '@/modules/membership/components/MessagingSettings';
+import { Timeline, type TimelineLine } from '@/modules/membership/Timeline';
 
 export const metadata: Metadata = { title: 'Person' };
 
@@ -25,7 +26,10 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
   if (!can(me, 'membership.people.read')) return <ForbiddenState what="this person's record" />;
 
   const { id } = await params;
-  const person = await serverApi<PersonDetail>(`/membership/people/${id}`);
+  const [person, timeline] = await Promise.all([
+    serverApi<PersonDetail>(`/membership/people/${id}`),
+    serverApi<TimelineLine[]>(`/membership/people/${id}/timeline`),
+  ]);
   const s = person.sensitive;
 
   const fact = (label: string, value: string | null | undefined) => (
@@ -158,6 +162,15 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
             </section>
           </>
         )}
+
+        <section className="rounded-[10px] border border-border bg-surface p-4 md:col-span-2">
+          <h2 className="mb-1 text-[13px] font-semibold text-fg">Timeline</h2>
+          <p className="mb-3 text-[12px] text-fg3">
+            Everything that happened with them, from every portal: Outreach&apos;s calls and visits
+            too.
+          </p>
+          <Timeline lines={timeline} />
+        </section>
 
         {person.notes && (
           <section className="rounded-[10px] border border-border bg-surface p-4 md:col-span-2">
