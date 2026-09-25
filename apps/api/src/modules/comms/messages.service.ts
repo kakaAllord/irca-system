@@ -6,6 +6,7 @@ import { RequestAuth } from '../../core/context/request-auth.js';
 import { AppError, notFound } from '../../core/http/app-error.js';
 import { AuditService } from '../../core/audit/audit.service.js';
 import { AudiencesService } from './audiences.service.js';
+import { AudienceRegistry } from '../../core/comms/audience.registry.js';
 
 const STATUSES = ['SCHEDULED', 'SENDING', 'SENT', 'PARTIAL', 'FAILED', 'CANCELLED'] as const;
 export type HistoryQuery = { departmentId?: string | null; status?: string; page?: number };
@@ -26,6 +27,7 @@ export class MessagesService {
     private readonly auth: RequestAuth,
     private readonly audit: AuditService,
     private readonly audiences: AudiencesService,
+    private readonly registry: AudienceRegistry,
   ) {}
 
   async list(query: HistoryQuery) {
@@ -106,6 +108,9 @@ export class MessagesService {
     if (!m) throw notFound('No such message.');
     await this.requireMayRead(m.departmentId);
     const whole = this.auth.has('membership.people.read_sensitive');
+    // Who a pledge reminder reached is who owes: not for every reader of history.
+    const guard = this.registry.find(m.audienceKey)?.readPermission;
+    const recipientsHidden = !!guard && !this.auth.has(guard);
     const users = await this.db.client.user.findMany({
       where: { id: { in: m.recipients.map((r) => r.userId).filter((u): u is string => !!u) } },
       select: { id: true, fullName: true },
@@ -131,7 +136,8 @@ export class MessagesService {
       segments: m.segments,
       cost: m.cost.toFixed(2),
       byStatus: (await this.counts([m.id])).get(m.id) ?? {},
-      recipients: m.recipients.map((r) => ({
+      recipientsHidden,
+      recipients: (recipientsHidden ? [] : m.recipients).map((r) => ({
         id: r.id,
         name: r.person?.fullName ?? users.find((u) => u.id === r.userId)?.fullName ?? '—',
         phone: whole ? r.phone : mask(r.phone),

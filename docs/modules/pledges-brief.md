@@ -67,6 +67,11 @@ its leaders send the reminders.
 - The lines a pledge writes on a person's timeline are hidden from anyone
   without `finance.pledges.read_sensitive`. Outreach, Membership and a
   department's leaders read the rest of that timeline, not these.
+- Who a reminder reached is who owes. Communications' history of a reminder
+  shows its counts to everyone who may read it, and the names only to those
+  holding `finance.pledges.read_sensitive`; the composer's sample shows the
+  words as written, not a named person with their figure, to a sender
+  without it.
 
 ## 6. What leaves the system, and who pays?
 

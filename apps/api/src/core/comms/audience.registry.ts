@@ -48,6 +48,13 @@ export interface AudienceProvider<P = unknown> {
    * two campaigns reminding on the same Monday are one text, not two.
    */
   readonly cooldown?: boolean;
+  /**
+   * Being in it says something private (that someone owes on a pledge), so
+   * who a message to it reached — their names in its history, a named
+   * sample in the composer — is shown only to holders of this permission.
+   * Others see the counts and the words as written.
+   */
+  readonly readPermission?: string;
   /** The audience blanks it fills for each person ({{balance}}), if any. */
   readonly fills?: readonly string[];
   /** Its parameters, checked before anything else is done with them. */
@@ -70,6 +77,10 @@ export class AudienceRegistry {
 
   all(): AudienceProvider[] {
     return [...this.providers.values()];
+  }
+
+  find(key: string): AudienceProvider | undefined {
+    return this.providers.get(key);
   }
 
   require(key: string): AudienceProvider {

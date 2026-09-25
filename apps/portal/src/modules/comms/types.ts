@@ -87,6 +87,8 @@ export type MessageDetail = Omit<MessageRow, 'recipientCount' | 'skippedCount' |
   fields: Record<string, string>;
   createdBy: string | null;
   finishedAt: string | null;
+  /** Who it reached is not for this reader (a pledge reminder): counts only. */
+  recipientsHidden: boolean;
   recipients: {
     id: string;
     name: string;

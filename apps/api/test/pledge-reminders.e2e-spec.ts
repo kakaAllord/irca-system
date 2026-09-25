@@ -212,6 +212,11 @@ describe('pledge reminders', () => {
       )
       .expect(200);
     expect(preview.body.audienceName).toBe('People who still owe on Ujenzi 2027');
+    // The leader does not hold the sensitive permission: the sample is the
+    // words as written, not a named person with their figure.
+    expect(preview.body.samples[0].text).toBe(
+      `Salamu {{first_name}}, bado {{balance}} kati ya {{amount}} kwa {{campaign_name}}, hadi {{due_date}}. ${OPT_OUT.sw}`,
+    );
     const sent = await portal(app)
       .post(
         '/v1/comms/messages',
@@ -226,6 +231,32 @@ describe('pledge reminders', () => {
     expect(rows[0]!.body).toBe(
       `Salamu Neema, bado 150,000 TZS kati ya 200,000 TZS kwa Ujenzi 2027, hadi 12 Oktoba. ${OPT_OUT.sw}`,
     );
+
+    // Who it reached is who owes: the history shows counts to the leader, and
+    // names only to someone who may see pledges.
+    const asLeader = await portal(app)
+      .get(`/v1/comms/messages/${sent.body.id}`, leaderCookie)
+      .expect(200);
+    expect(asLeader.body).toMatchObject({ recipientsHidden: true, recipients: [] });
+    const overseer = await createUserWithPermissions(db, ['comms.messages.read'], {
+      moduleKey: 'comms',
+    });
+    const role = await db.query<{ id: string }>(
+      `select id from roles where system_key = 'finance.pledges_overseer'`,
+    );
+    await db.query(`insert into user_roles (user_id, role_id) values ($1, $2)`, [
+      overseer.id,
+      role.rows[0]!.id,
+    ]);
+    const asOverseer = await portal(app)
+      .get(`/v1/comms/messages/${sent.body.id}`, await signIn(overseer))
+      .expect(200);
+    expect(asOverseer.body.recipientsHidden).toBe(false);
+    expect(asOverseer.body.recipients.map((r: { name: string }) => r.name).sort()).toEqual([
+      'Anna Mushi',
+      'Neema Mollel',
+      'Paul Laizer',
+    ]);
   });
 
   it('texts nobody twice when two campaigns remind on the same day, and counts who it skipped', async () => {

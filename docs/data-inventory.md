@@ -110,7 +110,9 @@ recorded it. The balance is worked out from those, never stored.
   timeline, and shown only to readers holding the same permission.
 - **In a text message:** a reminder names no figure, unless Communications has
   approved a template that does. What each person was sent is kept like any
-  other text message (section 5).
+  other text message (section 5). Who a reminder reached is shown in
+  Communications' history only to those holding the same permission; others
+  see how many.
 
 Per-person tithe or offering records would still be a new decision with its
 own consent conversation, not a small feature.

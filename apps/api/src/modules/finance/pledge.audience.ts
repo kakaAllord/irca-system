@@ -45,6 +45,8 @@ export class PledgeAudience implements OnModuleInit {
         'Everyone with an open pledge and something left to pay: one text each, however many pledges, and nobody twice in a fortnight.',
       scope: 'church',
       cooldown: true,
+      // Who owes is the leadership's sensitive permission, in Communications too.
+      readPermission: 'finance.pledges.read_sensitive',
       fills: ['campaign_name', 'amount', 'balance', 'due_date'],
       params: Params,
       describe: async (tx, params) => {

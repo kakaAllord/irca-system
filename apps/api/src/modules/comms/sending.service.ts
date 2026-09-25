@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import {
   BLANKS,
   ErrorCode,
+  OPT_OUT,
   SMS_LANGS,
   audienceBlanks,
   blanksOf,
@@ -79,8 +80,10 @@ export class SendingService {
   /** What a send would do, and whether it would be allowed, writing nothing. */
   async preview(input: SendInput) {
     return this.db.tx(async (tx) => {
-      const p = await this.prepare(tx, input, this.audiences.requestSender());
-      return this.describe(p);
+      const sender = this.audiences.requestSender();
+      const p = await this.prepare(tx, input, sender);
+      const guard = p.provider.readPermission;
+      return this.describe(p, !!guard && !sender.has(guard));
     });
   }
 
@@ -188,6 +191,7 @@ export class SendingService {
 
     return {
       input,
+      provider,
       department,
       template,
       bodies,
@@ -356,8 +360,12 @@ export class SendingService {
     };
   }
 
-  /** The numbers the composer shows before the button does anything. */
-  private describe(p: Prepared) {
+  /**
+   * The numbers the composer shows before the button does anything. With
+   * `anonymous`, each sample is the words as written rather than one real
+   * person's: for an audience whose members only some may see.
+   */
+  private describe(p: Prepared, anonymous = false) {
     const by = (s: string) => p.recipients.filter((r) => r.status === s).length;
     const samples = SMS_LANGS.flatMap((lang) => {
       const first = p.recipients.find((r) => r.status === 'PENDING' && r.lang === lang);
@@ -366,7 +374,7 @@ export class SendingService {
         {
           lang,
           people: p.recipients.filter((r) => r.status === 'PENDING' && r.lang === lang).length,
-          text: first.body,
+          text: anonymous ? `${p.bodies[first.lang] ?? ''} ${OPT_OUT[first.lang]}` : first.body,
           segments: first.segments,
           encoding: first.encoding,
         },
