@@ -54,6 +54,14 @@ export const USAGE_METRICS: MetricDef[] = [
   m('Departments', 'departments.leaders.named', 'counter', 'Department leaders named'),
   m('Departments', 'departments.members.added', 'counter', 'People added to departments'),
 
+  m('Messages', 'sms.queued', 'counter', 'Messages queued'),
+  m('Messages', 'sms.sent', 'counter', 'Messages sent'),
+  m('Messages', 'sms.delivered', 'counter', 'Messages delivered'),
+  m('Messages', 'sms.failed', 'counter', 'Messages that failed'),
+  m('Messages', 'sms.skipped_opt_out', 'counter', 'People left alone because they asked'),
+  m('Messages', 'sms.segments', 'counter', 'Segments sent (what the carrier bills)'),
+  m('Messages', 'sms.cost', 'counter', 'What messages cost, in TZS'),
+  m('Messages', 'sms.balance', 'gauge', 'Beem credit left, in TZS'),
   m('Messages', 'comms.templates.approved', 'counter', 'Templates approved'),
 
   m('API', 'api.requests', 'counter', 'Requests'),
