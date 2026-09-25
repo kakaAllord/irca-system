@@ -145,11 +145,16 @@ export class AudiencesService {
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     });
+    // For the pledge audience's "which campaign"; the names are not sensitive.
+    const campaigns = await this.db.client.pledgeCampaign.findMany({
+      select: { id: true, name: true },
+      orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
+    });
     const audiences = this.registry
       .all()
       .filter((p) => !granted || p.scope === 'department' || granted.has(p.key))
       .map((p) => describe(p));
-    return { audiences, departments, groups };
+    return { audiences, departments, groups, campaigns };
   }
 
   /** How many a choice reaches now, and how many are left alone, without sending. */

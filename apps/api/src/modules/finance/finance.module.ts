@@ -14,6 +14,7 @@ import {
   PledgesController,
 } from './pledges.controller.js';
 import { PledgePaymentChangeHandler } from './pledge-payment-change.handler.js';
+import { PledgeAudience } from './pledge.audience.js';
 
 /**
  * Money in and money out.
@@ -40,6 +41,7 @@ import { PledgePaymentChangeHandler } from './pledge-payment-change.handler.js';
     TransactionChangeHandler,
     PledgesService,
     PledgePaymentChangeHandler,
+    PledgeAudience,
   ],
 })
 export class FinanceModule {}

@@ -104,6 +104,41 @@ export function AudiencePicker({
         </fieldset>
       )}
 
+      {key === 'finance.pledge_outstanding' && (
+        <>
+          <Select
+            label="Which campaign"
+            value={(value?.params.campaignId as string | undefined) ?? ''}
+            onChange={(e) =>
+              onChange({
+                key,
+                params: {
+                  ...value?.params,
+                  campaignId: e.target.value || undefined,
+                },
+              })
+            }
+            options={[
+              { value: '', label: 'Every campaign' },
+              ...options.campaigns.map((c) => ({ value: c.id, label: c.name })),
+            ]}
+          />
+          <label className="flex items-center gap-2 text-[12.5px] text-fg">
+            <input
+              type="checkbox"
+              checked={value?.params.overdueOnly === true}
+              onChange={(e) =>
+                onChange({
+                  key,
+                  params: { ...value?.params, overdueOnly: e.target.checked || undefined },
+                })
+              }
+            />
+            Only those past the date they were to pay by
+          </label>
+        </>
+      )}
+
       {key === 'membership.class' && (
         <Select
           label="Which group"

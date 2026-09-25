@@ -19,6 +19,7 @@ export type AudienceOptions = {
   audiences: AudienceChoice[];
   departments: { id: string; name: string }[];
   groups: { id: string; name: string }[];
+  campaigns: { id: string; name: string }[];
 };
 
 export type Audience = { key: string; params: Record<string, unknown> };
