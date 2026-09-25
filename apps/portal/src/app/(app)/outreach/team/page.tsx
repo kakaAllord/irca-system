@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Cell, Row, Table } from '@/components/ui/Table';
 import { STAGE_LABEL } from '@/modules/membership/types';
 import { GroupActiveButton, GroupDrawer } from '@/modules/outreach/GroupDrawer';
+import { GroupHistory } from '@/modules/outreach/GroupHistory';
 import type { Team } from '@/modules/outreach/types';
 
 export const metadata: Metadata = { title: 'Team' };
@@ -114,6 +115,7 @@ export default async function TeamPage() {
                     <span className="text-[12px] text-fg2">
                       {g.people.map((p) => p.name).join(', ')}
                     </span>
+                    <GroupHistory group={g} />
                   </span>
                   {manage && (
                     <span className="flex flex-none items-center">
@@ -133,8 +135,9 @@ export default async function TeamPage() {
               <ul className="mt-2 flex flex-col gap-1.5">
                 {off.map((g) => (
                   <li key={g.id} className="flex items-center gap-2 text-fg3">
-                    <span>
-                      {g.name}: {g.people.map((p) => p.name).join(', ')}
+                    <span className="flex flex-col">
+                      {g.name}
+                      <GroupHistory group={g} />
                     </span>
                     {manage && <GroupActiveButton group={g} />}
                   </li>

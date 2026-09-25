@@ -21,6 +21,8 @@ export type PartnerGroup = {
   name: string;
   active: boolean;
   people: { personId: string; name: string }[];
+  /** Everyone who has been in it, from when until when (null: still in it). */
+  history: { personId: string; name: string; from: string; to: string | null }[];
 };
 
 export type Team = {
