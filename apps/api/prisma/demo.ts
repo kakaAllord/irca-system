@@ -8,6 +8,10 @@
 //
 //     npm run db:reset && npm run db:seed && npm run db:demo
 //
+// `--scale 10` writes ten times the people, registrations, finance entries,
+// Outreach contacts and traffic, which is what the list pages are measured
+// against before launch (docs/plan/10, step 10.1).
+//
 // Everything it writes comes from one fixed random seed, so two people running
 // it see the same church, and a screenshot keeps meaning what it meant.
 import { config } from 'dotenv';
@@ -23,7 +27,20 @@ if (env !== 'development' && env !== 'test') {
   process.exit(1);
 }
 
-const MONTHS = Number(process.argv.find((a) => a.startsWith('--months='))?.slice(9) ?? 18);
+/** `--name=value` or `--name value`, whichever was typed. */
+function arg(name: string): string | undefined {
+  const i = process.argv.findIndex((a) => a === `--${name}` || a.startsWith(`--${name}=`));
+  if (i < 0) return undefined;
+  const a = process.argv[i]!;
+  return a.includes('=') ? a.slice(a.indexOf('=') + 1) : process.argv[i + 1];
+}
+
+const MONTHS = Number(arg('months') ?? 18);
+const SCALE = Number(arg('scale') ?? 1);
+if (!Number.isInteger(SCALE) || SCALE < 1 || SCALE > 50) {
+  console.error(`--scale takes a whole number from 1 to 50, not ${arg('scale')}.`);
+  process.exit(1);
+}
 
 const db = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DIRECT_DATABASE_URL! }),
@@ -231,7 +248,20 @@ const LANGS = ['en', 'en', 'en', 'sw', 'sw', 'sw', 'sw', 'fr'];
 const fullName = (gender: string) =>
   `${pick(gender === 'female' ? FIRST_F : FIRST_M)} ${pick(SURNAMES)}`;
 
-const phone = () => `7${int(0, 8)}${String(int(0, 9_999_999)).padStart(7, '0')}`;
+/**
+ * Never the same number twice: a registration's number is unique, and at
+ * `--scale 10` the dice would repeat one.
+ */
+const phonesUsed = new Set<string>();
+function phone(): string {
+  for (;;) {
+    const n = `7${int(0, 8)}${String(int(0, 9_999_999)).padStart(7, '0')}`;
+    if (!phonesUsed.has(n)) {
+      phonesUsed.add(n);
+      return n;
+    }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Who is doing all this.
@@ -299,7 +329,7 @@ async function writeHistory(staff: Staff) {
   const church = await db.church.findFirstOrThrow();
   const code = church.code;
   const currency = church.currency;
-  const scale = 1;
+  const scale = SCALE;
 
   // -- registrations and the people behind them -----------------------------
 
@@ -599,6 +629,89 @@ async function writeHistory(staff: Staff) {
   await db.foundationAttendance.createMany({ data: attendance as never });
   console.log(`  ${code}: ${enrollments.length} class sign-ups, ${attendance.length} marks`);
 
+  // -- Saturdays out ----------------------------------------------------------
+
+  // The team is people who came through the form; those they reach are new
+  // people of their own, as the Outreach portal records them.
+  const team = people.slice(0, 12);
+  const outreachGroups = ['Njiro pair', 'Sakina pair', 'Kijenge pair'].map((name) => ({
+    id: uuid7(start),
+    name,
+    createdAt: start,
+  }));
+  const sessionRows: unknown[] = [];
+  const teamRows: unknown[] = [];
+  const teamMembers: unknown[] = [];
+  const reachedPeople: unknown[] = [];
+  const reachedRows: unknown[] = [];
+  for (const saturday of team.length >= 4 ? weekdays(6) : []) {
+    const at = atHour(saturday, 9);
+    const sid = uuid7(at);
+    sessionRows.push({
+      id: sid,
+      heldOn: new Date(`${ymd(saturday)}T00:00:00Z`),
+      status: 'COMPLETED',
+      createdById: staff.admin,
+      createdAt: at,
+    });
+    for (const group of some(outreachGroups, 2, 3)) {
+      const tid = uuid7(at);
+      const area = pick(WARDS);
+      const goers = some(team, 2, 3);
+      teamRows.push({
+        id: tid,
+        sessionId: sid,
+        groupId: group.id,
+        area,
+        spokenToOnly: int(0, 6) * scale,
+      });
+      for (const g of goers) teamMembers.push({ teamId: tid, personId: g.id });
+
+      for (let n = int(1, 5) * scale; n > 0; n--) {
+        const when = atHour(saturday, int(10, 15));
+        const gender = chance(0.5) ? 'female' : 'male';
+        const saved = chance(0.3);
+        const pid = uuid7(when);
+        reachedPeople.push({
+          id: pid,
+          fullName: fullName(gender),
+          gender,
+          dial: '+255',
+          phone: chance(0.8) ? phone() : '',
+          lang: 'sw',
+          source: 'OUTREACH',
+          stage: saved ? 'NEW_CONVERT' : 'VISITOR',
+          saved: saved || null,
+          createdById: staff.admin,
+          createdAt: when,
+          updatedAt: when,
+        });
+        reachedRows.push({
+          id: uuid7(when),
+          personId: pid,
+          sessionId: sid,
+          teamId: tid,
+          reachedOn: new Date(`${ymd(saturday)}T00:00:00Z`),
+          area,
+          reachedByIds: goers.map((g) => g.id),
+          needsFollowUp: when > addDays(today, -60) ? chance(0.6) : chance(0.1),
+          saved,
+          recordedById: staff.admin,
+          createdAt: when,
+        });
+      }
+    }
+  }
+  await db.outreachGroup.createMany({ data: outreachGroups, skipDuplicates: true });
+  await db.outreachSession.createMany({ data: sessionRows as never });
+  await db.outreachSessionTeam.createMany({ data: teamRows as never });
+  await db.outreachSessionTeamMember.createMany({ data: teamMembers as never });
+  await db.person.createMany({ data: reachedPeople as never });
+  await db.outreachReached.createMany({ data: reachedRows as never });
+  console.log(
+    `  ${code}: ${sessionRows.length} Saturdays out, ${reachedRows.length} people reached`,
+  );
+
   // -- the books ------------------------------------------------------------
 
   const INCOME = [
@@ -742,7 +855,7 @@ async function writeHistory(staff: Staff) {
       method: 'CASH',
       counterparty: 'Sunday service',
     });
-    for (let t = int(3, 9) * (scale > 0.5 ? 1 : 0) + 1; t > 0; t--) {
+    for (let t = int(3, 9) * scale + 1; t > 0; t--) {
       entry('INCOME', sunday, Math.round((int(20_000, 300_000) * growth) / 1000) * 1000, {
         source: 'Tithe',
         counterparty: fullName(chance(0.5) ? 'female' : 'male'),
@@ -794,7 +907,7 @@ async function writeHistory(staff: Staff) {
           counterparty: item === 'Rent' ? 'Kilombero Properties' : undefined,
         });
     }
-    for (let n = int(2, 7); n > 0; n--) {
+    for (let n = int(2, 7) * scale; n > 0; n--) {
       const on = billDay(int(1, 28));
       if (!on) continue;
       const item = pick([
