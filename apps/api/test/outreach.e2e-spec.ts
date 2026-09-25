@@ -346,7 +346,62 @@ describe('Outreach (Phase 8)', () => {
         .expect(204);
     });
 
-    it('opts a new person out when they said no', async () => {
+    it('asks "same person?" for a number already known, however it was typed', async () => {
+      const { cookie } = await outreach();
+      const first = await portal(app).post('/v1/outreach/reached', neema, cookie).expect(201);
+
+      const asked = await portal(app)
+        .post(
+          '/v1/outreach/reached',
+          { ...neema, fullName: 'Neema M.', phone: '+255712345678' },
+          cookie,
+        )
+        .expect(409);
+      expect(asked.body.error.code).toBe('POSSIBLE_MATCH');
+      expect(asked.body.error.details.candidates).toEqual([
+        {
+          personId: first.body.personId,
+          name: 'Neema Mollel',
+          last: expect.stringMatching(/^reached /),
+        },
+      ]);
+
+      // Same person: a second reach and a second line, on one person.
+      const same = await portal(app)
+        .post('/v1/outreach/reached', { ...neema, samePersonId: first.body.personId }, cookie)
+        .expect(201);
+      expect(same.body).toMatchObject({ personId: first.body.personId, known: true });
+      const count = await db.query(
+        `select (select count(*)::int from people) as people,
+                (select count(*)::int from person_interactions where person_id = $1) as lines`,
+        [first.body.personId],
+      );
+      expect(count.rows[0]).toEqual({ people: 5, lines: 2 }); // the leader, three members, and Neema
+
+      // Someone else: a new person, even with the same number.
+      const other = await portal(app)
+        .post(
+          '/v1/outreach/reached',
+          { ...neema, fullName: 'Neema Sister', notSamePerson: true },
+          cookie,
+        )
+        .expect(201);
+      expect(other.body.personId).not.toBe(first.body.personId);
+    });
+
+    it('matches on the name only when there is no number', async () => {
+      const { cookie } = await outreach();
+      await createPerson(db, { fullName: 'Baraka Swai' });
+      const asked = await portal(app)
+        .post('/v1/outreach/reached', { fullName: 'Baraka Swai', mayMessage: true }, cookie)
+        .expect(409);
+      expect(asked.body.error.details.candidates[0]).toMatchObject({
+        name: 'Baraka Swai',
+        last: expect.stringMatching(/^registered /),
+      });
+    });
+
+    it('opts a new person out when they said no, and never back in', async () => {
       const { cookie } = await outreach();
       const no = await portal(app)
         .post('/v1/outreach/reached', { ...neema, mayMessage: false }, cookie)
@@ -358,6 +413,15 @@ describe('Outreach (Phase 8)', () => {
         sms_opt_out: true,
         sms_opt_out_source: 'outreach',
       });
+      // A yes on a later Saturday does not undo it: only the person, through the office, can.
+      await portal(app)
+        .post(
+          '/v1/outreach/reached',
+          { ...neema, mayMessage: true, samePersonId: no.body.personId },
+          cookie,
+        )
+        .expect(201);
+      expect((await optOut(no.body.personId)).sms_opt_out).toBe(true);
     });
 
     it('leaves a viewer reading, never writing', async () => {

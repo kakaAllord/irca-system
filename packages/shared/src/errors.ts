@@ -37,6 +37,8 @@ export const ErrorCode = {
   NEEDS_DEPARTMENT: 'NEEDS_DEPARTMENT',
   NOT_CONFIRMED_MEMBER: 'NOT_CONFIRMED_MEMBER',
   ALREADY_LEADS: 'ALREADY_LEADS',
+  /** Someone recorded on a Saturday may be a person the church already knows. */
+  POSSIBLE_MATCH: 'POSSIBLE_MATCH',
   SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
   INTERNAL: 'INTERNAL',
 } as const;

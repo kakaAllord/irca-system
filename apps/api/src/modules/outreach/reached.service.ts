@@ -26,6 +26,10 @@ export type ReachedInput = {
   note?: string;
   /** Only for someone reached away from a Saturday; a team brings its own date. */
   reachedOn?: string;
+  /** "Same person": add this reach to someone already known. */
+  samePersonId?: string;
+  /** "Someone else": the candidates offered were not them. */
+  notSamePerson?: boolean;
 };
 
 export type ReachedQuery = {
@@ -37,7 +41,28 @@ export type ReachedQuery = {
   page?: number;
 };
 
+/** How close a name must be, with no phone to go by, to ask "same person?". */
+const SIMILAR_NAME = 0.55;
 const PAGE = 50;
+
+/**
+ * A phone number as digits, the way two records of it can be compared: the
+ * dialling code and the rest, with a leading 0 read as the trunk prefix
+ * people type out of habit (0712 → +255 712), as `toE164` reads it. Null
+ * when there is no number.
+ */
+export function phoneKey(dial: string, phone: string): string | null {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length < 6) return null;
+  if (phone.trim().startsWith('+')) return digits;
+  return `${dial.replace(/\D/g, '')}${digits.replace(/^0+/, '')}`;
+}
+
+/** The same key, in SQL, for the people already in the list. */
+const PERSON_PHONE_KEY = sql`case when p.phone like '+%'
+  then regexp_replace(p.phone, '\\D', '', 'g')
+  else regexp_replace(p.dial, '\\D', '', 'g')
+    || regexp_replace(regexp_replace(p.phone, '\\D', '', 'g'), '^0+', '') end`;
 
 /** "Peter Mushi and John Laizer", "Peter, John and Grace". */
 export function names(list: string[]): string {
@@ -48,7 +73,11 @@ export function names(list: string[]): string {
 /**
  * People reached on a Saturday, recorded in four fields (08 step 8.5).
  *
- * Someone reached becomes a person in the church's one list (D23).
+ * Someone reached becomes a person in the church's one list (D23), unless
+ * they already are one: before anyone is made, the phone number is compared
+ * with everyone's, or with no number the name, and the recorder is asked
+ * "same person?" instead of a second record being saved. The answer comes
+ * back with the request that is sent again.
  *
  * Their name and number are the office's to correct, in Membership. What
  * Outreach fills in later is its own: the area, the note, and whether they
@@ -282,9 +311,38 @@ export class ReachedService {
     return { sessionId, teamId: input.teamId ?? null, area, reachedByIds, reachedOn };
   }
 
-  /** The person reached, as a new person in People. */
+  /**
+   * The person reached: the one the recorder said it was, or a new one —
+   * but only once nobody already known looks like them.
+   */
   private async person(tx: Tx, input: ReachedInput) {
     const phone = input.phone.replace(/[^\d+]/g, '');
+    if (input.samePersonId) {
+      const known = await tx.person.findUnique({ where: { id: input.samePersonId } });
+      if (!known) throw notFound('That person is no longer in People.');
+      // Consent only ever turns messages off for someone already known (D22).
+      if (!input.mayMessage && !known.smsOptOut) {
+        await tx.person.update({
+          where: { id: known.id },
+          data: { smsOptOut: true, smsOptOutAt: new Date(), smsOptOutSource: 'outreach' },
+        });
+      }
+      return { id: known.id, fullName: known.fullName, known: true };
+    }
+
+    if (!input.notSamePerson) {
+      const candidates = await this.matches(tx, input.fullName, input.dial, phone);
+      if (candidates.length) {
+        const first = candidates[0]!;
+        throw new AppError(
+          409,
+          ErrorCode.POSSIBLE_MATCH,
+          `${first.name}${first.last ? `, ${first.last}` : ''}. Same person?`,
+          { candidates },
+        );
+      }
+    }
+
     const lang = input.lang ?? (await commsSettings(tx)).defaultLang;
     const created = await tx.person.create({
       data: {
@@ -301,6 +359,51 @@ export class ReachedService {
       },
     });
     return { id: created.id, fullName: created.fullName, known: false };
+  }
+
+  /**
+   * People who may be this one: the same phone number, or — only when no
+   * number was given — a close name. Each is said in the fewest words that
+   * let the recorder tell: name, and when and where they were last reached
+   * or registered. Nothing else about them.
+   */
+  async matches(tx: Tx, fullName: string, dial: string, phone: string) {
+    const key = phoneKey(dial, phone);
+    const rows = key
+      ? await tx.$queryRaw<{ id: string; full_name: string }[]>(sql`
+          select p.id, p.full_name from people p
+          where p.phone <> '' and ${PERSON_PHONE_KEY} = ${key}
+          order by p.created_at
+          limit 5`)
+      : await tx.$queryRaw<{ id: string; full_name: string }[]>(sql`
+          select p.id, p.full_name from people p
+          where similarity(lower(p.full_name), lower(${fullName.trim()})) >= ${SIMILAR_NAME}
+          order by similarity(lower(p.full_name), lower(${fullName.trim()})) desc, p.created_at
+          limit 5`);
+    if (!rows.length) return [];
+
+    const ids = rows.map((r) => r.id);
+    const [reaches, people] = await Promise.all([
+      tx.outreachReached.findMany({
+        where: { personId: { in: ids } },
+        orderBy: { reachedOn: 'desc' },
+        select: { personId: true, reachedOn: true, area: true },
+      }),
+      tx.person.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, createdAt: true, registration: { select: { createdAt: true } } },
+      }),
+    ]);
+    const short = (d: Date) =>
+      d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+    return rows.map((r) => {
+      const reach = reaches.find((x) => x.personId === r.id);
+      const person = people.find((x) => x.id === r.id)!;
+      const last = reach
+        ? `reached ${short(reach.reachedOn)}${reach.area ? ` in ${reach.area}` : ''}`
+        : `registered ${short(person.registration?.createdAt ?? person.createdAt)}`;
+      return { personId: r.id, name: r.full_name, last };
+    });
   }
 }
 

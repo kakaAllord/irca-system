@@ -33,6 +33,8 @@ const RecordSchema = z.object({
   needsFollowUp: z.boolean().optional(),
   note: z.string().trim().max(1000).optional(),
   reachedOn: Day.optional(),
+  samePersonId: z.uuid().optional(),
+  notSamePerson: z.boolean().optional(),
 });
 const UpdateSchema = z
   .object({
