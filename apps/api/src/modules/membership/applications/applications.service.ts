@@ -13,6 +13,7 @@ import { UsageService } from '../../../core/usage/usage.service.js';
 import { SequenceService } from '../../../core/sequences/sequence.service.js';
 import { moveStage, previousStage } from '../journey.js';
 import { setting } from '../settings.js';
+import { recordInteraction } from '../timeline.js';
 
 const OPEN: ApplicationStatus[] = ['UNDER_REVIEW', 'APPROVED'];
 const DAY = 86_400_000;
@@ -122,6 +123,14 @@ export class ApplicationsService {
         },
       });
       await moveStage(tx, person, 'MEMBERSHIP_REVIEW', this.auth.userId, 'Applied for membership');
+      await recordInteraction(tx, {
+        personId,
+        kind: 'APPLIED',
+        moduleKey: 'membership',
+        byId: this.auth.userId,
+        summary: 'Applied for membership',
+        meta: { applicationId: created.id },
+      });
       await this.audit.recordIn(tx, {
         action: 'membership.application.submitted',
         entityType: 'membership_application',
@@ -201,6 +210,14 @@ export class ApplicationsService {
         data: { memberNumber, confirmedAt: new Date() },
       });
       await moveStage(tx, person, 'CONFIRMED_MEMBER', this.auth.userId, 'Confirmed as a member');
+      await recordInteraction(tx, {
+        personId: person.id,
+        kind: 'CONFIRMED',
+        moduleKey: 'membership',
+        byId: this.auth.userId,
+        summary: 'Confirmed as a member',
+        meta: { applicationId: id },
+      });
       return `Confirmed ${person.fullName} as member ${memberNumber}`;
     });
     this.usage.inc('membership.members.confirmed');

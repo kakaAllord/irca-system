@@ -10,6 +10,7 @@ import { AuditService } from '../../../core/audit/audit.service.js';
 import { UsageService } from '../../../core/usage/usage.service.js';
 import { AppConfig } from '../../../config/app-config.js';
 import { checkManualMove, moveStage } from '../journey.js';
+import { recordInteraction } from '../timeline.js';
 import { toPersonDetail, toPersonRow, type PersonRow } from './person.dto.js';
 
 export const TABS = [
@@ -273,6 +274,18 @@ export class PeopleService {
       const created = await tx.personNote.create({
         data: { personId: id, kind, body, authorId: this.auth.userId! },
       });
+      // A call or a visit is on their timeline for everyone who may see them;
+      // what was written stays here, behind the sensitive permission.
+      if (kind !== 'NOTE') {
+        await recordInteraction(tx, {
+          personId: id,
+          kind,
+          moduleKey: 'membership',
+          byId: this.auth.userId,
+          summary: kind === 'CALL' ? 'Phone call' : 'Home visit',
+          meta: { noteId: created.id },
+        });
+      }
       await this.audit.recordIn(tx, {
         action: 'membership.note.added',
         entityType: 'person',

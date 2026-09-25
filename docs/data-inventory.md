@@ -20,7 +20,8 @@ phone, and the office afterwards.
 | What | Where it lives | Who can read it |
 | --- | --- | --- |
 | Name, gender, age group | `registrations`, `people` | anyone with `membership.people.read` |
-| Phone and email | `registrations`, `people` | `membership.people.read_sensitive` only |
+| Phone | `registrations`, `people` | anyone with `membership.people.read`: the follow-up team calls people. (Corrected 25 Sept 2026: this line said sensitive-only, which the code never did.) |
+| Email | `registrations`, `people` | `membership.people.read_sensitive` only |
 | Where they live: ward, region, country, how long | `registrations` | `membership.people.read` |
 | How they heard of the church, who invited them | `registrations` | `membership.people.read` |
 | Work, school, course, profession | `registrations` | `membership.people.read` |
@@ -33,6 +34,8 @@ phone, and the office afterwards.
 | Application to become a member, and the decision | `membership_applications` | `membership.applications.read` |
 | Foundation class group, and each session attended | `foundation_enrollments`, `foundation_attendance` | `membership.discipleship.read` |
 | Member number, date confirmed | `people` | `membership.people.read` |
+| How they came to be in People: the form, the office, or Outreach | `people.source` | `membership.people.read` |
+| Their timeline: registered, applied, class sessions, confirmed, calls and visits (without what was written), and from Phase 8 what Outreach did with them — each with when and which portal (D23) | `person_interactions` | `membership.people.read`; Outreach sees it for people it reached. Never what Membership keeps behind the sensitive permission. |
 | The language they are written to in; whether they asked for no messages, when and how | `people.lang`, `people.sms_opt_out*` | `membership.people.read` |
 | Which departments they lead or belong to, since when | `department_leaders`, `department_members` | administrators (`admin.departments.read`); a department's own leaders see its members' names, stages and the last three digits of their phone |
 | Every text sent to them: the number, the language and the exact words | `comms_recipients` | Communications (`comms.messages.read`), and the leaders of the department that sent it; the number is masked unless the reader holds `membership.people.read_sensitive` |
@@ -154,8 +157,10 @@ node apps/api/dist/cli/main.js person:erase --church IRCA --person <uuid> [--dry
 It asks for the person's id back before it does anything, and cannot be undone.
 It erases the person, their registration and every answer on it (prayer request
 included), their notes, their journey, their application and their class
-records, the departments they led or belonged to, and every text message sent
-to them. A number that asked for no messages stays blocked, without their
+records, the departments they led or belonged to, every text message sent
+to them, their timeline, and what Outreach recorded about them. Where they
+were one of the team who reached someone else, they are taken out of that
+record and their name out of the line on that person's timeline. A number that asked for no messages stays blocked, without their
 name, because honouring a STOP outlives the record. It keeps the activity
 log's lines — the log is what proves who did
 what — but replaces their name with `[erased]` wherever it was written into a

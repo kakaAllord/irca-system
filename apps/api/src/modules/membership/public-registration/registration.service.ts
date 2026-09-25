@@ -20,6 +20,7 @@ import { RequestAuth } from '../../../core/context/request-auth.js';
 import { AppError } from '../../../core/http/app-error.js';
 import { AuditService } from '../../../core/audit/audit.service.js';
 import { UsageService } from '../../../core/usage/usage.service.js';
+import { recordInteraction } from '../timeline.js';
 import { columnsOf, dtoOf, valuesOf, type RegistrationDto } from './values.js';
 
 /** What the form gets back from a Continue: where to go, or what is wrong. */
@@ -173,6 +174,17 @@ export class PublicRegistrationService {
         data: { status: 'submitted', submittedAt: new Date(), currentStep: 'done' },
       });
       await this.syncPerson(tx, sent);
+      const person = await tx.person.findFirst({ where: { registrationId: sent.id } });
+      if (person) {
+        await recordInteraction(tx, {
+          personId: person.id,
+          kind: 'REGISTERED',
+          moduleKey: 'membership',
+          byId: null,
+          summary: 'Filled in the registration form',
+          meta: { registrationId: sent.id },
+        });
+      }
       // Ticking "join the church" and finishing is asking to become a member:
       // the application appears for the pastors without anyone typing it in.
       if (sent.interest.includes(JOINING)) await this.applyFromForm(tx, sent);
@@ -234,8 +246,16 @@ export class PublicRegistrationService {
       where: { personId: person.id, status: { in: ['UNDER_REVIEW', 'APPROVED'] } },
     });
     if (open) return;
-    await tx.membershipApplication.create({
+    const application = await tx.membershipApplication.create({
       data: { personId: person.id, source: 'FORM' },
+    });
+    await recordInteraction(tx, {
+      personId: person.id,
+      kind: 'APPLIED',
+      moduleKey: 'membership',
+      byId: null,
+      summary: 'Asked to join the church, on the registration form',
+      meta: { applicationId: application.id },
     });
   }
 

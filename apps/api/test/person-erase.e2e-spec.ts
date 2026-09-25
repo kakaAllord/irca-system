@@ -72,6 +72,34 @@ describe('erasing one person, at their request', () => {
       [randomUUID(), departmentId, personId],
     );
     await db.query(
+      `insert into person_interactions (id, person_id, kind, at, module_key, summary)
+       values (gen_random_uuid(), $1, 'REGISTERED', now(), 'membership', 'Filled in the registration form')`,
+      [personId],
+    );
+    // Reached on a Saturday themselves, and one of the team who reached
+    // someone else, whose timeline names them.
+    await db.query(
+      `insert into outreach_reached (id, person_id, reached_on, reached_by_ids, recorded_by_id)
+       values (gen_random_uuid(), $1, current_date, '{}', $2)`,
+      [personId, staff.id],
+    );
+    const other = randomUUID();
+    await db.query(
+      `insert into people (id, full_name, updated_at) values ($1, 'Baraka Laizer', now())`,
+      [other],
+    );
+    await db.query(
+      `insert into outreach_reached (id, person_id, reached_on, reached_by_ids, recorded_by_id)
+       values (gen_random_uuid(), $1, current_date, array[$2::uuid], $3)`,
+      [other, personId, staff.id],
+    );
+    await db.query(
+      `insert into person_interactions (id, person_id, kind, at, module_key, summary)
+       values (gen_random_uuid(), $1, 'EVANGELISED', now(), 'outreach',
+               'Evangelised by Neema Mollel, Sombetini')`,
+      [other],
+    );
+    await db.query(
       `insert into audit_events (id, source, action, entity_type, entity_id, summary, after)
        values (gen_random_uuid(), 'feature', 'membership.person.added', 'person', $1,
                'Added Neema Mollel to the people', '{"fullName":"Neema Mollel"}')`,
@@ -104,9 +132,19 @@ describe('erasing one person, at their request', () => {
       enrollments: 1,
       attendance: 1,
       departments: 1,
+      interactions: 1,
+      outreach: 1,
+      timelinesRewritten: 1,
     });
+    // Baraka, whom they reached, stays; they are gone from his reach and his timeline.
+    expect(await rows('select reached_by_ids from outreach_reached')).toEqual([
+      { reached_by_ids: [] },
+    ]);
+    expect(await rows('select summary from person_interactions')).toEqual([
+      { summary: 'Evangelised by [erased], Sombetini' },
+    ]);
+    expect(await rows('select 1 from people where id = $1', [personId])).toHaveLength(0);
     for (const table of [
-      'people',
       'person_notes',
       'person_stage_events',
       'membership_applications',
@@ -144,7 +182,7 @@ describe('erasing one person, at their request', () => {
     const result = await erase(personId, true);
 
     expect(result.notes).toBe(1);
-    expect(await rows('select 1 from people')).toHaveLength(1);
+    expect(await rows('select 1 from people where id = $1', [personId])).toHaveLength(1);
     expect(await rows('select 1 from registrations')).toHaveLength(1);
     expect(await rows(`select 1 from audit_events where action = 'person.erased'`)).toHaveLength(0);
   });
@@ -162,6 +200,6 @@ describe('erasing one person, at their request', () => {
         confirm: async () => 'yes',
       }),
     ).rejects.toThrow(/the id did not match/);
-    expect(await rows('select 1 from people')).toHaveLength(1);
+    expect(await rows('select 1 from people where id = $1', [personId])).toHaveLength(1);
   });
 });

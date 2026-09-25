@@ -30,9 +30,10 @@ hand in the migrations, mostly the init migration.
 | `change_requests` | 4 | Requests to change a protected record (first user: finance entries), decided in Admin → Requests. | One pending per record. The decider is never the requester (check constraint). |
 | `finance_transactions` | 4 | Income and expense entries with their codes. | `delete`, `truncate` revoked. **Any** update refused by trigger `finance_txn_guard` unless it applies a newly approved change request. The number never changes, and a void is final. A month move is a void plus a new linked entry. |
 | `registrations` | 5 | Visitors' own answers (moved from the form's first database). | One per phone (partial unique index). Tokens preserved from before. |
-| `people` | 5 | The church's record of a person: stage, confirmed salvation and baptism, member number. `lang`, `sms_opt_out*` (7): the language they are written to in, and whether they want messages. | Member number unique. `lang` backfilled from the registration and copied by the form from then on (D22). |
+| `people` | 5 | The church's record of a person: stage, confirmed salvation and baptism, member number. `lang`, `sms_opt_out*` (7): the language they are written to in, and whether they want messages. `source` (8): `FORM`, `OFFICE` or `OUTREACH`. | Member number unique. `lang` backfilled from the registration and copied by the form from then on (D22). |
 | `person_stage_events` | 5 | History of stage moves. | |
 | `person_notes` | 5 | Notes, visits and calls. | Sensitive: only with `membership.people.read_sensitive`. |
+| `person_interactions` | 8 | Each person's timeline (D23): everything any portal recorded happening with them, with when, which portal and a one-line summary. Backfilled from registrations, applications, class attendance and logged calls and visits. | `update`, `delete`, `truncate` revoked: added to, never tidied. Summaries never carry sensitive notes. Erased with the person. |
 | `membership_applications` | 5 | Applications: review, approve, confirm. | One open per person. Confirmed after the probation period. |
 | `foundation_groups` | 5 | Class groups (Thursday, Saturday). | |
 | `foundation_enrollments` | 5 | Who is in which class. | One open per person. |

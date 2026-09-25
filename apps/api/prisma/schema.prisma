@@ -645,8 +645,12 @@ model Person {
   /// or on the form. Nothing is sent to them while it is set.
   smsOptOut       Boolean   @default(false) @map("sms_opt_out")
   smsOptOutAt     DateTime? @map("sms_opt_out_at") @db.Timestamptz(6)
-  /// 'reply' | 'office' | 'form'
+  /// 'reply' | 'office' | 'form' | 'outreach'
   smsOptOutSource String?   @map("sms_opt_out_source") @db.VarChar(10)
+
+  /// How they came to be in People: 'FORM' (the registration form), 'OFFICE'
+  /// (added by hand) or 'OUTREACH' (reached on a Saturday). Never changes.
+  source String @default("FORM") @db.VarChar(10)
 
   memberNumber Int?      @map("member_number")
   confirmedAt  DateTime? @map("confirmed_at") @db.Timestamptz(6)
@@ -669,6 +673,7 @@ model Person {
   outreachTeams     OutreachSessionTeamMember[]
   outreachReached   OutreachReached[]
   outreachTrainings OutreachTrainingAttendance[]
+  interactions      PersonInteraction[]
 
   @@unique([memberNumber])
   @@index([stage])
@@ -691,6 +696,51 @@ model PersonStageEvent {
 
   @@index([personId, at])
   @@map("person_stage_events")
+}
+
+enum InteractionKind {
+  EVANGELISED
+  CALL
+  VISIT
+  INVITED
+  ATTENDED_SERVICE
+  TRAINING
+  REGISTERED
+  CLASS_SESSION
+  APPLIED
+  CONFIRMED
+  NOTE
+}
+
+/// Everything that happened with a person, from any portal, in order (D23):
+/// evangelised on the 5th, called on the 7th, visited on the 12th, came on
+/// the 20th. Written by every portal, never edited or deleted. `people.stage`
+/// stays as the one-word summary of it, never a competing truth.
+///
+/// A summary is read by everyone who may see the person in any portal, so it
+/// never carries what Membership keeps behind its sensitive permission.
+model PersonInteraction {
+  id        String          @id @default(uuid(7)) @db.Uuid
+  personId  String          @map("person_id") @db.Uuid
+  kind      InteractionKind
+  /// When it happened, which is not always when it was written down.
+  at        DateTime        @db.Timestamptz(6)
+  /// The portal that recorded it, for the timeline's small labels.
+  moduleKey String          @map("module_key") @db.VarChar(30)
+  /// The staff account that recorded it, or null when the system did.
+  byId      String?         @map("by_id") @db.Uuid
+  /// One line in plain words: "Evangelised by Peter Mushi and John Laizer, Sombetini".
+  summary   String          @db.VarChar(200)
+  /// Whatever the recording portal wants back later: a session, an enrolment.
+  meta      Json            @default("{}")
+  createdAt DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  /// Erasing a person (the person:erase command) takes this with them.
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([personId, at(sort: Desc)])
+  @@index([kind, at(sort: Desc)])
+  @@map("person_interactions")
 }
 
 enum PersonNoteKind {
