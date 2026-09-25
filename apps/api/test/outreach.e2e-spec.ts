@@ -184,4 +184,88 @@ describe('Outreach (Phase 8)', () => {
       expect(refused.body.error.details.required).toEqual(['outreach.groups.manage']);
     });
   });
+  describe('Saturdays (8.5)', () => {
+    /** A planned Saturday with one team, made by the leader. */
+    async function saturday(cookie: string, personIds: string[], area = 'Sombetini') {
+      const session = await portal(app)
+        .post('/v1/outreach/sessions', { heldOn: '2026-09-26', title: 'Sombetini push' }, cookie)
+        .expect(201);
+      const team = await portal(app)
+        .post(`/v1/outreach/sessions/${session.body.id}/teams`, { area, personIds }, cookie)
+        .expect(201);
+      return { sessionId: session.body.id as string, teamId: team.body.id as string };
+    }
+
+    it('plans a Saturday, sends teams from the team, and closes it', async () => {
+      const { cookie, members } = await outreach();
+      const outsider = await createPerson(db, { fullName: 'Juma Outsider' });
+      const { sessionId, teamId } = await saturday(cookie, members.slice(0, 2));
+
+      const refused = await portal(app)
+        .post(
+          `/v1/outreach/sessions/${sessionId}/teams`,
+          { area: 'Kaloleni', personIds: [members[2], outsider.id] },
+          cookie,
+        )
+        .expect(422);
+      expect(refused.body.error.message).toMatch(/Juma Outsider is not on the Outreach team/);
+
+      const { body } = await portal(app)
+        .get(`/v1/outreach/sessions/${sessionId}`, cookie)
+        .expect(200);
+      expect(body).toMatchObject({ heldOn: '2026-09-26', status: 'PLANNED' });
+      expect(body.teams).toEqual([
+        expect.objectContaining({ id: teamId, area: 'Sombetini', reached: 0 }),
+      ]);
+      expect(body.teams[0].people.map((p: { name: string }) => p.name)).toEqual([
+        'John Laizer',
+        'Peter Mushi',
+      ]);
+
+      await portal(app)
+        .put(`/v1/outreach/sessions/${sessionId}/status`, { status: 'COMPLETED' }, cookie)
+        .expect(204);
+      // A closed Saturday keeps its teams until it is opened again.
+      await portal(app)
+        .put(
+          `/v1/outreach/sessions/${sessionId}/teams/${teamId}`,
+          { area: 'Elsewhere', personIds: members.slice(0, 1) },
+          cookie,
+        )
+        .expect(409);
+      await portal(app)
+        .put(`/v1/outreach/sessions/${sessionId}/status`, { status: 'PLANNED' }, cookie)
+        .expect(204);
+      await portal(app)
+        .del(`/v1/outreach/sessions/${sessionId}/teams/${teamId}`, cookie)
+        .expect(204);
+
+      // Areas already used come back as suggestions.
+      await saturday(cookie, members.slice(0, 1), 'Sombetini');
+      const areas = await portal(app).get('/v1/outreach/areas?q=somb', cookie).expect(200);
+      expect(areas.body).toEqual(['Sombetini']);
+
+      const list = await portal(app).get('/v1/outreach/sessions', cookie).expect(200);
+      expect(list.body).toHaveLength(2);
+    });
+
+    it('lets the team type who they spoke to, and leaves planning to the leaders', async () => {
+      const { cookie, members } = await outreach();
+      const { sessionId, teamId } = await saturday(cookie, members.slice(0, 2));
+      const theirs = await member();
+
+      await portal(app)
+        .put(`/v1/outreach/teams/${teamId}/spoken-to`, { spokenToOnly: 7 }, theirs)
+        .expect(204);
+      const { body } = await portal(app)
+        .get(`/v1/outreach/sessions/${sessionId}`, theirs)
+        .expect(200);
+      expect(body.teams[0].spokenToOnly).toBe(7);
+
+      const refused = await portal(app)
+        .post('/v1/outreach/sessions', { heldOn: '2026-10-03' }, theirs)
+        .expect(403);
+      expect(refused.body.error.details.required).toEqual(['outreach.sessions.manage']);
+    });
+  });
 });
