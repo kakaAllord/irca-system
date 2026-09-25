@@ -38,6 +38,7 @@ describe('Outreach (Phase 8)', () => {
   const signIn = async (email: string, password: string) =>
     sessionCookie(await portal(app).post('/v1/auth/login', { email, password }).expect(200));
   const MEMBER = outreachModule.systemRoles.find((r) => r.key === 'outreach.member')!.permissions;
+  const VIEWER = outreachModule.systemRoles.find((r) => r.key === 'outreach.viewer')!.permissions;
 
   /** The Outreach department, its leader signed in, and three members. */
   async function outreach() {
@@ -63,6 +64,12 @@ describe('Outreach (Phase 8)', () => {
   /** Someone who records on Saturdays: the Outreach member role, and no leadership. */
   async function member() {
     const user = await createUserWithPermissions(db, MEMBER, { moduleKey: 'outreach' });
+    return signIn(user.email, user.password);
+  }
+
+  /** A pastor or overseer: reads everything, changes nothing. */
+  async function viewer() {
+    const user = await createUserWithPermissions(db, VIEWER, { moduleKey: 'outreach' });
     return signIn(user.email, user.password);
   }
 
@@ -266,6 +273,111 @@ describe('Outreach (Phase 8)', () => {
         .post('/v1/outreach/sessions', { heldOn: '2026-10-03' }, theirs)
         .expect(403);
       expect(refused.body.error.details.required).toEqual(['outreach.sessions.manage']);
+    });
+  });
+  describe('the people reached (8.5)', () => {
+    const neema = {
+      fullName: 'Neema Mollel',
+      dial: '+255',
+      phone: '0712 345 678',
+      mayMessage: true,
+    };
+
+    it('records someone in four fields, and fills the rest from their team', async () => {
+      const { cookie, members } = await outreach();
+      const session = await portal(app)
+        .post('/v1/outreach/sessions', { heldOn: '2026-09-19' }, cookie)
+        .expect(201);
+      const team = await portal(app)
+        .post(
+          `/v1/outreach/sessions/${session.body.id}/teams`,
+          { area: 'Sombetini', personIds: members.slice(0, 2) },
+          cookie,
+        )
+        .expect(201);
+
+      const saved = await portal(app)
+        .post('/v1/outreach/reached', { ...neema, teamId: team.body.id }, await member())
+        .expect(201);
+      expect(saved.body.known).toBe(false);
+
+      const person = await db.query(
+        `select full_name, phone, source, stage, sms_opt_out from people where id = $1`,
+        [saved.body.personId],
+      );
+      expect(person.rows[0]).toEqual({
+        full_name: 'Neema Mollel',
+        phone: '0712345678',
+        source: 'OUTREACH',
+        stage: 'VISITOR',
+        sms_opt_out: false,
+      });
+      const lines = await db.query(
+        `select kind, summary, at::date::text as on from person_interactions where person_id = $1`,
+        [saved.body.personId],
+      );
+      expect(lines.rows).toEqual([
+        {
+          kind: 'EVANGELISED',
+          summary: 'Evangelised by Peter Mushi and John Laizer, Sombetini',
+          on: '2026-09-19',
+        },
+      ]);
+
+      const { body } = await portal(app).get('/v1/outreach/reached', cookie).expect(200);
+      expect(body.rows).toEqual([
+        expect.objectContaining({
+          name: 'Neema Mollel',
+          phone: '+255 0712345678',
+          area: 'Sombetini',
+          reachedOn: '2026-09-19',
+          reachedBy: ['Peter Mushi', 'John Laizer'],
+          thin: { phone: false, area: false },
+        }),
+      ]);
+
+      // Filled in later: the area, the note, whether they still need following up.
+      await portal(app)
+        .patch(
+          `/v1/outreach/reached/${body.rows[0].id}`,
+          { note: 'Lives behind the market', needsFollowUp: false },
+          cookie,
+        )
+        .expect(204);
+    });
+
+    it('opts a new person out when they said no', async () => {
+      const { cookie } = await outreach();
+      const no = await portal(app)
+        .post('/v1/outreach/reached', { ...neema, mayMessage: false }, cookie)
+        .expect(201);
+      const optOut = async (id: string) =>
+        (await db.query(`select sms_opt_out, sms_opt_out_source from people where id = $1`, [id]))
+          .rows[0];
+      expect(await optOut(no.body.personId)).toEqual({
+        sms_opt_out: true,
+        sms_opt_out_source: 'outreach',
+      });
+    });
+
+    it('leaves a viewer reading, never writing', async () => {
+      const { cookie, members } = await outreach();
+      const session = await portal(app)
+        .post('/v1/outreach/sessions', { heldOn: '2026-09-19' }, cookie)
+        .expect(201);
+      const reached = await portal(app).post('/v1/outreach/reached', neema, cookie).expect(201);
+      const theirs = await viewer();
+
+      await portal(app).get('/v1/outreach/reached', theirs).expect(200);
+      await portal(app).get(`/v1/outreach/sessions/${session.body.id}`, theirs).expect(200);
+      await portal(app).post('/v1/outreach/reached', neema, theirs).expect(403);
+      await portal(app)
+        .patch(`/v1/outreach/reached/${reached.body.reachedId}`, { note: 'x' }, theirs)
+        .expect(403);
+      await portal(app).post('/v1/outreach/sessions', { heldOn: '2026-09-26' }, theirs).expect(403);
+      await portal(app)
+        .post('/v1/outreach/groups', { name: 'Pair', personIds: members.slice(0, 2) }, theirs)
+        .expect(403);
     });
   });
 });
