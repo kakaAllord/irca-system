@@ -12,6 +12,8 @@ import { MessagesService } from './messages.service.js';
 import { SendingService } from './sending.service.js';
 import { OutboxService } from './outbox.service.js';
 import { CommsJobs } from './comms.jobs.js';
+import { SchedulesController } from './schedules.controller.js';
+import { SchedulesService } from './schedules.service.js';
 
 /**
  * The Communication system (Phase 7): templates, audiences, sending, beats,
@@ -20,7 +22,13 @@ import { CommsJobs } from './comms.jobs.js';
  */
 @Module({
   imports: [DepartmentsModule],
-  controllers: [SettingsController, AudiencesController, TemplatesController, MessagesController],
+  controllers: [
+    SettingsController,
+    AudiencesController,
+    TemplatesController,
+    MessagesController,
+    SchedulesController,
+  ],
   providers: [
     SettingsService,
     AudiencesService,
@@ -29,6 +37,7 @@ import { CommsJobs } from './comms.jobs.js';
     SendingService,
     MessagesService,
     OutboxService,
+    SchedulesService,
     CommsJobs,
   ],
   exports: [AudiencesService, SendingService, OutboxService],
