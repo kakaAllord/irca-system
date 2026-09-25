@@ -63,11 +63,26 @@ export const EnvSchema = z
      * or Backblaze B2. All five, or none; with none, uploads are refused with
      * a message saying so, and nothing else changes.
      */
-    STORAGE_ENDPOINT: z.url().optional().or(z.literal('').transform(() => undefined)),
-    STORAGE_REGION: z.string().optional().transform((v) => v || undefined),
-    STORAGE_BUCKET: z.string().optional().transform((v) => v || undefined),
-    STORAGE_ACCESS_KEY: z.string().optional().transform((v) => v || undefined),
-    STORAGE_SECRET_KEY: z.string().optional().transform((v) => v || undefined),
+    STORAGE_ENDPOINT: z
+      .url()
+      .optional()
+      .or(z.literal('').transform(() => undefined)),
+    STORAGE_REGION: z
+      .string()
+      .optional()
+      .transform((v) => v || undefined),
+    STORAGE_BUCKET: z
+      .string()
+      .optional()
+      .transform((v) => v || undefined),
+    STORAGE_ACCESS_KEY: z
+      .string()
+      .optional()
+      .transform((v) => v || undefined),
+    STORAGE_SECRET_KEY: z
+      .string()
+      .optional()
+      .transform((v) => v || undefined),
   })
   .refine(
     (env) => {
