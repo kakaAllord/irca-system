@@ -10,10 +10,12 @@ import {
   createDepartment,
   createLeader,
   createPerson,
+  createTemplate,
   createUserWithPermissions,
   ownerDb,
   portal,
   sessionCookie,
+  setCommsSettings,
   truncateAll,
 } from './helpers.js';
 
@@ -31,7 +33,7 @@ describe('Outreach (Phase 8)', () => {
   });
   beforeEach(async () => {
     await truncateAll(db);
-    await createChurch(db, 'IRCA', ['admin', 'membership', 'outreach']);
+    await createChurch(db, 'IRCA', ['admin', 'comms', 'membership', 'outreach']);
     await app.get(RegistrySync).sync();
   });
 
@@ -574,6 +576,129 @@ describe('Outreach (Phase 8)', () => {
       await portal(app)
         .post(`/v1/outreach/people/${body.personId}/followups`, { kind: 'CALL' }, await viewer())
         .expect(403);
+    });
+  });
+  describe('Friday training (8.7)', () => {
+    /** Seven more on the team, making ten with the leader and the three members. */
+    async function tenOnTheTeam(departmentId: string) {
+      for (let i = 1; i <= 6; i++) {
+        const person = await createPerson(db, { fullName: `Team Member ${i}` });
+        await db.query(
+          `insert into department_members (id, department_id, person_id) values ($1, $2, $3)`,
+          [randomUUID(), departmentId, person.id],
+        );
+      }
+    }
+
+    it('marks who came, once on each timeline however often it is marked', async () => {
+      const { cookie, department } = await outreach();
+      await tenOnTheTeam(department.id);
+      const made = await portal(app)
+        .post(
+          '/v1/outreach/trainings',
+          {
+            topic: 'Sharing your story',
+            trainer: 'Pastor Sarah',
+            date: '2026-09-18',
+            time: '18:00',
+          },
+          cookie,
+        )
+        .expect(201);
+      const { body } = await portal(app)
+        .get(`/v1/outreach/trainings/${made.body.id}`, cookie)
+        .expect(200);
+      expect(body).toMatchObject({ date: '2026-09-18', time: '18:00' });
+      // 18:00 in Arusha is 15:00 UTC.
+      expect(body.heldAt).toBe('2026-09-18T15:00:00.000Z');
+      expect(body.register).toHaveLength(10);
+
+      const marks = body.register.map((p: { personId: string }, i: number) => ({
+        personId: p.personId,
+        mark: i === 0 ? 'MISSED' : 'ATTENDED',
+      }));
+      await portal(app)
+        .put(`/v1/outreach/trainings/${made.body.id}/attendance`, { marks }, cookie)
+        .expect(204);
+      // Marked again: still nine lines.
+      await portal(app)
+        .put(`/v1/outreach/trainings/${made.body.id}/attendance`, { marks }, cookie)
+        .expect(204);
+      const lines = await db.query(
+        `select count(*)::int as n from person_interactions where kind = 'TRAINING'`,
+      );
+      expect(lines.rows[0].n).toBe(9);
+
+      const history = await portal(app).get('/v1/outreach/trainings/history', cookie).expect(200);
+      expect(history.body.trainings).toHaveLength(1);
+      expect(
+        history.body.people.filter((p: { marks: string[] }) => p.marks[0] === 'ATTENDED'),
+      ).toHaveLength(9);
+
+      // Only the leaders mark it.
+      await portal(app)
+        .put(`/v1/outreach/trainings/${made.body.id}/attendance`, { marks }, await member())
+        .expect(403);
+    });
+
+    it('reminds the team through the department, and only its leaders send', async () => {
+      const { cookie, department } = await outreach();
+      await setCommsSettings(db, { dailyCap: '50000' });
+      const template = await createTemplate(db, {
+        departmentId: department.id,
+        name: 'Training reminder',
+        bodies: { sw: 'Mafunzo ni Ijumaa saa 12 jioni.', en: 'Training is on Friday at 6pm.' },
+      });
+      const request = {
+        departmentId: department.id,
+        audience: { key: 'departments.everyone', params: { departmentIds: [department.id] } },
+        templateId: template.id,
+        fields: {},
+      };
+      const preview = await portal(app)
+        .post('/v1/comms/messages/preview', request, cookie)
+        .expect(200);
+      expect(preview.body.reach).toBe(4);
+      const sent = await portal(app).post('/v1/comms/messages', request, cookie).expect(201);
+      expect(sent.body.recipientCount).toBe(4);
+
+      // An Outreach member who does not lead the department sends nothing.
+      await portal(app)
+        .post('/v1/comms/messages', request, await member())
+        .expect(403);
+    });
+
+    it('keeps the people reached from Outreach until Communications grants them', async () => {
+      const { cookie, department } = await outreach();
+      await portal(app)
+        .post(
+          '/v1/outreach/reached',
+          { fullName: 'Juma Reached', phone: '0765 000 111', mayMessage: true },
+          cookie,
+        )
+        .expect(201);
+      const count = () =>
+        portal(app).post(
+          '/v1/comms/audience-count',
+          { departmentId: department.id, audience: { key: 'outreach.reached', params: {} } },
+          cookie,
+        );
+      await count().expect(403);
+
+      const comms = await createUserWithPermissions(
+        db,
+        ['comms.audiences.manage', 'comms.audiences.read'],
+        { moduleKey: 'comms' },
+      );
+      await portal(app)
+        .put(
+          `/v1/comms/audiences/outreach.reached/departments/${department.id}`,
+          {},
+          await signIn(comms.email, comms.password),
+        )
+        .expect(204);
+      const granted = await count().expect(200);
+      expect(granted.body).toMatchObject({ reach: 1 });
     });
   });
 });
