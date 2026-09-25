@@ -92,6 +92,11 @@ await department(
   'membership',
 );
 await department('Finance', 'Income and expenses, and the reports the church reads.', 'finance');
+await department(
+  'Communications',
+  'The messages the church sends, and the standards they follow.',
+  'comms',
+);
 await portal('admin');
 await portal('dev');
 
@@ -118,6 +123,9 @@ await user('followup@irca.local', 'Daniel Followup', 'followup-password-123', [
 ]);
 await user('clerk@irca.local', 'Neema Mollel', 'clerk-password-123', ['finance.clerk']);
 await user('mhazini@irca.local', 'Joyce Mhazini', 'manager-password-123', ['finance.manager']);
+// Communications is led by Allord Archard (comms brief, 24 Sept 2026); locally,
+// someone holding that role to sign in as.
+await user('comms@irca.local', 'Allord Archard', 'comms-password-123', ['comms.lead']);
 
 // The registration form's key, for development and the browser tests. A known
 // value only because this seed refuses to run anywhere else: production keys
@@ -136,6 +144,6 @@ await db.apiClient.upsert({
 });
 
 console.log(
-  'seeded IRCA, with dev@, admin@, pastor@, office@, followup@, clerk@ and mhazini@irca.local',
+  'seeded IRCA, with dev@, admin@, pastor@, office@, followup@, clerk@, mhazini@ and comms@irca.local',
 );
 await db.$disconnect();

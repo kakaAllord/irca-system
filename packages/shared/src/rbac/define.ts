@@ -43,7 +43,10 @@ export type NavIcon =
   | 'health'
   | 'usage'
   | 'settings'
-  | 'departments';
+  | 'departments'
+  | 'messages'
+  | 'templates'
+  | 'schedule';
 
 export type NavItem = {
   label: string;

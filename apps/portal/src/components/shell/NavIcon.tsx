@@ -151,4 +151,26 @@ const PATHS: Record<Name, React.ReactNode> = {
       <path d="M2.5 15.5c.4-1.9 1.6-3 3.2-3.3M21.5 15.5c-.4-1.9-1.6-3-3.2-3.3" />
     </>
   ),
+  // An envelope: a message to write.
+  messages: (
+    <>
+      <rect x="3" y="5.5" width="18" height="13" rx="2" />
+      <path d="m3.5 7 8.5 6 8.5-6" />
+    </>
+  ),
+  // A page with a star: words that were approved.
+  templates: (
+    <>
+      <path d="M6 3h9l4 4v14H6Z" />
+      <path d="M14 3v4h4" />
+      <path d="m12.5 11 1 2.1 2.3.3-1.7 1.6.4 2.3-2-1.1-2 1.1.4-2.3-1.7-1.6 2.3-.3Z" />
+    </>
+  ),
+  // A clock: something that happens on its own, on a rhythm.
+  schedule: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 2" />
+    </>
+  ),
 };

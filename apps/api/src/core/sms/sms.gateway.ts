@@ -112,11 +112,13 @@ export class SmsGateway {
       ...(apiKey ? { apiKeyEnc: seal(apiKey, sealKey), keyLast4: apiKey.slice(-4) } : {}),
       ...(secretKey ? { secretKeyEnc: seal(secretKey, sealKey) } : {}),
     };
-    await this.db.commsBeemAccount.upsert({
-      where: { id: 1 },
-      update: data,
-      create: { id: 1, ...(data as Required<typeof data>) },
-    });
+    // Not an upsert: Prisma checks the create half even when the row exists,
+    // and a first save must carry both sealed values.
+    if (existing) await this.db.commsBeemAccount.update({ where: { id: 1 }, data });
+    else
+      await this.db.commsBeemAccount.create({
+        data: { id: 1, ...(data as Required<typeof data>) },
+      });
     return { keyChanged: !!apiKey, secretChanged: !!secretKey };
   }
 

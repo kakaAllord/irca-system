@@ -4,6 +4,7 @@ import { financeModule } from './finance';
 import { membershipModule } from './membership';
 import { devModule } from './dev';
 import { departmentsModule } from './departments';
+import { commsModule } from './comms';
 
 /**
  * Every portal this system has. Order is the sidebar's order, except that
@@ -15,12 +16,13 @@ import { departmentsModule } from './departments';
 export const CHURCH_MODULES: ModuleDef[] = [
   membershipModule,
   financeModule,
+  commsModule,
   departmentsModule,
   adminModule,
   devModule,
 ];
 
-export { adminModule, financeModule, membershipModule, devModule, departmentsModule };
+export { adminModule, financeModule, membershipModule, devModule, departmentsModule, commsModule };
 
 export const ALL_MODULES: ModuleDef[] = CHURCH_MODULES;
 

@@ -15,6 +15,7 @@ import { FinanceModule } from './modules/finance/finance.module.js';
 import { MembershipModule } from './modules/membership/membership.module.js';
 import { DevModule } from './modules/dev/dev.module.js';
 import { DepartmentsModule } from './modules/departments/departments.module.js';
+import { CommsModule } from './modules/comms/comms.module.js';
 import { AllExceptionsFilter } from './core/http/all-exceptions.filter.js';
 import { HealthController } from './core/health/health.controller.js';
 import { AuthModule } from './core/auth/auth.module.js';
@@ -51,6 +52,7 @@ import { UsageInterceptor } from './core/usage/usage.interceptor.js';
     FinanceModule,
     MembershipModule,
     DepartmentsModule,
+    CommsModule,
     DevModule,
   ],
   controllers: [
