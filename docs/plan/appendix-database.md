@@ -24,7 +24,7 @@ hand in the migrations, mostly the init migration.
 | `email_outbox` | 3 | Queued and sent emails. | One-time links scrubbed from the payload once sent. |
 | `invitations` | 3 | One-time invitation tokens (hash). | 72 h, single use. |
 | `password_reset_tokens` | 3 | One-time reset tokens (hash). | 1 h, single use. Deleted after 7 days. |
-| `files` | 8 | A file kept in the private bucket (D24), for any module: what it belongs to, its key, name, type, size and who uploaded it. Outreach's session reports first. | `delete`, `truncate` and `update` revoked, except `deleted_at`, which marks a version replaced; the object is kept. The nightly `files-sweep` removes objects with no row after a day and reports rows with no object. |
+| `files` | 8 | A file kept on the files volume (D24), for any module: what it belongs to, its key, name, type, size and who uploaded it. Outreach's session reports first. | `delete`, `truncate` and `update` revoked, except `deleted_at`, which marks a version replaced; the object is kept. The nightly `files-sweep` removes files with no row after a day and reports rows whose file is missing. |
 | `sequences` | 4 | Gapless counters: `finance:EXP:2026-09`, `membership:member_number`. | Incremented only inside the transaction that uses the number. |
 | `finance_income_sources` | 4 | The list of income sources. | Unique by normalised name. Turned off, never deleted. |
 | `finance_expense_items` | 4 | The list of expense items. | Same. |

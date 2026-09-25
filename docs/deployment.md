@@ -145,7 +145,7 @@ development:
 | `RESEND_API_KEY`         | from Resend |
 | `BEEM_SETTINGS_KEY`      | 32 random bytes, base64 (`.env.example` says how). Seals the Beem key in the database. Make it once and keep it: a new one makes the saved Beem account unreadable until it is saved again |
 | `BEEM_INBOUND_SECRET`    | at least 24 random characters. The password in the reply URL given to Beem (§6a) |
-| `STORAGE_ENDPOINT`, `STORAGE_REGION`, `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY` | the private bucket for files (§6b). All five or none: with none, uploads are refused and nothing else changes |
+| `FILES_DIR`              | where files are kept: the files volume's mount path, such as `/data/files` (§6b). Unset, uploads are refused and nothing else changes |
 
 The Beem key and secret are **not** environment variables: Communications
 types them into Comms → Settings (D26).
@@ -245,51 +245,34 @@ redeploying; its old database stays untouched until the owner retires it.
 5. Send one message to a phone you hold, and watch it become **Delivered** in
    Comms → History within ten minutes.
 
-## 6b. File storage (Cloudflare R2 or Backblaze B2)
+## 6b. File storage (a Railway volume)
 
-Files such as Outreach's Saturday reports are kept in one private bucket
-(D24). Either provider works, and the code does not care which: a few
-hundred PDFs a year cost next to nothing on both. The browser uploads straight
-to the bucket and reads through links that stop working after five minutes,
-so the bucket is **never public**.
+Files such as Outreach's Saturday reports are kept on a Railway volume
+attached to the API (D24): a disk that survives every deploy and restart.
+Only its own deletion loses what is on it. Files are private: the browser
+sends them to the API and reads them back through it, after the permission
+check, so there is nothing public to configure.
 
-1. **Make the bucket.** R2: Cloudflare dashboard → R2 → Create bucket, name
-   `irca-files`, location automatic. B2: Buckets → Create a Bucket,
-   `irca-files`, **Private**, default encryption on.
-2. **Make a key that can use only that bucket.** R2: R2 → Manage API tokens →
-   Create token, *Object Read & Write*, limited to `irca-files`. B2: App Keys →
-   Add a New Application Key, access to `irca-files` only, *Read and Write*.
-   Copy the key id and secret straight into the API's environment:
-   `STORAGE_ACCESS_KEY` and `STORAGE_SECRET_KEY`.
-3. **Say where it is.** R2: `STORAGE_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com`,
-   `STORAGE_REGION=auto`. B2: `STORAGE_ENDPOINT=https://s3.<region>.backblazeb2.com`
-   (the bucket page shows it), `STORAGE_REGION=<region>`, such as `eu-central-003`.
-   `STORAGE_BUCKET=irca-files`.
-4. **Let the portal upload to it (CORS).** The browser posts the file from the
-   portal's address, so the bucket must allow that one origin and nothing
-   else. R2: bucket → Settings → CORS policy:
+1. **Attach the volume.** Railway → the `api` service → **+ New → Volume**,
+   mount path `/data`. One volume per service; Hobby gives 5 GB, Pro 50 GB,
+   which is years of PDFs at 10 MB each.
+2. **Say where files go.** In the `api` service's variables:
+   `FILES_DIR=/data/files`. The API makes the folders it needs.
+3. **If the files cannot be written**, the image runs as a user other than
+   root: add `RAILWAY_RUN_UID=0` to the same variables (Railway's own advice
+   for volumes).
+4. **What the volume costs you.** The API cannot have replicas while it has a
+   volume, and each deploy stops it for a moment while the new one takes the
+   disk over, so deploy when nobody is using it, never on a Sunday morning.
+5. **Back it up.** The database's backups do not include these files. Turn on
+   the volume's backups in Railway if the plan has them, and keep the Phase 10
+   copy (`10-strengthening.md`, step 10.2) in mind.
+6. **Check it before launch.** Attach a PDF to a Saturday in Outreach, redeploy
+   the API, and open it again: it must still be there. Try a 12 MB PDF and a
+   `.docx`: both are refused, and nothing is kept.
 
-   ```json
-   [
-     {
-       "AllowedOrigins": ["https://portal.<domain>"],
-       "AllowedMethods": ["POST", "GET"],
-       "AllowedHeaders": ["*"],
-       "MaxAgeSeconds": 3600
-     }
-   ]
-   ```
-
-   B2 takes the same rule through its S3 API (`aws s3api put-bucket-cors
-   --endpoint-url <STORAGE_ENDPOINT> --bucket irca-files --cors-configuration
-   file://cors.json`, with the rule above wrapped as `{"CORSRules": [...]}`).
-5. **Check it before launch** with a real file: attach a PDF to a Saturday in
-   Outreach and open it again; then try a 12 MB PDF and a `.docx`, both of
-   which **the bucket** must refuse before anything is saved (08 step 8.9).
-   Wait six minutes and open the old link: it must no longer work.
-
-Every night at 03:30 the API removes objects more than a day old that no file
-row points at (an upload abandoned half-way) and lists rows whose object has
+Every night at 03:30 the API removes files more than a day old that no file
+row points at (an upload abandoned half-way) and lists rows whose file has
 gone. Both appear in the dev console's job log as the `files-sweep` result;
 anything under "missing" needs a person to look into it.
 

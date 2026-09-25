@@ -716,48 +716,49 @@ will use the same thing).
 
 **Do.**
 
-1. **Storage.** An S3-compatible bucket — Cloudflare R2 or Backblaze B2 (both
-   cheap for a few hundred PDFs a year, and the code does not care which).
-   Private. Add `STORAGE_ENDPOINT`, `STORAGE_REGION`, `STORAGE_BUCKET`,
-   `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY` to `env.ts` (optional; uploads
-   are refused with a clear message when unset) and `.env.example`, and a
-   section to `docs/deployment.md` on creating the bucket and its CORS rule.
-   Behind a `FileStorage` interface in `apps/api/src/core/files/`, with an
-   in-memory one for tests, the way SMS has its providers.
+*Corrected 25 Sept 2026 (D24): the files live on a Railway volume, not in a
+bucket. The steps below are as built.*
+
+1. **Storage.** A folder on a disk that outlives deploys: in production a
+   Railway volume attached to the API, named by `FILES_DIR` in `env.ts`
+   (optional; uploads are refused with a clear message when unset) and
+   `.env.example`, with a section in `docs/deployment.md` on attaching the
+   volume. Behind a `FileStorage` interface in `apps/api/src/core/files/`; tests
+   use a throwaway folder.
 2. **One `files` table** in core, for every module:
    `id, module_key, entity_type, entity_id, key, original_name, content_type,
    bytes, uploaded_by_id, uploaded_at, deleted_at`. Keys look like
-   `outreach/sessions/<session-id>/<uuid>.pdf`.
-3. **The browser uploads straight to storage.**
-   `POST /v1/outreach/sessions/:id/report/upload` (`outreach.reports.upload`)
-   returns a **presigned POST** that itself refuses anything but
-   `application/pdf` and anything over 10 MB. The browser uploads, then calls
-   `POST /v1/outreach/sessions/:id/report { key, name }`, and the API checks
-   the object is there, is a PDF and is under the limit, then records the
-   row. A 10 MB file never passes through the API. (The presign route lives
-   with the session rather than as a general `/v1/files/presign`: which
+   `outreach/sessions/<session-id>/<uuid>.pdf`, and are the file's path under
+   `FILES_DIR`.
+3. **The browser sends the file to the API.**
+   `PUT /v1/outreach/sessions/:id/report?name=&bytes=` (`outreach.reports.upload`)
+   with the PDF as the body. The API refuses anything declared as another
+   type, writes the body as it arrives, cuts it off the moment it passes 10 MB,
+   and refuses one that did not arrive at the size declared or does not start
+   like a PDF — removing what it wrote — before recording the row. (The route
+   lives with the session rather than as a general `/v1/files`: which
    permission covers an upload is the owning module's to say.)
-4. **Reading** is `GET /v1/outreach/sessions/:id/report`, which checks
-   `outreach.reports.read` and answers with a signed link valid for five
-   minutes.
+4. **Reading** is `GET /v1/outreach/sessions/:id/report` (and `?file=<id>` for
+   an earlier version), which checks `outreach.reports.read` and streams the
+   PDF, not to be cached.
 5. One report per session; uploading again keeps the old one as a previous
-   version (`deleted_at` set, object kept).
-6. A nightly job reports and removes storage objects older than a day with no
-   row (an upload abandoned half-way), and reports rows with no object.
+   version (`deleted_at` set, file kept).
+6. A nightly job removes files older than a day with no row (an upload
+   abandoned half-way), and reports rows with no file.
 7. Metrics `storage.bytes` and `storage.files`.
 8. **Say plainly what erasure cannot do.** Add a row to
    `docs/data-inventory.md`: session reports may contain names and places, live
-   in object storage, and `person:erase` cannot reach inside a PDF. Add a step
-   to `docs/runbooks/erasure-request.md` telling the operator to check the
-   reports of the months the person was reached, by hand.
+   on the files volume, and `person:erase` cannot reach inside a PDF. Add a
+   step to `docs/runbooks/erasure-request.md` telling the operator to check the
+   reports of the Saturdays the person was part of, by hand.
 
-**Check.** A 12 MB file is refused before it uploads; a `.docx` is refused;
-the signed link stops working after five minutes; someone without
-`outreach.reports.read` gets 403 for the link; the orphan job lists what it
-removed. (The first two are the bucket's to refuse: check them against a real
-bucket before launch, and in tests check the policy the presign produces.)
+**Check.** A 12 MB file is refused, and nothing is kept; a `.docx` is refused;
+someone without `outreach.reports.read` gets 403; the orphan job lists what it
+removed; and before launch, a report attached, the API redeployed, and the
+report opened again.
 
-**Commit.** "Keep files in object storage, once, for every module"; "Attach the
+**Commit.** "Keep files in object storage, once, for every module"; "Keep files on
+the church's own disk instead of a bucket"; "Attach the
 Saturday report to its session".
 
 ---
@@ -800,7 +801,7 @@ test fail.
 - [x] Follow-up can happen many times, in any order.
 - [x] Friday training is recorded, and the team reminded through the department's Messages.
 - [x] Every dashboard number opens the list behind it.
-- [x] The session PDF is attached, limited, private, and named in the data inventory and the erasure runbook. *(Against the in-memory store; the checks against a real bucket are `docs/deployment.md` §6b, before launch.)*
+- [x] The session PDF is attached, limited, private, and named in the data inventory and the erasure runbook. *(Walked in a browser on a disk folder; attaching the Railway volume and the redeploy check are `docs/deployment.md` §6b, before launch.)*
 - [x] `appendix-database.md`, `what-works-now.md` and the metric list are updated.
 - [ ] Someone other than the builder has walked it in a browser, at phone width. *(The owner's: `what-works-now.md` §11, steps 24–27.)*
 - [ ] Step 8.1: the Outreach leader's answers are in `outreach-brief.md`. *(The owner's.)*
@@ -837,6 +838,8 @@ is right, and this is why.
   say which those were; the runbook has the operator check them first.
 - **Where the office adds someone by hand, `people.source` says `OFFICE`.** It
   had said `FORM` since 8.3; a migration corrected those saved in between.
-- **The storage library** is the AWS SDK's S3 client, which both R2 and B2
-  speak. Its variables are all five or none, and the API refuses to start with
-  some.
+- **Files live on a Railway volume** (owner, 25 Sept 2026), not in an R2 or
+  B2 bucket as first built: uploads and downloads go through the API, and
+  `FILES_DIR` replaces the five `STORAGE_` variables and the AWS SDK. The
+  browser sends the file's size with it, so a body cut short on the way is
+  refused rather than kept.

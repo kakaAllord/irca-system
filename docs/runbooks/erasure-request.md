@@ -32,8 +32,10 @@ to be erased. `docs/data-inventory.md` says what is held about whom.
    keep the list. For each: Portal → **Outreach → Saturdays → that date →
    Report**, and read it. Where it names them, ask the Outreach leader to
    attach a version without them. The version with their name is then kept
-   as an earlier version, so remove it too: delete its object in the bucket's
-   dashboard (the key is in the list), then its row, as the database owner:
+   as an earlier version, so remove it too: delete its file from the volume,
+   from a shell on the `api` service (Railway → the service → its shell, or
+   `railway ssh`), `rm "$FILES_DIR/<the key>"`, then its row, as the database
+   owner:
 
    ```sql
    delete from files where key = '<the key>';

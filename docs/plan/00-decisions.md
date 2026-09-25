@@ -429,21 +429,27 @@ Outreach follow-up page render the same timeline component.
 
 ---
 
-## D24. Files live in object storage, with one table for all of them (22 Sept 2026)
+## D24. Files live on the church's own disk, with one table for all of them (22 Sept 2026; storage corrected 25 Sept 2026)
 
 Outreach asked to attach the Saturday report as a PDF — *"rather than forcing
 them to reproduce their existing reporting process inside the system"*. That
 is the first file the system keeps, and the finance receipts of Q7 are the
 second, so it is decided once:
 
-- S3-compatible object storage (Cloudflare R2 or Backblaze B2), one bucket,
-  keys prefixed by module. Private; read through a short-lived signed URL.
+- ~~S3-compatible object storage (Cloudflare R2 or Backblaze B2)~~ *Corrected
+  25 Sept 2026 by the owner:* a **Railway volume** attached to the API, the
+  folder named by `FILES_DIR`, paths prefixed by module. It survives every
+  deploy. What the owner accepted with it: the API cannot run more than one
+  copy while it has a volume, and a deploy stops it briefly, so deploys are
+  made when nobody is using it. Files are private: read only through the API,
+  after the owning module's permission check.
 - One core `files` table recording the module, what it belongs to, the key,
   the size and who uploaded it — so the next module does not invent a second
   one.
-- The browser uploads straight to storage with a presigned POST; a 10 MB PDF
-  never travels through the API. Type and size are refused by the presign
-  itself.
+- The browser sends the file to the API, which writes it as it arrives,
+  counts it against the limit and cuts it off the moment it passes, and
+  checks it arrived whole and is the kind of file it says before recording
+  it.
 - `storage.bytes` and `storage.files`, charted by the dev console like every
   other metric.
 - **Erasure cannot reach inside a PDF.** `docs/data-inventory.md` and the

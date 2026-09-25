@@ -421,10 +421,10 @@ member** role, and a pastor who only reads has **Outreach viewer**.
   attenders, Saturdays held, areas, team members out, training attendance —
   and the weekly trend. **Every number opens the list it was counted from.**
 - **The session report.** A leader attaches the Saturday's report as a PDF of
-  up to 10 MB, straight into the church's private file storage; it opens
-  through a link that works for five minutes, and a new one keeps the old one
-  as an earlier version. Until the bucket is set up (`docs/deployment.md`
-  §6b), attaching says storage is not set up.
+  up to 10 MB, kept on the church's own file storage (a Railway volume in
+  production); it opens only for those who may read reports, and a new one
+  keeps the old one as an earlier version. Until the volume is set up
+  (`docs/deployment.md` §6b), attaching says storage is not set up.
 
 ## 8a. The developer console
 
@@ -656,7 +656,7 @@ whole Saturday walked in a browser at phone width.
 - For Communications to go live: the Beem account typed into Comms → Settings, and the
   reply URL given to Beem (`docs/deployment.md`, §6a).
 - For Outreach: the Outreach leader's answers to step 8.1 (how the team
-  works, its areas, which numbers it reports upward), the file bucket
-  (`docs/deployment.md` §6b, with its checks against the real bucket), and a
+  works, its areas, which numbers it reports upward), the files volume
+  (`docs/deployment.md` §6b, with its checks before launch), and a
   second person walking it at phone width.
 - Pledges (Phase 9), once the leadership has answered step 9.0.

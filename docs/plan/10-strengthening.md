@@ -147,8 +147,10 @@ proven it.
    - encrypts the file with `age`, to a public key committed in
      `ops/backup.pub` (the private key is held offline by the owner and one
      pastor, never on a server);
-   - uploads it to the object storage from Phase 8 (a separate bucket or
-     prefix, `backups/`) and keeps 30 days.
+   - keeps it off Railway, since the files volume is on the same platform
+     as the database (where, and for how long, is decided in this step), for
+     30 days. The files volume needs a backup of its own: Railway's volume
+     backups, or a copy of `FILES_DIR` alongside the dump.
 4. **The restore drill** — before launch, then every three months:
    1. download last night's dump and decrypt it with the private key;
    2. restore it into a **new Neon branch** (never `main`) with `pg_restore`;
@@ -173,7 +175,7 @@ there is nothing to separate: backing up the church *is* backing up the
 database (10.2), and restoring one church *is* the restore drill.
 
 If the church ever wants all its data handed over, or a deployment shut down,
-that is the 10.2 dump plus the object storage bucket, handed over encrypted.
+that is the 10.2 dump plus the files volume (`FILES_DIR`), handed over encrypted.
 Write a runbook for it only if it is asked for.
 
 The step number is kept so references to 10.4 stay correct.
