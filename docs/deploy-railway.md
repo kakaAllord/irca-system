@@ -245,6 +245,7 @@ applies; these are the production values:
 | `RESEND_API_KEY` | from Resend (`docs/deployment.md` §6) |
 | `BEEM_SETTINGS_KEY` | 32 random bytes, base64: `openssl rand -base64 32`. **Make it once and keep it** — a new one makes the saved Beem account unreadable until Communications saves it again |
 | `BEEM_INBOUND_SECRET` | `openssl rand -hex 24`. The password in the reply URL given to Beem |
+| `STORAGE_ENDPOINT` … `STORAGE_SECRET_KEY` | the private file bucket, all five or none (`docs/deployment.md` §6b). Without them, uploads are refused and nothing else changes |
 
 The Beem key and secret are **not** variables: Communications types them into
 Comms → Settings in the portal (D26). `SMS_LIVE` is left unset in
@@ -434,12 +435,11 @@ Sunday.
 ## 8. Files, for Outreach's session reports
 
 Phase 8 step 8.9 stores PDF reports in S3-compatible object storage, not on
-the API's disk: a Railway service's disk is replaced on every deploy. Use
-Cloudflare R2 or Backblaze B2 as the plan says (or Railway's own bucket
-storage, if the project has it and it speaks S3), and give the `api` service
-the `STORAGE_*` variables that step lists. That step is still being built
-(25 Sept 2026); once it is, a missing bucket only means uploading a report is
-refused with a message saying so, and nothing else is affected.
+the API's disk: a Railway service's disk is replaced on every deploy. Make a
+private Cloudflare R2 or Backblaze B2 bucket, its key and its CORS rule as
+`docs/deployment.md` §6b says, and give the `api` service the five
+`STORAGE_*` variables. Without them, uploading a report is refused with a
+message saying storage is not set up, and nothing else is affected.
 
 ---
 

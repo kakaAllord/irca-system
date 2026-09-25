@@ -346,6 +346,32 @@ model PasswordResetToken {
   @@map("password_reset_tokens")
 }
 
+/// A file kept in object storage (D24), for any module: Outreach's session
+/// reports first, Finance's receipts later. The bytes live in the bucket; this
+/// row says what they are, whose they are and who put them there. Replacing a
+/// file sets `deleted_at` on the old row and keeps the object, so an earlier
+/// version can still be found. Rows are never deleted by the application.
+model File {
+  id           String    @id @default(uuid(7)) @db.Uuid
+  /// The module that owns it, which decides who may read it: 'outreach'.
+  moduleKey    String    @map("module_key") @db.VarChar(30)
+  /// What it belongs to: 'outreach_session' and that session's id.
+  entityType   String    @map("entity_type") @db.VarChar(40)
+  entityId     String    @map("entity_id") @db.Uuid
+  /// Where it is in the bucket: outreach/sessions/<session-id>/<uuid>.pdf.
+  key          String    @unique @db.VarChar(300)
+  originalName String    @map("original_name") @db.VarChar(200)
+  contentType  String    @map("content_type") @db.VarChar(100)
+  bytes        Int
+  uploadedById String    @map("uploaded_by_id") @db.Uuid
+  uploadedAt   DateTime  @default(now()) @map("uploaded_at") @db.Timestamptz(6)
+  /// Replaced by a newer version. The object is kept.
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([entityType, entityId])
+  @@map("files")
+}
+
 // ---------------------------------------------------------------------------
 // Change requests (D17) and the Finance portal.
 // ---------------------------------------------------------------------------

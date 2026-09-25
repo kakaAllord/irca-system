@@ -54,6 +54,9 @@ export const USAGE_METRICS: MetricDef[] = [
   m('Departments', 'departments.leaders.named', 'counter', 'Department leaders named'),
   m('Departments', 'departments.members.added', 'counter', 'People added to departments'),
 
+  m('Storage', 'storage.files', 'gauge', 'Files kept (current versions)'),
+  m('Storage', 'storage.bytes', 'gauge', 'Size of every file kept, older versions too', 'bytes'),
+
   m('Outreach', 'outreach.reached', 'counter', 'People recorded as reached'),
   m('Outreach', 'outreach.followups', 'counter', 'Calls, visits and invitations'),
   m('Outreach', 'outreach.visits', 'counter', 'Home visits'),

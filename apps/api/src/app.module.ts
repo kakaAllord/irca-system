@@ -8,6 +8,7 @@ import { DatabaseModule } from './core/database/database.module.js';
 import { CoreModule } from './core/core.module.js';
 import { EmailModule } from './core/email/email.module.js';
 import { SmsModule } from './core/sms/sms.module.js';
+import { FilesModule } from './core/files/files.module.js';
 import { TestEmailController } from './core/email/test-email.controller.js';
 import { InvitationsModule } from './core/invitations/invitations.module.js';
 import { AdminModule } from './modules/admin/admin.module.js';
@@ -45,6 +46,7 @@ import { UsageInterceptor } from './core/usage/usage.interceptor.js';
     }),
     EmailModule,
     SmsModule,
+    FilesModule,
     CoreModule,
     AuthModule,
     ImpersonationModule,

@@ -5,6 +5,7 @@ import { ImpersonationService } from '../impersonation/impersonation.service.js'
 import { EmailService } from '../email/email.service.js';
 import { JobRunner } from './job-runner.service.js';
 import { UsageSnapshot } from '../usage/usage-snapshot.service.js';
+import { FilesService } from '../files/files.service.js';
 
 /**
  * The work that happens on a clock rather than on a request. Each runs through
@@ -18,6 +19,7 @@ export class ScheduledJobs {
     private readonly db: PrismaDb,
     private readonly email: EmailService,
     private readonly snapshot: UsageSnapshot,
+    private readonly files: FilesService,
   ) {}
 
   /** How big each table is, and what there is, measured before anyone is awake. */
@@ -41,6 +43,15 @@ export class ScheduledJobs {
   @Cron(CronExpression.EVERY_MINUTE, { name: 'impersonation-expiry' })
   expireImpersonations() {
     return this.jobs.run('impersonation-expiry', () => this.impersonation.expireOverdue());
+  }
+
+  /**
+   * Uploads abandoned half-way are removed, and files whose object has gone
+   * are reported in the job's result, where the dev console shows it.
+   */
+  @Cron('30 3 * * *', { name: 'files-sweep', timeZone: 'Africa/Dar_es_Salaam' })
+  sweepFiles() {
+    return this.jobs.run('files-sweep', () => this.files.sweep());
   }
 
   /** Overnight in Arusha, where the churches are. */

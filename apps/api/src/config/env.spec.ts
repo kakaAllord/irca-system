@@ -35,4 +35,20 @@ describe('validateEnv', () => {
       validateEnv({ ...valid, NODE_ENV: 'production', SESSION_COOKIE_NAME: '__Host-irca_session' }),
     ).not.toThrow();
   });
+
+  it('takes file storage whole or not at all', () => {
+    const storage = {
+      STORAGE_ENDPOINT: 'https://account.r2.cloudflarestorage.com',
+      STORAGE_REGION: 'auto',
+      STORAGE_BUCKET: 'irca-files',
+      STORAGE_ACCESS_KEY: 'key',
+      STORAGE_SECRET_KEY: 'secret',
+    };
+    expect(validateEnv({ ...valid, ...storage }).STORAGE_BUCKET).toBe('irca-files');
+    // Empty, as .env.example leaves them, is none.
+    const none = validateEnv({ ...valid, STORAGE_ENDPOINT: '', STORAGE_BUCKET: '' });
+    expect(none.STORAGE_ENDPOINT).toBeUndefined();
+    const { STORAGE_SECRET_KEY: _s, ...partial } = storage;
+    expect(() => validateEnv({ ...valid, ...partial })).toThrow(/all five STORAGE_/);
+  });
 });

@@ -131,6 +131,11 @@ export class UsageSnapshot {
         Prisma.sql`select count(*)::bigint as n from change_requests where status = 'PENDING'`,
       ],
       [
+        'storage.files',
+        Prisma.sql`select count(*)::bigint as n from files where deleted_at is null`,
+      ],
+      ['storage.bytes', Prisma.sql`select coalesce(sum(bytes), 0)::bigint as n from files`],
+      [
         'outreach.followups.pending',
         Prisma.sql`select count(distinct person_id)::bigint as n from outreach_reached
                    where needs_follow_up`,

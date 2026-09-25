@@ -145,6 +145,7 @@ development:
 | `RESEND_API_KEY`         | from Resend |
 | `BEEM_SETTINGS_KEY`      | 32 random bytes, base64 (`.env.example` says how). Seals the Beem key in the database. Make it once and keep it: a new one makes the saved Beem account unreadable until it is saved again |
 | `BEEM_INBOUND_SECRET`    | at least 24 random characters. The password in the reply URL given to Beem (§6a) |
+| `STORAGE_ENDPOINT`, `STORAGE_REGION`, `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY` | the private bucket for files (§6b). All five or none: with none, uploads are refused and nothing else changes |
 
 The Beem key and secret are **not** environment variables: Communications
 types them into Comms → Settings (D26).
@@ -242,6 +243,54 @@ redeploying; its old database stays untouched until the owner retires it.
    Nothing to set up.
 5. Send one message to a phone you hold, and watch it become **Delivered** in
    Comms → History within ten minutes.
+
+## 6b. File storage (Cloudflare R2 or Backblaze B2)
+
+Files such as Outreach's Saturday reports are kept in one private bucket
+(D24). Either provider works, and the code does not care which: a few
+hundred PDFs a year cost next to nothing on both. The browser uploads straight
+to the bucket and reads through links that stop working after five minutes,
+so the bucket is **never public**.
+
+1. **Make the bucket.** R2: Cloudflare dashboard → R2 → Create bucket, name
+   `irca-files`, location automatic. B2: Buckets → Create a Bucket,
+   `irca-files`, **Private**, default encryption on.
+2. **Make a key that can use only that bucket.** R2: R2 → Manage API tokens →
+   Create token, *Object Read & Write*, limited to `irca-files`. B2: App Keys →
+   Add a New Application Key, access to `irca-files` only, *Read and Write*.
+   Copy the key id and secret straight into the API's environment:
+   `STORAGE_ACCESS_KEY` and `STORAGE_SECRET_KEY`.
+3. **Say where it is.** R2: `STORAGE_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com`,
+   `STORAGE_REGION=auto`. B2: `STORAGE_ENDPOINT=https://s3.<region>.backblazeb2.com`
+   (the bucket page shows it), `STORAGE_REGION=<region>`, such as `eu-central-003`.
+   `STORAGE_BUCKET=irca-files`.
+4. **Let the portal upload to it (CORS).** The browser posts the file from the
+   portal's address, so the bucket must allow that one origin and nothing
+   else. R2: bucket → Settings → CORS policy:
+
+   ```json
+   [
+     {
+       "AllowedOrigins": ["https://portal.<domain>"],
+       "AllowedMethods": ["POST", "GET"],
+       "AllowedHeaders": ["*"],
+       "MaxAgeSeconds": 3600
+     }
+   ]
+   ```
+
+   B2 takes the same rule through its S3 API (`aws s3api put-bucket-cors
+   --endpoint-url <STORAGE_ENDPOINT> --bucket irca-files --cors-configuration
+   file://cors.json`, with the rule above wrapped as `{"CORSRules": [...]}`).
+5. **Check it before launch** with a real file: attach a PDF to a Saturday in
+   Outreach and open it again; then try a 12 MB PDF and a `.docx`, both of
+   which **the bucket** must refuse before anything is saved (08 step 8.9).
+   Wait six minutes and open the old link: it must no longer work.
+
+Every night at 03:30 the API removes objects more than a day old that no file
+row points at (an upload abandoned half-way) and lists rows whose object has
+gone. Both appear in the dev console's job log as the `files-sweep` result;
+anything under "missing" needs a person to look into it.
 
 ---
 
