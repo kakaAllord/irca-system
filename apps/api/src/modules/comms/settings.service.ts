@@ -19,7 +19,12 @@ export class SettingsService {
     return { ...(await commsSettings(this.db.client)), beem: await this.gateway.summary() };
   }
 
-  async save(input: Omit<CommsSettings, 'personCooldownDays'> & { personCooldownDays?: number }) {
+  async save(
+    input: Omit<CommsSettings, 'personCooldownDays' | 'balanceAlertFloor'> & {
+      personCooldownDays?: number;
+      balanceAlertFloor?: number;
+    },
+  ) {
     await this.db.tx(async (tx) => {
       const before = await commsSettings(tx);
       const next = { ...before, ...input };

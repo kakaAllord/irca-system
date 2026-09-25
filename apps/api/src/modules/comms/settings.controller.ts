@@ -18,6 +18,13 @@ const SettingsSchema = z.object({
   quietHours: z.string().trim().regex(QUIET, 'Two times, such as 21:00-07:00'),
   /** Left out: kept as it is. */
   personCooldownDays: z.number().int().min(0, 'At least 0').max(90, 'At most 90').optional(),
+  /** Left out: kept as it is. */
+  balanceAlertFloor: z
+    .number()
+    .int('A whole number')
+    .min(0, 'At least 0')
+    .max(10_000_000, 'At most 10,000,000')
+    .optional(),
 });
 
 const BeemSchema = z.object({

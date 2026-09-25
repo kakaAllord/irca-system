@@ -22,6 +22,11 @@ export type CommsSettings = {
    * (09 step 9.3). 0: no such wait.
    */
   personCooldownDays: number;
+  /**
+   * Communications and the owner are warned when Beem's credit falls below
+   * this, as Test connection shows it (docs/plan/10, step 10.4). 0: never.
+   */
+  balanceAlertFloor: number;
 };
 
 export const DEFAULTS: CommsSettings = {
@@ -30,6 +35,7 @@ export const DEFAULTS: CommsSettings = {
   defaultLang: 'sw',
   quietHours: '21:00-07:00',
   personCooldownDays: 14,
+  balanceAlertFloor: 500,
 };
 
 const KEYS = {
@@ -38,6 +44,7 @@ const KEYS = {
   defaultLang: 'comms.defaultLang',
   quietHours: 'comms.quietHours',
   personCooldownDays: 'comms.personCooldownDays',
+  balanceAlertFloor: 'comms.balanceAlertFloor',
 } as const;
 
 const MONEY = /^\d{1,10}(\.\d{1,2})?$/;
@@ -52,6 +59,7 @@ export async function commsSettings(tx: Pick<Tx, 'setting'>): Promise<CommsSetti
   const lang = value(KEYS.defaultLang);
   const quiet = value(KEYS.quietHours);
   const cooldown = value(KEYS.personCooldownDays);
+  const floor = value(KEYS.balanceAlertFloor);
   return {
     pricePerSegment: money(value(KEYS.pricePerSegment)) ?? DEFAULTS.pricePerSegment,
     dailyCap: money(value(KEYS.dailyCap)),
@@ -63,6 +71,10 @@ export async function commsSettings(tx: Pick<Tx, 'setting'>): Promise<CommsSetti
       typeof cooldown === 'number' && Number.isInteger(cooldown) && cooldown >= 0 && cooldown <= 90
         ? cooldown
         : DEFAULTS.personCooldownDays,
+    balanceAlertFloor:
+      typeof floor === 'number' && Number.isInteger(floor) && floor >= 0
+        ? floor
+        : DEFAULTS.balanceAlertFloor,
   };
 }
 

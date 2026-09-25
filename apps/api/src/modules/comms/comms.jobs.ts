@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { JobRunner } from '../../core/jobs/job-runner.service.js';
 import { OutboxService } from './outbox.service.js';
 import { SchedulesService } from './schedules.service.js';
+import { CommsAlerts } from './comms-alerts.service.js';
 
 /**
  * Communications' clock, beside email's (core/jobs): each through JobRunner,
@@ -14,6 +15,7 @@ export class CommsJobs {
     private readonly jobs: JobRunner,
     private readonly outbox: OutboxService,
     private readonly schedules: SchedulesService,
+    private readonly alerts: CommsAlerts,
   ) {}
 
   /** Beats that are due, each through the ordinary send. */
@@ -35,6 +37,16 @@ export class CommsJobs {
 
   @Cron(CronExpression.EVERY_HOUR, { name: 'sms-balance' })
   readBalance() {
-    return this.jobs.run('sms-balance', () => this.outbox.readBalance());
+    return this.jobs.run('sms-balance', async () => {
+      const reading = await this.outbox.readBalance();
+      await this.alerts.checkCredit(reading.credit);
+      return reading;
+    });
+  }
+
+  /** Beside the system's own alerts, on the same ten minutes. */
+  @Cron(CronExpression.EVERY_10_MINUTES, { name: 'sms-alerts' })
+  checkForAlerts() {
+    return this.jobs.run('sms-alerts', () => this.alerts.checkFailing());
   }
 }

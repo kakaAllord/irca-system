@@ -12,6 +12,7 @@ import { MessagesService } from './messages.service.js';
 import { SendingService } from './sending.service.js';
 import { OutboxService } from './outbox.service.js';
 import { CommsJobs } from './comms.jobs.js';
+import { CommsAlerts } from './comms-alerts.service.js';
 import { SchedulesController } from './schedules.controller.js';
 import { SchedulesService } from './schedules.service.js';
 import { InboundController } from './inbound.controller.js';
@@ -45,6 +46,7 @@ import { OverviewService } from './overview.service.js';
     InboundService,
     OverviewService,
     CommsJobs,
+    CommsAlerts,
   ],
   exports: [AudiencesService, SendingService, OutboxService],
 })
