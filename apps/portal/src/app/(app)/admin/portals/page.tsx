@@ -82,6 +82,7 @@ export default async function PortalsPage() {
                 )}
               </p>
             )}
+            <LeadersNote portal={portal} />
             <p className="text-[11.5px] text-fg3">
               {!Object.keys(moduleByKey(portal.key)?.permissions ?? {}).some(isAssignable)
                 ? 'Nobody is given it: leading a department opens it.'
@@ -93,5 +94,27 @@ export default async function PortalsPage() {
         ))}
       </div>
     </>
+  );
+}
+
+/**
+ * What the leaders of a portal's department may do in it without any role
+ * (D29), so an administrator can see where a leader's access comes from.
+ */
+function LeadersNote({ portal }: { portal: Portal }) {
+  const def = moduleByKey(portal.key);
+  if (!def?.leaders) return null;
+  const labels = def.leaders.permissions.map((key) => def.permissions[key]!.label);
+  return (
+    <details className="text-[11.5px] text-fg2">
+      <summary className="cursor-pointer">
+        Leaders of {portal.department?.name ?? 'its department'} run it, with no role needed
+      </summary>
+      <ul className="mt-1 list-disc pl-5">
+        {labels.map((label) => (
+          <li key={label}>{label}</li>
+        ))}
+      </ul>
+    </details>
   );
 }

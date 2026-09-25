@@ -80,6 +80,13 @@ export type ModuleDef = {
   home: string;
   permissions: Record<string, PermissionDef>;
   systemRoles: SystemRoleDef[];
+  /**
+   * What the leaders of the department this portal belongs to may do in it,
+   * without any role (D29). Ordinary permissions of this module, so a role
+   * may hold them too; leaders simply have them for as long as they lead,
+   * and lose them the moment they stop.
+   */
+  leaders?: { description: string; permissions: string[] };
   nav: NavItem[];
 };
 
@@ -94,6 +101,16 @@ export function defineModule<const M extends ModuleDef>(m: M): M {
       if (!(p in m.permissions)) throw new Error(`Role ${role.key} uses unknown permission ${p}`);
       if (m.permissions[p]!.fromLeadership) {
         throw new Error(`Role ${role.key} cannot hold ${p}: it comes from leading a department`);
+      }
+    }
+  }
+  if (m.leaders) {
+    // A core portal belongs to no department, so it has no leaders to name.
+    if (m.kind === 'core') throw new Error(`${m.key} is core and belongs to no department`);
+    for (const p of m.leaders.permissions) {
+      if (!(p in m.permissions)) throw new Error(`Leaders of ${m.key} use unknown permission ${p}`);
+      if (m.permissions[p]!.fromLeadership) {
+        throw new Error(`Leaders of ${m.key} already hold ${p} by leading any department`);
       }
     }
   }

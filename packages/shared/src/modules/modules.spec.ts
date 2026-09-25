@@ -5,6 +5,7 @@ import {
   ALL_PERMISSIONS,
   CHURCH_MODULES,
   LEADERSHIP_PERMISSIONS,
+  PORTAL_LEADER_PERMISSIONS,
   isAssignable,
   permissionKind,
 } from './index';
@@ -71,6 +72,39 @@ describe('module definitions', () => {
       'admin',
       'dev',
     ]);
+  });
+
+  it("checks what a portal's own leaders may do (D29)", () => {
+    const base = {
+      key: 'f',
+      name: 'F',
+      description: '',
+      kind: 'department' as const,
+      home: '/f',
+      permissions: {
+        'f.a.read': { kind: 'read' as const, label: 'x' },
+        'f.own.read': { kind: 'read' as const, label: 'x', fromLeadership: true as const },
+      },
+      systemRoles: [],
+      nav: [],
+    };
+    expect(() =>
+      defineModule({ ...base, leaders: { description: '', permissions: ['f.b.read'] } }),
+    ).toThrow(/unknown permission f.b.read/);
+    expect(() =>
+      defineModule({ ...base, leaders: { description: '', permissions: ['f.own.read'] } }),
+    ).toThrow(/by leading any department/);
+    expect(() =>
+      defineModule({
+        ...base,
+        kind: 'core',
+        leaders: { description: '', permissions: ['f.a.read'] },
+      }),
+    ).toThrow(/belongs to no department/);
+    for (const p of PORTAL_LEADER_PERMISSIONS) {
+      expect(ALL_PERMISSIONS[p.key], p.key).toBeDefined();
+      expect(p.key.startsWith(`${p.moduleKey}.`)).toBe(true);
+    }
   });
 
   it('never puts a leadership permission in a role', () => {

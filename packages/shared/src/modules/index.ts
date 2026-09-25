@@ -44,6 +44,15 @@ export const LEADERSHIP_PERMISSIONS: { key: string; moduleKey: string }[] = ALL_
       .map(([key]) => ({ key, moduleKey: m.key })),
 );
 
+/**
+ * What leading the department a portal belongs to allows in that portal
+ * (D29), with the portal, so the resolver adds each only for the leaders of
+ * that portal's own department.
+ */
+export const PORTAL_LEADER_PERMISSIONS: { key: string; moduleKey: string }[] = ALL_MODULES.flatMap(
+  (m) => (m.leaders?.permissions ?? []).map((key) => ({ key, moduleKey: m.key })),
+);
+
 /** Whether a permission can be put in a role. Leadership ones cannot. */
 export const isAssignable = (key: string): boolean =>
   key in ALL_PERMISSIONS && !ALL_PERMISSIONS[key]!.fromLeadership;
