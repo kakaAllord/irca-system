@@ -54,6 +54,8 @@ export const USAGE_METRICS: MetricDef[] = [
   m('Departments', 'departments.leaders.named', 'counter', 'Department leaders named'),
   m('Departments', 'departments.members.added', 'counter', 'People added to departments'),
 
+  m('Messages', 'comms.templates.approved', 'counter', 'Templates approved'),
+
   m('API', 'api.requests', 'counter', 'Requests'),
   m('API', 'api.requests.*', 'counter', 'Requests by module'),
   m('API', 'api.route.*', 'counter', 'Requests by route (the template, never the real path)'),

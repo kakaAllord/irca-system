@@ -5,6 +5,8 @@ import { SettingsService } from './settings.service.js';
 import { AudiencesController } from './audiences.controller.js';
 import { AudiencesService } from './audiences.service.js';
 import { StaffAudience } from './staff.audience.js';
+import { TemplatesController } from './templates.controller.js';
+import { TemplatesService } from './templates.service.js';
 
 /**
  * The Communication system (Phase 7): templates, audiences, sending, beats,
@@ -13,8 +15,8 @@ import { StaffAudience } from './staff.audience.js';
  */
 @Module({
   imports: [DepartmentsModule],
-  controllers: [SettingsController, AudiencesController],
-  providers: [SettingsService, AudiencesService, StaffAudience],
+  controllers: [SettingsController, AudiencesController, TemplatesController],
+  providers: [SettingsService, AudiencesService, StaffAudience, TemplatesService],
   exports: [AudiencesService],
 })
 export class CommsModule {}
