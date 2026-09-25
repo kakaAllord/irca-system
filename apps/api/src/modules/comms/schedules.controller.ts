@@ -14,6 +14,7 @@ const ScheduleSchema = z.object({
   templateIds: z.array(z.uuid()).min(1, 'Choose at least one template').max(5),
   fields: z.record(z.string(), z.string().max(60)).default({}),
   daysOfWeek: z.array(z.number().int().min(1).max(7)).min(1, 'Choose at least one day').max(7),
+  weeksOfMonth: z.array(z.number().int().min(1).max(4)).max(4).default([]),
   timeOfDay: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'A time such as 18:00'),
   jitterMinutes: z.number().int().min(0).max(120).default(0),
   startsOn: z.iso.date(),

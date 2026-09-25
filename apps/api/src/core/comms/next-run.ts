@@ -9,6 +9,11 @@
 export type Rhythm = {
   /** 1 = Monday … 7 = Sunday. */
   daysOfWeek: number[];
+  /**
+   * Which weeks of the month: 1 is days 1–7, so [1] with Monday is "the
+   * first Monday of each month". Empty is every week.
+   */
+  weeksOfMonth?: number[];
   /** 'HH:MM', church time. */
   timeOfDay: string;
   jitterMinutes: number;
@@ -126,6 +131,8 @@ export function nextRun(
     const d = new Date(day);
     const dow = ((d.getUTCDay() + 6) % 7) + 1;
     if (!rhythm.daysOfWeek.includes(dow)) continue;
+    const week = Math.ceil(d.getUTCDate() / 7);
+    if (rhythm.weeksOfMonth?.length && !rhythm.weeksOfMonth.includes(week)) continue;
     const base = atWall(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate(), hh, mm, timeZone);
     const jitter = Math.floor(random() * (Math.max(0, rhythm.jitterMinutes) + 1));
     const at = afterQuiet(new Date(base.getTime() + jitter * 60_000), timeZone, quiet);

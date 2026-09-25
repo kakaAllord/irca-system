@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { ScheduleDrawer } from './ScheduleDrawer';
-import { DAYS, when, type AudienceOptions, type Schedule, type Template } from './types';
+import { DAYS, WEEKS, when, type AudienceOptions, type Schedule, type Template } from './types';
 
 /** The beats: when each next runs, what it last did, and pause, resume, change, stop. */
 export function SchedulesPanel({
@@ -99,7 +99,10 @@ function ScheduleCard({
     }
   }
 
-  const days = s.daysOfWeek.map((d) => DAYS[d - 1]).join(', ');
+  const weekdays = s.daysOfWeek.map((d) => DAYS[d - 1]).join(', ');
+  const days = s.weeksOfMonth.length
+    ? `The ${s.weeksOfMonth.map((w) => WEEKS[w - 1]).join(' and ')} ${weekdays} of each month`
+    : weekdays;
   return (
     <article className="flex flex-col gap-2 rounded-[10px] border border-border bg-surface p-4">
       <div className="flex items-start justify-between gap-2">

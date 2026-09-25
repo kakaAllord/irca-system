@@ -104,6 +104,35 @@ describe('beats: the same message on a rhythm (07 step 7.11)', () => {
     expect(listed.body[0]).toMatchObject({ lastError: null, lastMessage: { status: 'SENDING' } });
   });
 
+  it('sends once a month when asked: the first Tuesday', async () => {
+    const { id, templates, cookie, choir } = await choirBeat();
+    await portal(app)
+      .put(
+        `/v1/comms/schedules/${id}`,
+        {
+          departmentId: choir.id,
+          name: 'Monthly practice',
+          audience: { key: 'departments.everyone', params: { departmentIds: [choir.id] } },
+          templateIds: templates,
+          daysOfWeek: [2],
+          weeksOfMonth: [1],
+          timeOfDay: '18:00',
+          jitterMinutes: 0,
+          startsOn: '2026-01-01',
+        },
+        cookie,
+      )
+      .expect(204);
+    const listed = await portal(app)
+      .get(`/v1/comms/schedules?departmentId=${choir.id}`, cookie)
+      .expect(200);
+    expect(listed.body[0].weeksOfMonth).toEqual([1]);
+    // A Tuesday in the first seven days of a month, in Arusha.
+    const next = new Date(new Date(listed.body[0].nextRunAt).getTime() + 3 * 3_600_000);
+    expect(next.getUTCDay()).toBe(2);
+    expect(next.getUTCDate()).toBeLessThanOrEqual(7);
+  });
+
   it('stops sending, and says why, once its leader steps down', async () => {
     const { id, leader } = await choirBeat();
     await db.query(`update department_leaders set ended_at = now() where id = $1`, [

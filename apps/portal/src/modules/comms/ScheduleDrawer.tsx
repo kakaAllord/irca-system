@@ -13,7 +13,14 @@ import { RequiredMark } from '@/components/ui/RequiredMark';
 import { Select } from '@/components/ui/Select';
 import { SubmitButton } from '@/components/ui/SubmitButton';
 import { AudiencePicker, audienceReady } from './AudiencePicker';
-import { DAYS, type Audience, type AudienceOptions, type Schedule, type Template } from './types';
+import {
+  DAYS,
+  WEEKS,
+  type Audience,
+  type AudienceOptions,
+  type Schedule,
+  type Template,
+} from './types';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -42,6 +49,7 @@ export function ScheduleDrawer({
   const [templateIds, setTemplateIds] = useState<string[]>(schedule?.templateIds ?? []);
   const [fields, setFields] = useState<Record<string, string>>(schedule?.fields ?? {});
   const [days, setDays] = useState<number[]>(schedule?.daysOfWeek ?? []);
+  const [week, setWeek] = useState(String(schedule?.weeksOfMonth[0] ?? ''));
   const [time, setTime] = useState(schedule?.timeOfDay ?? '18:00');
   const [jitter, setJitter] = useState(String(schedule?.jitterMinutes ?? 15));
   const [startsOn, setStartsOn] = useState(schedule?.startsOn ?? today());
@@ -63,6 +71,7 @@ export function ScheduleDrawer({
       templateIds,
       fields,
       daysOfWeek: days,
+      weeksOfMonth: week ? [Number(week)] : [],
       timeOfDay: time,
       jitterMinutes: Number(jitter),
       startsOn,
@@ -186,6 +195,18 @@ export function ScheduleDrawer({
               ))}
             </div>
           </fieldset>
+          <Select
+            label="How often"
+            value={week}
+            onChange={(e) => setWeek(e.target.value)}
+            options={[
+              { value: '', label: 'Every week' },
+              ...WEEKS.map((w, i) => ({
+                value: String(i + 1),
+                label: `Once a month: the ${w} of those days`,
+              })),
+            ]}
+          />
           <div className="grid grid-cols-2 gap-3">
             <Input
               label="Time"

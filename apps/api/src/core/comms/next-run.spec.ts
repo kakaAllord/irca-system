@@ -75,4 +75,26 @@ describe('when a beat next sends', () => {
       arusha('2026-09-30T07:00'),
     );
   });
+
+  it('sends in the chosen weeks of the month only: the first Monday at ten', () => {
+    const monthly: Rhythm = {
+      ...tuesdays,
+      daysOfWeek: [1],
+      weeksOfMonth: [1],
+      timeOfDay: '10:00',
+    };
+    // Thursday 24 September 2026: the next first Monday is 5 October.
+    expect(nextRun(monthly, arusha('2026-09-24T10:00'), TZ, QUIET, none)).toEqual(
+      arusha('2026-10-05T10:00'),
+    );
+    // After it, the one in November: Monday 2 November.
+    expect(nextRun(monthly, arusha('2026-10-05T10:00'), TZ, QUIET, none)).toEqual(
+      arusha('2026-11-02T10:00'),
+    );
+    // The third Friday: 18 September 2026 is the third, 25th the fourth.
+    const third = { ...monthly, daysOfWeek: [5], weeksOfMonth: [3] };
+    expect(nextRun(third, arusha('2026-09-01T00:00'), TZ, QUIET, none)).toEqual(
+      arusha('2026-09-18T10:00'),
+    );
+  });
 });

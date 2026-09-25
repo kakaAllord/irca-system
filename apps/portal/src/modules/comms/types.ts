@@ -109,6 +109,8 @@ export type Schedule = {
   templateIds: string[];
   fields: Record<string, string>;
   daysOfWeek: number[];
+  /** Empty: every week. [1]: the first of those days in each month. */
+  weeksOfMonth: number[];
   timeOfDay: string;
   jitterMinutes: number;
   startsOn: string;
@@ -159,3 +161,6 @@ export const money = (value: string | number) =>
   Number(value).toLocaleString('en-GB', { maximumFractionDigits: 2 });
 
 export const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+/** Which of a month's weeks a beat sends in: 'first' for [1]. */
+export const WEEKS = ['first', 'second', 'third', 'fourth'];

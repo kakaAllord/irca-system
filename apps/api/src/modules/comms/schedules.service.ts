@@ -17,6 +17,8 @@ export type ScheduleInput = {
   templateIds: string[];
   fields: Record<string, string>;
   daysOfWeek: number[];
+  /** Empty: every week. [1]: the first of those days in each month. */
+  weeksOfMonth?: number[];
   timeOfDay: string;
   jitterMinutes: number;
   startsOn: string;
@@ -82,6 +84,7 @@ export class SchedulesService {
       templateIds: r.templateIds,
       fields: r.fields,
       daysOfWeek: r.daysOfWeek,
+      weeksOfMonth: r.weeksOfMonth,
       timeOfDay: r.timeOfDay,
       jitterMinutes: r.jitterMinutes,
       startsOn: r.startsOn.toISOString().slice(0, 10),
@@ -289,6 +292,7 @@ export class SchedulesService {
     const tz = (await tx.church.findFirst())?.timezone ?? 'Africa/Dar_es_Salaam';
     const rhythm: Rhythm = {
       daysOfWeek: [...new Set(input.daysOfWeek)].sort(),
+      weeksOfMonth: [...new Set(input.weeksOfMonth ?? [])].sort((a, b) => a - b),
       timeOfDay: input.timeOfDay,
       jitterMinutes: input.jitterMinutes,
       startsOn: new Date(`${input.startsOn}T00:00:00Z`),
@@ -332,6 +336,7 @@ export class SchedulesService {
 
 function rhythmOf(row: {
   daysOfWeek: number[];
+  weeksOfMonth: number[];
   timeOfDay: string;
   jitterMinutes: number;
   startsOn: Date;
@@ -339,6 +344,7 @@ function rhythmOf(row: {
 }): Rhythm {
   return {
     daysOfWeek: row.daysOfWeek,
+    weeksOfMonth: row.weeksOfMonth,
     timeOfDay: row.timeOfDay,
     jitterMinutes: row.jitterMinutes,
     startsOn: row.startsOn,

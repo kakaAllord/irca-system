@@ -1267,6 +1267,8 @@ model CommsSchedule {
   fields         Json      @default("{}")
   /// 1 = Monday … 7 = Sunday.
   daysOfWeek     Int[]     @map("days_of_week")
+  /// Which weeks of the month (1 = days 1–7). Empty: every week.
+  weeksOfMonth   Int[]     @default([]) @map("weeks_of_month")
   /// 'HH:MM', in the church's timezone.
   timeOfDay      String    @map("time_of_day") @db.VarChar(5)
   jitterMinutes  Int       @default(0) @map("jitter_minutes")
