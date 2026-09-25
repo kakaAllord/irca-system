@@ -14,7 +14,12 @@ export default defineConfig({
   // may change the schema. The running API never uses this URL: each of its
   // clients gets its own driver adapter and role (src/core/database).
   datasource: {
-    url: env('DIRECT_DATABASE_URL'),
+    // `prisma generate` reads only the schema, and CI and a fresh clone
+    // typecheck before any .env exists. Every command that connects still
+    // refuses to start without the URL, and says which variable is missing.
+    url: process.argv.includes('generate')
+      ? (process.env.DIRECT_DATABASE_URL ?? '')
+      : env('DIRECT_DATABASE_URL'),
     // Prisma builds a throwaway copy of the schema to work out what a migration
     // should contain. It normally creates that database itself; set
     // SHADOW_DATABASE_URL to point at one you made by hand, which is what a
