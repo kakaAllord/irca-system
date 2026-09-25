@@ -16,6 +16,12 @@ export type CommsSettings = {
   defaultLang: SmsLang;
   /** No beat sends inside it: 'HH:MM-HH:MM', church time. */
   quietHours: string;
+  /**
+   * An audience that reminds people about the same thing (pledges) reaches
+   * nobody twice within this many days, however many messages use it
+   * (09 step 9.3). 0: no such wait.
+   */
+  personCooldownDays: number;
 };
 
 export const DEFAULTS: CommsSettings = {
@@ -23,6 +29,7 @@ export const DEFAULTS: CommsSettings = {
   dailyCap: null,
   defaultLang: 'sw',
   quietHours: '21:00-07:00',
+  personCooldownDays: 14,
 };
 
 const KEYS = {
@@ -30,6 +37,7 @@ const KEYS = {
   dailyCap: 'comms.dailyCap',
   defaultLang: 'comms.defaultLang',
   quietHours: 'comms.quietHours',
+  personCooldownDays: 'comms.personCooldownDays',
 } as const;
 
 const MONEY = /^\d{1,10}(\.\d{1,2})?$/;
@@ -43,6 +51,7 @@ export async function commsSettings(tx: Pick<Tx, 'setting'>): Promise<CommsSetti
     typeof v === 'string' && MONEY.test(v) ? Number(v).toFixed(2) : null;
   const lang = value(KEYS.defaultLang);
   const quiet = value(KEYS.quietHours);
+  const cooldown = value(KEYS.personCooldownDays);
   return {
     pricePerSegment: money(value(KEYS.pricePerSegment)) ?? DEFAULTS.pricePerSegment,
     dailyCap: money(value(KEYS.dailyCap)),
@@ -50,6 +59,10 @@ export async function commsSettings(tx: Pick<Tx, 'setting'>): Promise<CommsSetti
       ? (lang as SmsLang)
       : DEFAULTS.defaultLang,
     quietHours: typeof quiet === 'string' && QUIET.test(quiet) ? quiet : DEFAULTS.quietHours,
+    personCooldownDays:
+      typeof cooldown === 'number' && Number.isInteger(cooldown) && cooldown >= 0 && cooldown <= 90
+        ? cooldown
+        : DEFAULTS.personCooldownDays,
   };
 }
 

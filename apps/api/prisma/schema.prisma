@@ -1222,6 +1222,8 @@ enum RecipientStatus {
   SKIPPED_OPT_OUT
   SKIPPED_NO_PHONE
   SKIPPED_DUPLICATE
+  /// Reached by the same reminding audience within the cooldown (09 step 9.3).
+  SKIPPED_RECENT
 }
 
 /// The outbox: one row per number, which is also the delivery record.

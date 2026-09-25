@@ -2,7 +2,9 @@ import { randomUUID } from 'node:crypto';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import type pg from 'pg';
 import { OPT_OUT } from '@irca/shared';
+import { z } from 'zod';
 import { RegistrySync } from '../src/core/rbac/registry-sync.service.js';
+import { AudienceRegistry } from '../src/core/comms/audience.registry.js';
 import { MemorySmsProvider } from '../src/core/sms/providers/memory.provider.js';
 import { UsageService } from '../src/core/usage/usage.service.js';
 import { OutboxService } from '../src/modules/comms/outbox.service.js';
@@ -265,6 +267,75 @@ describe('sending: refused for a reason you can read, whenever it should be (07 
     // The limit taken away: no limit, whatever has been spent today.
     await setCommsSettings(db, { dailyCap: null });
     await send(cookie, body).expect(201);
+  });
+
+  it('reaches nobody twice within the cooldown from an audience that reminds', async () => {
+    const { dept } = await choir();
+    // A reminding audience, as Finance's pledge one is: here, the choir.
+    app.get(AudienceRegistry).register({
+      key: 'test.reminding',
+      label: 'Reminded',
+      description: 'For this test',
+      scope: 'church',
+      cooldown: true,
+      params: z.object({ note: z.string().optional() }),
+      describe: async () => 'Reminded',
+      resolve: async (tx) =>
+        (
+          await tx.person.findMany({
+            where: { departments: { some: { departmentId: dept.id } } },
+          })
+        ).map((p) => ({
+          personId: p.id,
+          name: p.fullName,
+          dial: p.dial,
+          phone: p.phone,
+          lang: p.lang,
+          optedOut: p.smsOptOut,
+        })),
+    });
+    const lead = await signIn(
+      await createUserWithPermissions(
+        db,
+        ['comms.messages.read', 'comms.messages.send', 'comms.messages.send_adhoc'],
+        { moduleKey: 'comms' },
+      ),
+    );
+    const remind = (note: string) =>
+      send(lead, {
+        departmentId: null,
+        audience: { key: 'test.reminding', params: { note } },
+        bodies: { sw: 'Kumbukumbu.' },
+      });
+
+    const first = await remind('Ujenzi').expect(201);
+    expect(first.body.recipientCount).toBe(3);
+
+    // Another reminder the same day, about something else: one text each is enough.
+    const second = await remind('Bus').expect(409);
+    expect(second.body.error.message).toMatch(/in the last 14 days/);
+
+    // Someone new joins: they alone are reminded, and the rest are counted as left alone.
+    await member(
+      dept.id,
+      (await createPerson(db, { fullName: 'Rose Newcomer', phone: '713000009' })).id,
+    );
+    const third = await remind('Bus').expect(201);
+    expect(third.body).toMatchObject({ recipientCount: 1 });
+    const { rows } = await db.query<{ status: string; n: number }>(
+      `select status, count(*)::int as n from comms_recipients where message_id = $1
+       group by status order by status`,
+      [third.body.id],
+    );
+    expect(rows).toEqual([
+      { status: 'PENDING', n: 1 },
+      { status: 'SKIPPED_OPT_OUT', n: 1 },
+      { status: 'SKIPPED_RECENT', n: 3 },
+    ]);
+
+    // A cooldown of 0 days, saved in Comms → Settings, lets it remind again.
+    await setCommsSettings(db, { personCooldownDays: 0 });
+    await remind('Again').expect(201);
   });
 
   it('lets Communications send free text, schedule it, and stop it before it goes', async () => {

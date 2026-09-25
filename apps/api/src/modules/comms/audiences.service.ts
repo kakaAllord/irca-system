@@ -156,8 +156,14 @@ export class AudiencesService {
   async count(departmentId: string | null, key: string, params: unknown) {
     return this.db.tx(async (tx) => {
       await this.authorize(tx, departmentId, key, params);
-      const { defaultLang } = await commsSettings(tx);
-      const { name, recipients } = await this.resolver.resolve(tx, key, params, defaultLang);
+      const { defaultLang, personCooldownDays } = await commsSettings(tx);
+      const { name, recipients } = await this.resolver.resolve(
+        tx,
+        key,
+        params,
+        defaultLang,
+        personCooldownDays,
+      );
       return {
         name,
         reach: recipients.filter((r) => r.status === 'PENDING').length,

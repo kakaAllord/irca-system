@@ -70,6 +70,12 @@ export const USAGE_METRICS: MetricDef[] = [
   m('Messages', 'sms.delivered', 'counter', 'Messages delivered'),
   m('Messages', 'sms.failed', 'counter', 'Messages that failed'),
   m('Messages', 'sms.skipped_opt_out', 'counter', 'People left alone because they asked'),
+  m(
+    'Messages',
+    'sms.skipped_recent',
+    'counter',
+    'People left alone because a reminder reached them lately',
+  ),
   m('Messages', 'sms.segments', 'counter', 'Segments sent (what the carrier bills)'),
   m('Messages', 'sms.cost', 'counter', 'What messages cost, in TZS'),
   m('Messages', 'sms.balance', 'gauge', 'Beem credit left, in TZS'),

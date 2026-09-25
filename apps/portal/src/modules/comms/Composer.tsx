@@ -275,7 +275,8 @@ export function Composer({
               <dd className="text-fg2">
                 {preview.leftAlone.optedOut +
                   preview.leftAlone.noPhone +
-                  preview.leftAlone.duplicate ===
+                  preview.leftAlone.duplicate +
+                  preview.leftAlone.recent ===
                 0
                   ? 'Nobody'
                   : [
@@ -285,6 +286,7 @@ export function Composer({
                         `${preview.leftAlone.noPhone} with no usable number`,
                       preview.leftAlone.duplicate &&
                         `${preview.leftAlone.duplicate} sharing a number`,
+                      preview.leftAlone.recent && `${preview.leftAlone.recent} reminded lately`,
                     ]
                       .filter(Boolean)
                       .join(', ')}

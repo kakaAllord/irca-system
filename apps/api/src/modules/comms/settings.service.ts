@@ -19,9 +19,10 @@ export class SettingsService {
     return { ...(await commsSettings(this.db.client)), beem: await this.gateway.summary() };
   }
 
-  async save(next: CommsSettings) {
+  async save(input: Omit<CommsSettings, 'personCooldownDays'> & { personCooldownDays?: number }) {
     await this.db.tx(async (tx) => {
       const before = await commsSettings(tx);
+      const next = { ...before, ...input };
       await saveCommsSettings(tx, next);
       await this.audit.recordIn(tx, {
         action: 'comms.settings.changed',

@@ -98,6 +98,7 @@ export class SendingService {
     );
     this.usage.inc('sms.queued', result.recipientCount);
     this.usage.inc('sms.skipped_opt_out', result.optedOut);
+    this.usage.inc('sms.skipped_recent', result.recent);
     this.usage.inc('sms.segments', result.segments);
     this.usage.inc('sms.cost', Math.round(Number(result.cost)));
     return {
@@ -145,6 +146,7 @@ export class SendingService {
       input.audience.key,
       input.audience.params,
       settings.defaultLang,
+      settings.personCooldownDays,
     );
     // {{balance}} to someone the audience knows nothing about would go out
     // as a blank space where a figure should be.
@@ -179,7 +181,9 @@ export class SendingService {
       }
     }
     if (!problem && !rendered.some((r) => r.status === 'PENDING')) {
-      problem = 'Nobody in this audience can be sent to.';
+      problem = rendered.some((r) => r.status === 'SKIPPED_RECENT')
+        ? `Everyone in this audience who can be sent to was sent a message from it in the last ${settings.personCooldownDays} days.`
+        : 'Nobody in this audience can be sent to.';
     }
 
     return {
@@ -346,6 +350,7 @@ export class SendingService {
       recipientCount: pending.length,
       skippedCount: message.skippedCount,
       optedOut: p.recipients.filter((r) => r.status === 'SKIPPED_OPT_OUT').length,
+      recent: p.recipients.filter((r) => r.status === 'SKIPPED_RECENT').length,
       segments: p.segments,
       cost: fromCents(p.cost),
     };
@@ -374,6 +379,7 @@ export class SendingService {
         optedOut: by('SKIPPED_OPT_OUT'),
         noPhone: by('SKIPPED_NO_PHONE'),
         duplicate: by('SKIPPED_DUPLICATE'),
+        recent: by('SKIPPED_RECENT'),
       },
       segments: p.segments,
       pricePerSegment: fromCents(p.price),

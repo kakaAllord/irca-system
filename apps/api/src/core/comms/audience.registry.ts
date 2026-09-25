@@ -41,6 +41,13 @@ export interface AudienceProvider<P = unknown> {
    * people, which its leaders can always reach — but only their own.
    */
   readonly scope: 'church' | 'department';
+  /**
+   * It reminds people about the same thing again and again, so nobody in it
+   * is sent another message from it within Communications' cooldown
+   * (comms.personCooldownDays), whoever sends and with whatever parameters:
+   * two campaigns reminding on the same Monday are one text, not two.
+   */
+  readonly cooldown?: boolean;
   /** The audience blanks it fills for each person ({{balance}}), if any. */
   readonly fills?: readonly string[];
   /** Its parameters, checked before anything else is done with them. */

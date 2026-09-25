@@ -4,7 +4,7 @@ import type { Tx } from '../database/db.service.js';
 import { toE164 } from '../sms/phone.js';
 import { AudienceRegistry, type AudienceMember } from './audience.registry.js';
 
-export type Skip = 'SKIPPED_OPT_OUT' | 'SKIPPED_NO_PHONE' | 'SKIPPED_DUPLICATE';
+export type Skip = 'SKIPPED_OPT_OUT' | 'SKIPPED_NO_PHONE' | 'SKIPPED_DUPLICATE' | 'SKIPPED_RECENT';
 
 /** One person, decided: who, which number, which language, and whether they are sent to. */
 export type Resolved = {
@@ -29,6 +29,8 @@ export type Resolved = {
  * 2. One message per number: someone listed twice (a leader who is also a
  *    member) is SKIPPED_DUPLICATE the second time.
  * 3. A number that isn't one is SKIPPED_NO_PHONE.
+ * 4. For an audience that reminds (pledges), anyone it reached within the
+ *    cooldown — by number or by person, from any sender — is SKIPPED_RECENT.
  *
  * Who may use which audience is the sender's check, not this one.
  */
@@ -36,11 +38,54 @@ export type Resolved = {
 export class AudienceResolver {
   constructor(private readonly registry: AudienceRegistry) {}
 
-  async resolve(tx: Tx, key: string, raw: unknown, defaultLang: SmsLang) {
+  async resolve(tx: Tx, key: string, raw: unknown, defaultLang: SmsLang, cooldownDays = 0) {
     const { provider, params } = this.registry.parse(key, raw);
     const name = await provider.describe(tx, params);
     const members = await provider.resolve(tx, params);
-    return { provider, params, name, recipients: await this.decide(tx, members, defaultLang) };
+    const recipients = await this.decide(tx, members, defaultLang);
+    if (provider.cooldown && cooldownDays > 0) {
+      await this.coolDown(tx, key, recipients, cooldownDays);
+    }
+    return { provider, params, name, recipients };
+  }
+
+  /**
+   * Leaves alone whoever this audience reached within the last `days` — or
+   * will reach within them, from a message already scheduled — whichever
+   * department sent it and whatever it was about. Counted by number and by
+   * person: a family sharing a phone is still one phone.
+   */
+  private async coolDown(tx: Tx, key: string, recipients: Resolved[], days: number) {
+    const pending = recipients.filter((r) => r.status === 'PENDING');
+    if (!pending.length) return;
+    const now = Date.now();
+    const from = new Date(now - days * 86_400_000);
+    const to = new Date(now + days * 86_400_000);
+    const reached = await tx.commsRecipient.findMany({
+      where: {
+        status: { in: ['PENDING', 'SENDING', 'SENT', 'DELIVERED'] },
+        OR: [
+          { phone: { in: pending.map((r) => r.phone) } },
+          { personId: { in: pending.flatMap((r) => (r.personId ? [r.personId] : [])) } },
+        ],
+        message: {
+          audienceKey: key,
+          status: { not: 'CANCELLED' },
+          OR: [
+            { scheduledFor: { gt: from, lt: to } },
+            { scheduledFor: null, createdAt: { gt: from, lt: to } },
+          ],
+        },
+      },
+      select: { phone: true, personId: true },
+    });
+    const phones = new Set(reached.map((r) => r.phone));
+    const people = new Set(reached.flatMap((r) => (r.personId ? [r.personId] : [])));
+    for (const r of pending) {
+      if (phones.has(r.phone) || (r.personId && people.has(r.personId))) {
+        r.status = 'SKIPPED_RECENT';
+      }
+    }
   }
 
   async decide(tx: Tx, members: AudienceMember[], defaultLang: SmsLang): Promise<Resolved[]> {

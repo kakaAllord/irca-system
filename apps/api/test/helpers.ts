@@ -240,7 +240,12 @@ export async function createTemplate(
 /** Communications' settings, as if saved in Comms → Settings. */
 export async function setCommsSettings(
   db: pg.Client,
-  settings: { dailyCap?: string | null; pricePerSegment?: string; defaultLang?: string },
+  settings: {
+    dailyCap?: string | null;
+    pricePerSegment?: string;
+    defaultLang?: string;
+    personCooldownDays?: number;
+  },
 ) {
   for (const [key, value] of Object.entries(settings)) {
     if (value === null) {

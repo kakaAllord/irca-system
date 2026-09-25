@@ -17,6 +17,7 @@ export type CommsSettings = {
   dailyCap: string | null;
   defaultLang: 'en' | 'sw' | 'fr';
   quietHours: string;
+  personCooldownDays: number;
   beem: {
     saved: boolean;
     senderId: string | null;
@@ -36,6 +37,7 @@ export function SettingsForm({ settings }: { settings: CommsSettings }) {
   const [from, to] = settings.quietHours.split('-');
   const [quietFrom, setQuietFrom] = useState(from ?? '21:00');
   const [quietTo, setQuietTo] = useState(to ?? '07:00');
+  const [cooldown, setCooldown] = useState(String(settings.personCooldownDays));
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [errors, setErrors] = useState<Record<string, string[]>>({});
@@ -54,6 +56,7 @@ export function SettingsForm({ settings }: { settings: CommsSettings }) {
           dailyCap: cap.trim() || null,
           defaultLang: lang,
           quietHours: `${quietFrom}-${quietTo}`,
+          personCooldownDays: Number(cooldown),
         },
       });
       setSaved(true);
@@ -103,6 +106,17 @@ export function SettingsForm({ settings }: { settings: CommsSettings }) {
           value={quietTo}
           onChange={(e) => setQuietTo(e.target.value)}
         />
+        <Input
+          label="Days between reminders"
+          required
+          type="number"
+          min={0}
+          max={90}
+          value={cooldown}
+          onChange={(e) => setCooldown(e.target.value)}
+          hint="A reminder, such as a pledge reminder, reaches nobody twice within this many days, whoever sends it."
+          error={errors.personCooldownDays?.[0]}
+        />
         <Select
           label="Default language"
           value={lang}
@@ -115,7 +129,12 @@ export function SettingsForm({ settings }: { settings: CommsSettings }) {
       <div>
         <SubmitButton
           loading={busy}
-          missing={price.trim() ? [] : ['Price per segment']}
+          missing={
+            [
+              !price.trim() && 'Price per segment',
+              !cooldown.trim() && 'Days between reminders',
+            ].filter(Boolean) as string[]
+          }
           onClick={save}
         >
           Save

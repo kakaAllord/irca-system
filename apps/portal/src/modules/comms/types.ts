@@ -45,7 +45,7 @@ export type Template = {
 export type Preview = {
   audienceName: string;
   reach: number;
-  leftAlone: { optedOut: number; noPhone: number; duplicate: number };
+  leftAlone: { optedOut: number; noPhone: number; duplicate: number; recent: number };
   segments: number;
   pricePerSegment: string;
   cost: string;
@@ -144,6 +144,7 @@ export const RECIPIENT_STATUS: Record<string, string> = {
   SKIPPED_OPT_OUT: 'Left alone: asked not to be messaged',
   SKIPPED_NO_PHONE: 'Left alone: no usable number',
   SKIPPED_DUPLICATE: 'Left alone: same number as someone above',
+  SKIPPED_RECENT: 'Left alone: this reminder reached them lately',
 };
 
 /** "25 Sept, 18:04", in the church's own time. */
