@@ -16,11 +16,11 @@ export default async function CommsSettingsPage() {
     <>
       <PageHeader
         title="Settings"
-        subtitle="What messages cost, how much may be spent in a day, and the Beem account."
+        subtitle="What messages cost, how much may be spent in a day, when to warn about credit, and the Beem account."
       />
       <div className="flex max-w-2xl flex-col gap-5">
         <section className="rounded-[10px] border border-border bg-surface p-4">
-          <h2 className="mb-3 text-[13px] font-semibold text-fg">Cost, limit and quiet hours</h2>
+          <h2 className="mb-3 text-[13px] font-semibold text-fg">Cost, limits and quiet hours</h2>
           <SettingsForm settings={settings} />
         </section>
         <section className="rounded-[10px] border border-border bg-surface p-4">

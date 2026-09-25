@@ -18,6 +18,7 @@ export type CommsSettings = {
   defaultLang: 'en' | 'sw' | 'fr';
   quietHours: string;
   personCooldownDays: number;
+  balanceAlertFloor: number;
   beem: {
     saved: boolean;
     senderId: string | null;
@@ -38,6 +39,7 @@ export function SettingsForm({ settings }: { settings: CommsSettings }) {
   const [quietFrom, setQuietFrom] = useState(from ?? '21:00');
   const [quietTo, setQuietTo] = useState(to ?? '07:00');
   const [cooldown, setCooldown] = useState(String(settings.personCooldownDays));
+  const [floor, setFloor] = useState(String(settings.balanceAlertFloor));
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [errors, setErrors] = useState<Record<string, string[]>>({});
@@ -57,6 +59,7 @@ export function SettingsForm({ settings }: { settings: CommsSettings }) {
           defaultLang: lang,
           quietHours: `${quietFrom}-${quietTo}`,
           personCooldownDays: Number(cooldown),
+          balanceAlertFloor: Number(floor),
         },
       });
       setSaved(true);
@@ -117,6 +120,16 @@ export function SettingsForm({ settings }: { settings: CommsSettings }) {
           hint="A reminder, such as a pledge reminder, reaches nobody twice within this many days, whoever sends it."
           error={errors.personCooldownDays?.[0]}
         />
+        <Input
+          label="Warn when credit falls below"
+          required
+          type="number"
+          min={0}
+          value={floor}
+          onChange={(e) => setFloor(e.target.value)}
+          hint="Beem's credit, as Test connection shows it. You and the system's owner are emailed and texted. 0: never warn."
+          error={errors.balanceAlertFloor?.[0]}
+        />
         <Select
           label="Default language"
           value={lang}
@@ -133,6 +146,7 @@ export function SettingsForm({ settings }: { settings: CommsSettings }) {
             [
               !price.trim() && 'Price per segment',
               !cooldown.trim() && 'Days between reminders',
+              !floor.trim() && 'Warn when credit falls below',
             ].filter(Boolean) as string[]
           }
           onClick={save}
