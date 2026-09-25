@@ -5,8 +5,8 @@
 > in their own language, at most once a fortnight — through the Communication
 > system.
 
-**Status:** not started, and **must not start until step 9.0 is settled** —
-three decisions only the church's leadership can make. **Comes after:**
+**Status:** step 9.0 answered on 25 September 2026 (all three as recommended;
+records kept forever, not "campaign plus seven years" — see below). **Comes after:**
 Phase 7 (which sends the reminders) and Phase 8 (whose person timeline this
 phase writes to).
 
@@ -133,6 +133,14 @@ qualification.
 
 **If it goes wrong.** No answer from the leadership? Stop here. Build nothing
 in this phase, and say so to the owner.
+
+**Answered, 25 September 2026.** The owner gave all three answers on the
+leadership's behalf, each as recommended above. On how long pledges are kept,
+the owner refused the recommended "for as long as the campaign runs, plus
+seven years": **pledge records are never deleted**. The answers are in
+`docs/modules/pledges-brief.md`; `docs/data-inventory.md` sections 3, 5 and 6
+say what is held, who sees it, that it is kept forever, and that erasing a
+person leaves their pledges in place without their name.
 
 ---
 

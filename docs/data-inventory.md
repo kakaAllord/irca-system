@@ -91,10 +91,29 @@ who may read people, and in the dev console only cut short (`ne***@gmail.com`).
 
 `finance_transactions` records what was received and spent, by category, with
 a reference number, a date and who entered it. **It never names a giver.**
-Envelope numbers, pledges and individual giving are deliberately not in this
-system: the finance portal reports totals by source, not by person. If the
-church ever wants per-giver records, that is a new decision with its own
-consent conversation, not a small feature.
+Envelope numbers, tithes and individual offerings are deliberately not in this
+system: the finance portal reports those totals by source, not by person.
+
+**Pledges are the one exception**, agreed by the leadership on 25 September
+2026 (`docs/modules/pledges-brief.md`). For a pledge, and only a pledge, the
+system holds who promised, how much, towards which campaign, how and by when
+they said they would pay, and each payment they made against it, with who
+recorded it. The balance is worked out from those, never stored.
+
+- **Who sees names against amounts:** only those holding
+  `finance.pledges.read_sensitive` — the finance manager, and the pastors
+  through the Pledges overseer role. Others allowed into Pledges see each
+  campaign's totals and counts. A clerk recording a payment finds the one
+  person in front of them by name and sees that person's pledge, never the
+  list.
+- **On the timeline:** that someone promised and paid is written on their
+  timeline, and shown only to readers holding the same permission.
+- **In a text message:** a reminder names no figure, unless Communications has
+  approved a template that does. What each person was sent is kept like any
+  other text message (section 5).
+
+Per-person tithe or offering records would still be a new decision with its
+own consent conversation, not a small feature.
 
 ---
 
@@ -128,6 +147,7 @@ for that reason.
 | Follow-up notes | with the person | — |
 | Activity log (`audit_events`) | **forever** | it is what proves who did what; never edited, never deleted, except by an erasure request, which replaces the name |
 | Finance entries | forever | money must reconcile years later |
+| Pledges and their payments (`pledge_campaigns`, `pledges`, `pledge_payments`) | **forever, never deleted** (leadership, 25 Sept 2026) | a pledge is part of the church's history; the application cannot delete them, and an erased person's pledges stay without their name |
 | Sessions | 90 days after they stop working | support ("was she signed in on Sunday?") |
 | Password reset links | 7 days | they expire long before that |
 | Emails sent (`email_outbox`) | the queue row stays; the body is not kept after sending | |
@@ -160,7 +180,10 @@ It asks for the person's id back before it does anything, and cannot be undone.
 It erases the person, their registration and every answer on it (prayer request
 included), their notes, their journey, their application and their class
 records, the departments they led or belonged to, every text message sent
-to them, their timeline, and what Outreach recorded about them. Where they
+to them, their timeline, and what Outreach recorded about them. Their
+pledges and payments are **not** erased — pledges are never deleted — but
+they stop belonging to anyone: the name goes, the money stays, so every
+campaign still adds up. Where they
 were one of the team who reached someone else, they are taken out of that
 record and their name out of the line on that person's timeline. A number that asked for no messages stays blocked, without their
 name, because honouring a STOP outlives the record. It keeps the activity
@@ -191,17 +214,13 @@ nothing.
 
 ---
 
-## 7a. What is coming, and what it will add here
-
-One more phase adds personal data, and this page is rewritten in the same pull
-request:
-
-- **Phase 9, pledges.** Per-person promises and payments — see section 3.
+## 7a. What each phase added here
 
 Phase 7, the Communication system, is built, and is described in the tables
 above. Phase 8, Outreach, adds the people reached on a doorstep: they join
 People, and are texted only once Communications deliberately gives Outreach
-that audience (D22).
+that audience (D22). Phase 9, pledges, adds per-person promises and payments,
+described in section 3.
 
 ## 8. Before launch
 
