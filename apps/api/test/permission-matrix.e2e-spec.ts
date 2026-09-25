@@ -95,8 +95,22 @@ describe('the permission matrix', () => {
     await app.get(RegistrySync).sync();
   });
 
-  /** Signed in as someone holding exactly these permissions, one role per portal. */
-  async function holding(permissions: string[]) {
+  /**
+   * Signed in as someone holding exactly these permissions, one role per
+   * portal. Routes that need the same permission share the one person, within
+   * a test: making a person hashes a password, and doing it once per route
+   * made this test slower with every route added.
+   */
+  let signedIn = new Map<string, Promise<string>>();
+  beforeEach(() => {
+    signedIn = new Map();
+  });
+  function holding(permissions: string[]) {
+    const key = [...permissions].sort().join(' ');
+    if (!signedIn.has(key)) signedIn.set(key, signIn(permissions));
+    return signedIn.get(key)!;
+  }
+  async function signIn(permissions: string[]) {
     const user = await createUser(db);
     for (const m of ALL_MODULES) {
       const own = permissions.filter((p) => moduleByKey(m.key)?.permissions[p]);
@@ -141,7 +155,9 @@ describe('the permission matrix', () => {
       if (!refusedByGuard(res)) leaks.push(`${route.method} ${route.path} → ${res.status}`);
     }
     expect(leaks).toEqual([]);
-  });
+    // A sweep of every route, which grows with each one added: not a single
+    // request, so not held to the per-test limit meant for one.
+  }, 120_000);
 
   it('lets someone holding only what a route needs past the check', async () => {
     const refused: string[] = [];
@@ -152,5 +168,5 @@ describe('the permission matrix', () => {
       if (refusedByGuard(res)) refused.push(`${route.method} ${route.path}`);
     }
     expect(refused).toEqual([]);
-  });
+  }, 120_000);
 });
