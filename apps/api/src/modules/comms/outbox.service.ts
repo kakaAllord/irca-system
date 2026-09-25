@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Db } from '../../core/database/db.service.js';
 import { UsageService } from '../../core/usage/usage.service.js';
 import { SmsGateway } from '../../core/sms/sms.gateway.js';
+import { recordInteraction } from '../membership/timeline.js';
 
 /** The email outbox's back-off: a provider having a bad minute should not lose a message. */
 const BACKOFF_MINUTES = [1, 5, 30, 120, 360];
@@ -65,6 +66,15 @@ export class OutboxService {
       ).map((b) => b.phone),
     );
     const { provider, senderId } = await this.gateway.current();
+    // Who it was from, for the line on each person's timeline.
+    const from = new Map(
+      (
+        await this.db.client.commsMessage.findMany({
+          where: { id: { in: messageIds } },
+          select: { id: true, department: { select: { name: true } } },
+        })
+      ).map((m) => [m.id, m.department?.name ?? 'Communications']),
+    );
 
     let sent = 0;
     let failed = 0;
@@ -80,14 +90,31 @@ export class OutboxService {
       }
       const result = await provider.send({ to: row.phone, body: row.body, senderId });
       if (result.accepted) {
-        await this.db.client.commsRecipient.update({
-          where: { id: row.id },
-          data: {
-            status: 'SENT',
-            sentAt: new Date(),
-            providerMessageId: result.providerMessageId,
-            lastError: null,
-          },
+        // Sent, and on their timeline, together: whoever calls them next can
+        // see they were texted on Monday (09 step 9.3). The words stay in
+        // the message record; the timeline says only who it was from.
+        await this.db.tx(async (tx) => {
+          const sentAt = new Date();
+          await tx.commsRecipient.update({
+            where: { id: row.id },
+            data: {
+              status: 'SENT',
+              sentAt,
+              providerMessageId: result.providerMessageId,
+              lastError: null,
+            },
+          });
+          if (row.personId) {
+            await recordInteraction(tx, {
+              personId: row.personId,
+              kind: 'MESSAGE_SENT',
+              moduleKey: 'comms',
+              byId: null,
+              summary: `Sent a text message from ${from.get(row.messageId) ?? 'Communications'}`,
+              at: sentAt,
+              meta: { messageId: row.messageId },
+            });
+          }
         });
         sent++;
         continue;

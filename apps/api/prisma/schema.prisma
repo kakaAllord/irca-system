@@ -844,6 +844,7 @@ enum InteractionKind {
   NOTE
   PLEDGE_PROMISED
   PLEDGE_PAID
+  MESSAGE_SENT
 }
 
 /// Everything that happened with a person, from any portal, in order (D23):

@@ -156,6 +156,13 @@ describe('sending: refused for a reason you can read, whenever it should be (07 
     );
     expect(JSON.stringify(rows)).not.toMatch(/713|\+255/);
 
+    // Each person sent to has it on their timeline, from whom but not what it said.
+    const timeline = await db.query<{ summary: string; n: number }>(
+      `select summary, count(*)::int as n from person_interactions
+       where kind = 'MESSAGE_SENT' group by summary`,
+    );
+    expect(timeline.rows).toEqual([{ summary: 'Sent a text message from Choir', n: 4 }]);
+
     // Communications sees what each department spent this month.
     const viewer = await signIn(
       await createUserWithPermissions(db, ['comms.messages.read'], { moduleKey: 'comms' }),
