@@ -33,6 +33,25 @@ export const financeModule = defineModule({
       label: 'Rename and turn off income sources and expense items',
     },
     'finance.reports.read': { kind: 'read', label: 'See reports and statements' },
+    'finance.pledges.read': {
+      kind: 'read',
+      label: 'See pledge campaigns and their progress',
+      hint: 'Totals and counts only. Who owes what needs the next permission.',
+    },
+    'finance.pledges.read_sensitive': {
+      kind: 'read',
+      label: 'See who pledged, and what each person still owes',
+      hint: 'Names against amounts. The leadership gave this to the finance manager and the pastors.',
+    },
+    'finance.pledges.manage': {
+      kind: 'write',
+      label: 'Open campaigns, record pledges and cancel them',
+    },
+    'finance.pledges.record_payment': {
+      kind: 'write',
+      label: 'Record a payment towards a pledge, and ask for one to be corrected',
+      hint: 'Finds the one person paying by name; does not open the list of who owes.',
+    },
   },
   systemRoles: [
     {
@@ -50,7 +69,7 @@ export const financeModule = defineModule({
       key: 'finance.clerk',
       name: 'Finance clerk',
       description:
-        'Everything a viewer can, plus record income and expenses, add new items while doing so, and ask for corrections.',
+        'Everything a viewer can, plus record income and expenses, add new items while doing so, ask for corrections, and record payments towards pledges.',
       permissions: [
         'finance.overview.read',
         'finance.transactions.read',
@@ -59,12 +78,15 @@ export const financeModule = defineModule({
         'finance.transactions.create',
         'finance.transactions.request_change',
         'finance.catalog.create',
+        'finance.pledges.read',
+        'finance.pledges.record_payment',
       ],
     },
     {
       key: 'finance.manager',
       name: 'Finance manager',
-      description: 'Everything a clerk can, plus download entries and tidy the lists.',
+      description:
+        'Everything a clerk can, plus download entries, tidy the lists, and keep pledges: campaigns, who promised what, and what is left.',
       permissions: [
         'finance.overview.read',
         'finance.transactions.read',
@@ -75,7 +97,18 @@ export const financeModule = defineModule({
         'finance.catalog.create',
         'finance.transactions.export',
         'finance.catalog.manage',
+        'finance.pledges.read',
+        'finance.pledges.read_sensitive',
+        'finance.pledges.manage',
+        'finance.pledges.record_payment',
       ],
+    },
+    {
+      key: 'finance.pledges_overseer',
+      name: 'Pledges overseer',
+      description:
+        'For the pastors: every pledge, who made it and what is left, and nothing else in Finance. Changes nothing.',
+      permissions: ['finance.pledges.read', 'finance.pledges.read_sensitive'],
     },
   ],
   nav: [

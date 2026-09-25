@@ -519,10 +519,11 @@ model FinanceTransaction {
   /// it, so the old entry is voided and this new one points back at it.
   replacesId       String?       @unique @map("replaces_id") @db.Uuid
 
-  incomeSource FinanceIncomeSource? @relation(fields: [incomeSourceId], references: [id])
-  expenseItem  FinanceExpenseItem?  @relation(fields: [expenseItemId], references: [id])
-  replaces     FinanceTransaction?  @relation("replacement", fields: [replacesId], references: [id])
-  replacedBy   FinanceTransaction?  @relation("replacement")
+  incomeSource   FinanceIncomeSource? @relation(fields: [incomeSourceId], references: [id])
+  expenseItem    FinanceExpenseItem?  @relation(fields: [expenseItemId], references: [id])
+  replaces       FinanceTransaction?  @relation("replacement", fields: [replacesId], references: [id])
+  replacedBy     FinanceTransaction?  @relation("replacement")
+  pledgePayments PledgePayment[]
 
   @@unique([kind, periodYear, periodMonth, seq])
   @@unique([clientRequestId])
@@ -531,6 +532,109 @@ model FinanceTransaction {
   @@index([incomeSourceId])
   @@index([expenseItemId])
   @@map("finance_transactions")
+}
+
+// ---------------------------------------------------------------------------
+// Pledges (Phase 9): what a person promised towards a campaign, and what they
+// have paid. The one place the church names a giver against an amount, agreed
+// by the leadership on 25 Sept 2026 (docs/modules/pledges-brief.md). Nothing
+// here is ever deleted.
+// ---------------------------------------------------------------------------
+
+enum PledgeStatus {
+  OPEN
+  COMPLETED
+  CANCELLED
+}
+
+/// How they said they would pay.
+enum PledgeRhythm {
+  ONE_OFF
+  WEEKLY
+  MONTHLY
+}
+
+/// Something the church is raising for: 'Ujenzi 2027', 'Bus fund'.
+model PledgeCampaign {
+  id           String    @id @default(uuid(7)) @db.Uuid
+  name         String    @unique @db.VarChar(80)
+  /// What pledges count towards, for the progress bar. None: no target.
+  targetAmount Decimal?  @map("target_amount") @db.Decimal(14, 2)
+  startsOn     DateTime  @map("starts_on") @db.Date
+  endsOn       DateTime? @map("ends_on") @db.Date
+  /// Closed campaigns take no new pledges; their pledges can still be paid.
+  isActive     Boolean   @default(true) @map("is_active")
+  createdById  String    @map("created_by_id") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  pledges Pledge[]
+
+  @@map("pledge_campaigns")
+}
+
+/// One person's promise. The balance is never stored: it is the amount less
+/// the payments still standing, worked out in SQL each time.
+model Pledge {
+  id              String       @id @default(uuid(7)) @db.Uuid
+  campaignId      String       @map("campaign_id") @db.Uuid
+  /// Null only once the person was erased: the money stays, the name goes.
+  personId        String?      @map("person_id") @db.Uuid
+  amount          Decimal      @db.Decimal(14, 2)
+  rhythm          PledgeRhythm @default(ONE_OFF)
+  dueOn           DateTime?    @map("due_on") @db.Date
+  note            String       @default("") @db.VarChar(300)
+  status          PledgeStatus @default(OPEN)
+  promisedOn      DateTime     @map("promised_on") @db.Date
+  recordedById    String       @map("recorded_by_id") @db.Uuid
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  completedAt     DateTime?    @map("completed_at") @db.Timestamptz(6)
+  cancelledAt     DateTime?    @map("cancelled_at") @db.Timestamptz(6)
+  cancelledById   String?      @map("cancelled_by_id") @db.Uuid
+  cancelReason    String?      @map("cancel_reason") @db.VarChar(300)
+  /// Made by the form. A retried submit returns the first pledge, not a second.
+  clientRequestId String       @unique @map("client_request_id") @db.Uuid
+
+  campaign PledgeCampaign  @relation(fields: [campaignId], references: [id])
+  person   Person?         @relation(fields: [personId], references: [id], onDelete: SetNull)
+  payments PledgePayment[]
+
+  @@index([campaignId, status])
+  @@index([personId])
+  @@map("pledges")
+}
+
+/// Money received against a pledge. Written once; corrected or voided only
+/// through a change request an administrator approves (D17).
+model PledgePayment {
+  id               String        @id @default(uuid(7)) @db.Uuid
+  pledgeId         String        @map("pledge_id") @db.Uuid
+  amount           Decimal       @db.Decimal(14, 2)
+  paidOn           DateTime      @map("paid_on") @db.Date
+  method           PaymentMethod @default(CASH)
+  /// The finance entry that recorded this money, when there is one.
+  transactionId    String?       @map("transaction_id") @db.Uuid
+  note             String        @default("") @db.VarChar(200)
+  status           FinanceStatus @default(POSTED)
+  recordedById     String        @map("recorded_by_id") @db.Uuid
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  /// Made by the form. A retried submit returns the first payment, not a second.
+  clientRequestId  String        @unique @map("client_request_id") @db.Uuid
+  voidedAt         DateTime?     @map("voided_at") @db.Timestamptz(6)
+  /// The approver, not the person who asked.
+  voidedById       String?       @map("voided_by_id") @db.Uuid
+  voidReason       String?       @map("void_reason") @db.VarChar(500)
+  /// Starts at 1, and goes up by one each time an approved change is applied.
+  revision         Int           @default(1)
+  /// The approved request behind the latest change; the trigger checks it.
+  appliedRequestId String?       @map("applied_request_id") @db.Uuid
+
+  pledge      Pledge              @relation(fields: [pledgeId], references: [id])
+  transaction FinanceTransaction? @relation(fields: [transactionId], references: [id])
+
+  @@index([pledgeId])
+  @@index([transactionId])
+  @@map("pledge_payments")
 }
 
 // ---------------------------------------------------------------------------
@@ -701,6 +805,7 @@ model Person {
   outreachReached   OutreachReached[]
   outreachTrainings OutreachTrainingAttendance[]
   interactions      PersonInteraction[]
+  pledges           Pledge[]
 
   @@unique([memberNumber])
   @@index([stage])
@@ -737,6 +842,8 @@ enum InteractionKind {
   APPLIED
   CONFIRMED
   NOTE
+  PLEDGE_PROMISED
+  PLEDGE_PAID
 }
 
 /// Everything that happened with a person, from any portal, in order (D23):

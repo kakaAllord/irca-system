@@ -20,6 +20,8 @@ const MEASURED_TABLES = [
   'person_interactions',
   'person_notes',
   'person_stage_events',
+  'pledge_payments',
+  'pledges',
   'registrations',
   'sessions',
   'usage_daily',
@@ -106,6 +108,7 @@ export class UsageSnapshot {
         Prisma.sql`select (select count(*) from finance_income_sources)
                         + (select count(*) from finance_expense_items) as n`,
       ],
+      ['entities.finance.pledges', Prisma.sql`select count(*)::bigint as n from pledges`],
       [
         'entities.users.active',
         Prisma.sql`select count(*)::bigint as n from users where status = 'ACTIVE'`,
