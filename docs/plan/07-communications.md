@@ -171,9 +171,10 @@ depends on them.
 **Answers (owner, 24 Sept 2026).** Communications is led by **Allord
 Archard**. Everyone who is messaged is already in People, because they came
 through the registration form. The monthly SMS budget is not decided yet:
-there is therefore **no default daily cap**, and every real send is refused
-with *"Set a daily limit in Comms → Settings first"* until Communications
-saves one. That way a forgotten setting cannot empty the credit.
+there is therefore **no default daily cap**. *Corrected 25 Sept 2026, by the
+owner:* sending does not wait for one either. With no cap saved there is no
+limit; Communications sets one in Comms → Settings, or clears it, if the church
+wants spending held to a figure.
 
 **Check.** `grep -n TBC docs/modules/comms-brief.md` finds only the budget.
 
@@ -609,8 +610,8 @@ the wrong people, or be started by the wrong person.
       Communications. Free text: `comms.messages.send_adhoc`, Communications
       only.
    4. **What will it cost?** Resolve, fill the blanks, add the way to stop
-      (7.12), count segments, multiply by the price. **No daily cap saved:
-      refuse.** Over the cap: refuse and say the figure — *"This would bring
+      (7.12), count segments, multiply by the price. No daily cap saved: no
+      limit (corrected 25 Sept 2026). Over a saved cap: refuse and say the figure — *"This would bring
       today's messages to 52,300 TZS; the daily limit is 50,000 TZS."*
    5. **Write, don't send.** One `comms_messages` row and one
       `comms_recipients` row per number, `PENDING`, with `next_attempt_at` at
@@ -806,7 +807,7 @@ test fail, and put it back.
 - [x] Communications sends to the whole church, to departments, to all leaders, and to chosen departments' leaders.
 - [x] Every message carries the way to stop, and a STOP is honoured for good.
 - [x] Each person is written to in their own language (`people.lang`).
-- [x] No send goes out until a daily cap is saved; the cap refuses an over-budget send and names the figure.
+- [x] A saved daily cap refuses an over-budget send and names the figure; with none saved there is no limit (owner, 25 Sept 2026).
 - [x] A beat sends on its rhythm, from its variants, never in quiet hours.
 - [x] The Beem key is never shown in full and never sent back to the browser.
 - [x] Dev → Usage charts messages sent and their cost; Dev → Health shows the credit left.

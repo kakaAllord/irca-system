@@ -3,14 +3,14 @@ import type { Tx } from '../../core/database/db.service.js';
 
 /**
  * Communications' own numbers, in the settings table, with their defaults
- * here. There is deliberately no default daily cap: the budget is not decided
- * (comms brief, 24 Sept 2026), and a made-up figure is worse than none, so
- * nothing is sent until Communications saves one.
+ * here. There is no daily cap unless Communications saves one: the owner
+ * decided on 25 Sept 2026 that sending should not wait on a budget, and that
+ * a limit is there to set in Comms → Settings if the church ever needs one.
  */
 export type CommsSettings = {
   /** TZS per segment, from Beem's price list. */
   pricePerSegment: string;
-  /** TZS per day, or null: nothing is sent until one is saved. */
+  /** TZS per day, or null for no limit. */
   dailyCap: string | null;
   /** For people with no language recorded, and bodies left empty. */
   defaultLang: SmsLang;

@@ -231,8 +231,9 @@ redeploying; its old database stays untouched until the owner retires it.
    once an account is saved; staging and every developer's machine do not,
    unless `SMS_LIVE=true` is set there on purpose, so a Beem key typed in for
    a test still texts nobody.
-2. Communications saves a **daily limit** on the same page. Nothing is sent
-   until there is one (07 step 7.1).
+2. If the church wants spending held to a figure, Communications saves a
+   **daily limit** on the same page; a send that would pass it is refused.
+   With none saved, there is no limit (owner, 25 Sept 2026).
 3. In Beem's dashboard, under two-way SMS, set the callback URL for replies to
    `https://api.<domain>/v1/public/comms/inbound?key=<BEEM_INBOUND_SECRET>`.
    Beem signs nothing, so the secret in the URL is what proves the call is

@@ -70,12 +70,6 @@ export function SettingsForm({ settings }: { settings: CommsSettings }) {
 
   return (
     <div className="flex flex-col gap-4">
-      {!settings.dailyCap && (
-        <Alert tone="warn">
-          There is no daily limit yet, so nothing can be sent. Set one from the monthly budget: the
-          budget divided by thirty.
-        </Alert>
-      )}
       <div className="grid gap-4 sm:grid-cols-2">
         <Input
           label="Price per segment (TZS)"
@@ -91,7 +85,7 @@ export function SettingsForm({ settings }: { settings: CommsSettings }) {
           inputMode="decimal"
           value={cap}
           onChange={(e) => setCap(e.target.value)}
-          hint="A send that would pass it is refused."
+          hint="Empty for no limit. A send that would pass a limit is refused."
           error={errors.dailyCap?.[0]}
         />
         <Input

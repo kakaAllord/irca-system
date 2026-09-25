@@ -67,7 +67,8 @@ never stored (Phase 7, step 7.8).
 
 SMS through **Beem Africa**, one account for the church, whose key and secret
 Communications enters and changes itself in the portal (D26). Cost is counted
-per segment (`sms.segments`, `sms.cost`), with a daily cap so a mistake cannot
-empty the credit. The monthly budget: **TBC** — not decided on 24 Sept 2026.
-Until Communications saves a daily limit in Comms → Settings, every send is
-refused, so there is no default figure that could be wrong.
+per segment (`sms.segments`, `sms.cost`). **No daily limit unless one is
+saved** (owner, 25 Sept 2026): sending does not wait on a budget, and
+Communications can set a limit in Comms → Settings, or take it away, whenever
+the church wants spending held to a figure. The monthly budget is therefore
+not needed before launch.

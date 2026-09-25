@@ -353,9 +353,9 @@ history, one set of approved words and one bill (D21, D22, D25, D26).
   does anything, the page shows how many people, who is left alone and why, a
   sample in each language, the segments and the cost — "Send to 4 people ·
   about 120 TZS" — and asks once more.
-- **Refusals say why.** Nothing is sent until Communications saves a daily
-  limit in **Comms → Settings**, and a send that would pass it is refused with
-  the figure. Words that are not approved, another department's people or
+- **Refusals say why.** There is no daily limit unless Communications saves
+  one in **Comms → Settings**; once one is saved, a send that would pass it is
+  refused with the figure. Words that are not approved, another department's people or
   words, and free text from a department are refused in plain words too.
 - **Everyone is written to in their own language**, the one they answered the
   form in (the office can change it on the person's page), and **every
@@ -521,7 +521,7 @@ The portal is on <http://localhost:3000>, the API on <http://localhost:4000>.
 Membership, Finance, Communications and Outreach are turned on, each belonging
 to the department of the same name. No department has a leader yet: name one in
 Admin → Departments (they must be a confirmed member, so run `npm run db:demo`
-and confirm someone first). There is no daily SMS limit until you save one in
+and confirm someone first). There is no daily SMS limit unless you save one in
 Comms → Settings. The registration form runs at <http://localhost:3001>; with
 `REGISTRATION_BACKEND=api` in `apps/registration/.env.local` (and the seed's
 local key in `REGISTRATION_API_KEY`) it writes into this system.
@@ -652,8 +652,7 @@ whole Saturday walked in a browser at phone width.
   database code (5.19).
 - Backups beyond Neon's own history, load testing and monitoring (Phase 10,
   when the owner says so).
-- For Communications to go live: the monthly SMS budget (so Communications can
-  save the daily limit), the Beem account typed into Comms → Settings, and the
+- For Communications to go live: the Beem account typed into Comms → Settings, and the
   reply URL given to Beem (`docs/deployment.md`, §6a).
 - For Outreach: the Outreach leader's answers to step 8.1 (how the team
   works, its areas, which numbers it reports upward), the file bucket

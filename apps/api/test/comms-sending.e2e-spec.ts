@@ -232,7 +232,7 @@ describe('sending: refused for a reason you can read, whenever it should be (07 
     expect(blank.body.error.message).toBe('Fill in date before sending.');
   });
 
-  it('sends nothing until a daily limit is saved, and refuses one over it with the figure', async () => {
+  it('sends with no limit saved, and refuses a send over a saved limit with the figure', async () => {
     const { dept, cookie, template } = await choir();
     const body = {
       departmentId: dept.id,
@@ -241,16 +241,16 @@ describe('sending: refused for a reason you can read, whenever it should be (07 
       fields: { date: 'Ijumaa' },
     };
 
-    await setCommsSettings(db, { dailyCap: null });
-    const none = await send(cookie, body).expect(409);
-    expect(none.body.error.message).toMatch(/until Communications sets a daily limit/);
-
     await setCommsSettings(db, { dailyCap: '200', pricePerSegment: '30' });
     await send(cookie, body).expect(201);
     const over = await send(cookie, body).expect(409);
     expect(over.body.error.message).toBe(
       "This would bring today's messages to 240 TZS; the daily limit is 200 TZS.",
     );
+
+    // The limit taken away: no limit, whatever has been spent today.
+    await setCommsSettings(db, { dailyCap: null });
+    await send(cookie, body).expect(201);
   });
 
   it('lets Communications send free text, schedule it, and stop it before it goes', async () => {

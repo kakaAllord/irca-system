@@ -159,9 +159,9 @@ export class SendingService {
     const when = this.when(input.scheduledFor);
     let problem: string | null = null;
     let spentToday = 0n;
-    if (settings.dailyCap === null) {
-      problem = 'Nothing can be sent until Communications sets a daily limit in Comms → Settings.';
-    } else {
+    // No limit saved means no limit: Communications sets one in Comms →
+    // Settings only if the church wants spending held to a figure.
+    if (settings.dailyCap !== null) {
       spentToday = await this.spentOn(tx, when ?? new Date());
       const cap = toCents(settings.dailyCap);
       if (spentToday + cost > cap) {
