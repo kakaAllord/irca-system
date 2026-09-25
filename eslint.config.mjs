@@ -32,6 +32,14 @@ export default tseslint.config(
     },
   },
   {
+    // The load tests run inside k6 (load/README.md), which provides these
+    // globals, and whose console is how a script reports: there is no logger
+    // to bypass there.
+    files: ['load/**/*.js'],
+    languageOptions: { globals: { __ENV: 'readonly', __VU: 'readonly', __ITER: 'readonly' } },
+    rules: { 'no-console': 'off' },
+  },
+  {
     // The portal runs in browsers as well as on the server.
     files: ['apps/portal/**/*.{ts,tsx}'],
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
