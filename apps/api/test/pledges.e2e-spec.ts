@@ -7,7 +7,10 @@ import {
   createApp,
   createChurch,
   createPerson,
+  createRole,
+  createUser,
   createUserWithPermissions,
+  grantRole,
   ownerDb,
   portal,
   sessionCookie,
@@ -297,6 +300,38 @@ describe('pledges: what people promised, and what they have paid', () => {
       { kind: 'PLEDGE_PROMISED', summary: 'Made a pledge towards Bus fund' },
       { kind: 'PLEDGE_PAID', summary: 'Paid their pledge towards Bus fund in full' },
     ]);
+  });
+
+  it('shows pledge lines on a timeline only to those who may see pledges', async () => {
+    const manager = await as(MANAGER);
+    const { id: campaignId } = await campaign(manager.cookie, { name: 'Bus fund' });
+    const person = await createPerson(db);
+    await pledge(manager.cookie, campaignId, person.id);
+
+    /** Someone holding a role in each portal named. */
+    async function holding(roles: Record<string, string[]>) {
+      const user = await createUser(db);
+      for (const [moduleKey, permissions] of Object.entries(roles)) {
+        const role = await createRole(db, { moduleKey, permissions });
+        await grantRole(db, user.id, role.id);
+      }
+      return sessionCookie(
+        await portal(app)
+          .post('/v1/auth/login', { email: user.email, password: user.password })
+          .expect(200),
+      );
+    }
+    const office = await holding({ membership: ['membership.people.read'] });
+    const pastor = await holding({
+      membership: ['membership.people.read'],
+      finance: OVERSEER,
+    });
+    const kinds = async (cookie: string) =>
+      (
+        await portal(app).get(`/v1/membership/people/${person.id}/timeline`, cookie).expect(200)
+      ).body.map((l: { kind: string }) => l.kind);
+    expect(await kinds(office)).not.toContain('PLEDGE_PROMISED');
+    expect(await kinds(pastor)).toContain('PLEDGE_PROMISED');
   });
 
   it('never lets the application delete a pledge, a payment or a campaign, nor edit a payment', async () => {

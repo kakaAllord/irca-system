@@ -54,16 +54,25 @@ export type TimelineLine = {
 };
 
 /**
+ * Lines only some readers see: that someone made a pledge, and paid it. The
+ * leadership put who pledged behind Finance's sensitive permission
+ * (docs/modules/pledges-brief.md), and a timeline is read in every portal.
+ */
+export const PLEDGE_KINDS: InteractionKind[] = ['PLEDGE_PROMISED', 'PLEDGE_PAID'];
+
+/**
  * A person's timeline, oldest first, the way the owner's own example reads:
  * evangelised, called, visited, came. One query serves both portals that show
- * it (08 step 8.6); each checks first that the reader may see this person.
+ * it (08 step 8.6); each checks first that the reader may see this person,
+ * and says whether they may see pledges.
  */
 export async function readTimeline(
   db: Pick<Tx, 'personInteraction' | 'user'>,
   personId: string,
+  reader: { seesPledges: boolean },
 ): Promise<TimelineLine[]> {
   const rows = await db.personInteraction.findMany({
-    where: { personId },
+    where: { personId, ...(reader.seesPledges ? {} : { kind: { notIn: PLEDGE_KINDS } }) },
     orderBy: [{ at: 'asc' }, { id: 'asc' }],
     take: 500,
   });

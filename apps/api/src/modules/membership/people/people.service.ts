@@ -195,7 +195,9 @@ export class PeopleService {
   /** Someone who never filled in the form, typed in by the office. */
   async timeline(id: string) {
     await this.require(id);
-    return readTimeline(this.db.client, id);
+    return readTimeline(this.db.client, id, {
+      seesPledges: this.auth.has('finance.pledges.read_sensitive'),
+    });
   }
 
   async add(input: {

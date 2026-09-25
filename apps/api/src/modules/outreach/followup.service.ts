@@ -82,7 +82,8 @@ export class FollowupService {
       join people p on p.id = w.person_id
       left join lateral (
         select summary, at from person_interactions i
-        where i.person_id = p.id order by at desc, id desc limit 1
+        where i.person_id = p.id and i.kind not in ('PLEDGE_PROMISED', 'PLEDGE_PAID')
+        order by at desc, id desc limit 1
       ) l on true
       order by w.first_on, p.full_name
       limit 500`);
@@ -106,7 +107,9 @@ export class FollowupService {
         orderBy: { reachedOn: 'desc' },
         include: { session: { select: { id: true, title: true, heldOn: true } } },
       }),
-      readTimeline(this.db.client, personId),
+      readTimeline(this.db.client, personId, {
+        seesPledges: this.auth.has('finance.pledges.read_sensitive'),
+      }),
     ]);
     const byIds = [...new Set(reaches.flatMap((r) => r.reachedByIds))];
     const team = await this.db.client.person.findMany({
