@@ -124,7 +124,7 @@ The same settings on either.
 | Pre-deploy command | `npm run db:deploy -w @irca/api` — migrations run once per deploy, before the new version takes traffic, and a failed migration fails the deploy rather than the site |
 | Start              | `node apps/api/dist/main.js` |
 | Health check       | `/health` (outside `/v1`, never rate-limited) |
-| Instances          | **one.** Rate-limit counters are in memory, and jobs are lock-safe but pointless twice over. Two instances needs the counters moved first (Phase 10). |
+| Instances          | **one.** Rate-limit counters are in memory, jobs are lock-safe but pointless twice over, and the files volume (§6b) allows no replicas. One instance was nowhere near busy at a Sunday's load (`load/README.md`). |
 
 ### Environment
 
@@ -321,3 +321,41 @@ reachable from the internet.
 host, run the same container on its scheduler with the same variables.
 `docs/runbooks/restore.md` is the way back, and the record of every restore
 drill: one before launch, then one every three months.
+
+---
+
+## 10. Alerts
+
+The owner should hear about a problem from an alert, not from a pastor on
+Sunday (`docs/plan/10-strengthening.md`, step 10.4). Two halves:
+
+**From outside: is it up?** A server that is down cannot say so, so an
+uptime monitor watches it. UptimeRobot and Better Stack both do this free.
+Add three checks, every minute (or the free tier's shortest), alerting the
+owner's phone and email:
+
+- `https://api.<domain>/health`, expecting `"status":"ok"`;
+- `https://portal.<domain>/login`;
+- the registration form's home page.
+
+Better Stack and healthchecks.io also take the nightly backup's heartbeat
+(`HEARTBEAT_URL`, `docs/deploy-railway.md` §9.3), which warns when a night
+passes with no backup.
+
+**From inside: is it working?** The API checks every ten minutes and emails
+everyone who may read Dev → Health when requests are failing, an email was
+given up on, a job failed twice in a row, or the database is filling. Texts
+get the same treatment: low credit and failing texts go to Communications
+as well. An email given up on, and low credit, are also texted, since email
+may be what is broken. Three things to set:
+
+1. **Dev → Settings → Alerts:** check who hears, and that each has a phone
+   (a user's phone is the one on their linked person). Set **Database
+   storage** to what the plan allows; until then storage is not watched.
+2. **Comms → Settings:** "Warn when credit falls below" starts at 500.
+3. Press **Send a test alert**, and check the email and text arrived.
+
+**Proving each one on staging:** stop the API (the uptime alert arrives);
+Send a test alert (the email and text arrive); set the credit floor above the
+current credit (the credit alert arrives within the hour). Write each, with
+its time, in the pull request.

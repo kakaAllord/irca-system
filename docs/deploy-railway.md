@@ -413,9 +413,14 @@ The address must be your own public one. If it is a private `10.x`/`fd..`
 address, raise `TRUST_PROXY` by one and redeploy the API; if it looks right
 but is a Railway address, lower it. Check again.
 
-**Logs.** Each service's **Deploy Logs** hold what it printed. The API's
-request log never contains request bodies, cookies or tokens, by design; the
-dev console's **Dev → Logs** shows the recent part of it too.
+**Logs.** Each service's **Deploy Logs** hold what it printed, across
+restarts and redeploys, for as long as the plan keeps them (7 days on Hobby,
+30 on Pro). The API's request log never contains request bodies, cookies or
+tokens, by design; the dev console's **Dev → Logs** shows the recent part of
+it too, but only since the last restart. If the church ever needs logs kept
+longer, Railway has no log drain: a forwarder such as Vector, run as another
+service, can send them to a provider, which then holds visitors' addresses
+and user ids, so choose one deliberately.
 
 ---
 

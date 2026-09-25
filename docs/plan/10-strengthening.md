@@ -15,8 +15,12 @@ step looks small, or because something here would have prevented a problem
 you just saw. The owner decided on 23 September 2026 that the feature work
 comes first and that this phase is theirs to open (`README.md` §3.4a).
 
-**Status:** not started. **Comes after:** Phases 7, 8 and 9 — and the owner's
-yes.
+**Status:** **built** (25 September 2026), the day the owner said yes ("Do
+phase 10"). Everything that can be built and proved on a development machine
+is: the scripts, the migration, the backup job, the alerts, and the runbooks,
+each checked locally. What only the owner can do is listed in 10.5: the runs on
+staging, the real keys and bucket, the uptime monitor, and the restore drill
+with real data. **Comes after:** Phases 7, 8 and 9, and the owner's yes.
 
 ---
 
@@ -111,6 +115,39 @@ shows index scans; the numbering run has 400 consecutive numbers.
 **Commit.** "Index the list pages for ten times today's data"; "Add a load test
 for Sunday registrations".
 
+**As built.**
+
+- **No index was needed.** With `db:demo --scale 10` (12,549 people, 7,917
+  registrations, 6,194 finance entries, 6,020 people reached; Outreach was
+  added to the demo for this), every list page's default query and every name
+  search, captured from the running API, took under 10 ms. The sequential
+  scans left are whole-table counts and facets, where a scan is the right
+  plan, and `like '%…%'` searches across several columns, which only four
+  trigram indexes on `people` would help, at a cost to every registration
+  step, which writes to `people`. Revisit at ten times *that*.
+- **What was slow was the job log.** `job_runs` gains about five million rows
+  a year (the outboxes run every fifteen seconds) and nothing pruned it. The
+  Health page's `distinct on (job)` took 3.5 s over a year of runs and would
+  have passed the 10 s statement limit in about three. It now steps through
+  the index one job at a time (0.3 ms over the same rows), and the nightly
+  snapshot forgets successful runs after 30 days and failures after 180.
+- **The load test found a dropped request.** One autosave in 3,596 was lost
+  to a reset connection: Node closed idle keep-alive connections after about
+  five seconds, and a client that does not honour the Keep-Alive header, as
+  proxies do, could send on one as it closed. Reproduced with a raw socket at
+  six seconds' idle, fixed by keeping connections 65 s (longer than proxies
+  keep theirs), and the probe then passed.
+- `load/registration.js` calls the API as the registration form does after
+  its cutover (the form's server is a thin forwarder), with each visitor's
+  own address, since the limits are per visitor. `load/numbering.js` adds the
+  numbering run; `load/README.md` has how to run both, the SQL that checks the
+  numbers, how to put staging back, and the results.
+- **Connections (point 5).** The Railway deployment has no pooler in front of
+  Postgres (`docs/deploy-railway.md` §2.3), so there is nothing to set.
+  `pgbouncer=true` matters only if the database is ever on Neon's pooled host.
+- **One instance (point 6)** was nowhere near busy at a Sunday's load, and
+  cannot be two anyway while the API holds the files volume (D24).
+
 ---
 
 ## 10.2 — Backups and the restore drill
@@ -165,6 +202,34 @@ written down with a date; a second person has read `restore.md`.
 **Commit.** "Let the backup role read the database"; "Back up the database
 nightly, encrypted, and write down how to restore it".
 
+**As built.**
+
+- **A cron service beside the database, not a GitHub Action.** The
+  repository is public, so workflow artifacts could be downloaded by anyone
+  signed in to GitHub, and an Action would need the database reachable from
+  the internet, which the Railway guide switches off. `ops/backup/` is a small
+  container (PostgreSQL 18's client, `age`, `curl`) that Railway runs once a
+  night on a cron schedule over the private network. It dumps as
+  `irca_backup`, checks `pg_restore` can list the dump, encrypts it to every
+  key in `ops/backup/recipients.txt`, and uploads it with a signed `curl` to
+  any S3-compatible bucket off Railway (Cloudflare R2 suggested), whose
+  lifecycle rule keeps 30 nights. It refuses to run until a key is committed.
+  `docs/deploy-railway.md` §9 sets it up.
+- **Two keys, not one shared.** The owner and a pastor each make their own
+  pair; either opens any backup. `age` encrypts to both at once.
+- **Files.** The cron service cannot reach the API's volume, so the files
+  are covered by Railway's volume backups (Daily, Weekly), which live on
+  Railway. They are session reports, which the office also holds; if that is
+  not enough, the next step is the API copying them to the same bucket.
+- **Neon's window (point 1)** is not written down: the deployment is on
+  Railway, whose backup schedules (daily kept 6 days, weekly 27, monthly 89)
+  are in the Railway guide. The restore runbook covers both hosts.
+- **Proved locally, not yet for real.** A scratch copy at ten times today's
+  data was backed up through a local S3 stand-in, downloaded, decrypted with
+  the second key, restored into an empty database, and compared (rows,
+  grants, triggers, migration state), in about a minute. A wrong bucket
+  secret and a missing key both fail loudly. The real drill is the owner's.
+
 ---
 
 ## 10.3 — Removed by D27
@@ -216,13 +281,53 @@ current balance: the alert arrives. Write each in the PR with its time.
 **Commit.** "Alert when the system is down, failing, or running out of credit";
 "Keep the server log where a restart cannot lose it".
 
+**As built.**
+
+- **One job, every ten minutes** (`alerts`, in core), checks failing
+  requests, emails given up on, jobs failing twice and storage; Comms checks
+  its own (`sms-alerts` every ten minutes, and the credit after each hourly
+  reading). An `alerts` table remembers what has been said, so each alert is
+  sent when it starts, again at most every twelve hours while it lasts, and
+  once when it clears.
+- **Failing requests** are measured from the day's counters between two
+  checks, and judged only with at least fifty requests in the window. After a
+  restart the first check only takes a reading.
+- **Who hears** is worked out by permission, not role: everyone active who
+  may read the Health page (the Developer and Watcher roles), and for credit
+  and failing texts also whoever runs Comms → Settings. Dev → Settings →
+  Alerts lists them, with the phone each text would go to, and sends a test
+  alert on purpose.
+- **The fallback when email is broken is a text, not SMTP.** SMTP would need
+  a second email account, and would probably fail for the same reason.
+  Emails given up on, and low credit, are also texted to each recipient's
+  phone, straight to Beem: a message to the staff, not from the church, so it
+  is not in Comms' history or counted against the daily limit.
+- **Thresholds** are in `settings` with the plan's defaults in code. The
+  credit floor is in Comms → Settings (500 to start, 0 for never). The
+  database's storage size has no default, since the system cannot ask the
+  host, so that alarm waits until it is set in Dev → Settings.
+- **The server log** is not shipped to a provider. Railway keeps each
+  service's log across restarts and redeploys (7 days on Hobby, 30 on Pro),
+  which is what the plan asked for, without sending request logs, with their
+  addresses and user ids, to another company. If the church needs more than
+  that, a log forwarder can be added then (`docs/deploy-railway.md` §6).
+- **Down** is left to the uptime monitor, as planned: the owner sets it up.
+
 ---
 
 ## 10.5 — Phase check
 
-- [ ] The owner said yes before this phase began.
+- [x] The owner said yes before this phase began (25 Sept 2026).
 - [ ] The load test passed on staging, and the result is written down.
+  *Passed on a development machine (`load/README.md`); staging is the owner's.*
 - [ ] The backup role can read the database, and the nightly dump runs.
+  *The role reads everything (migration `backup_read`); the job ran locally.
+  The keys, the bucket and the Railway service are the owner's.*
 - [ ] A restore drill was done and written down, with a date.
+  *Proved locally and written down as such; the real drill is the owner's.*
 - [ ] Every alert in 10.4 was triggered on purpose once, and arrived.
+  *Each is triggered in `test/alerts.e2e-spec.ts`. On staging: the uptime
+  monitor (stop the API), a test alert from Dev → Settings, and the credit
+  floor set above the credit.*
 - [ ] `docs/deployment.md` and `docs/runbooks/restore.md` are updated, and a second person has read them.
+  *Updated; the second reader is the owner's to find.*

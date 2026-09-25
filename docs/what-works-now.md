@@ -485,8 +485,12 @@ For whoever runs the system, under **Dev** in the sidebar.
 - **View-as log** — who viewed the portal as whom, drawn as a terminal you
   type into. The only place this can be seen.
 - **Settings** — the church's name, code, clock and currency (the code locks
-  once it is on an entry number), and the keys the registration form signs in
-  with, each shown once when made.
+  once it is on an entry number), the keys the registration form signs in
+  with, each shown once when made, and **Alerts**: who is emailed (and texted)
+  when requests fail, an email is given up on, a job fails twice, the
+  database fills or the text credit runs low, what is wrong right now, the
+  database's storage size, and **Send a test alert**. Communications sets the
+  credit floor in Comms → Settings.
 
 ## 8b. Help
 
@@ -647,7 +651,8 @@ This is the walk that proves the access rules. Half an hour, in a browser.
     **Usage**: each tab has numbers (run `npm run db:demo` first for history).
 22. Dev → **Settings**: try a timezone that does not exist and read the
     refusal; make a registration key, copy it, revoke it. Admin → Activity
-    shows both.
+    shows both. Under **Alerts**, press **Send a test alert**: with
+    `EMAIL_PROVIDER=log` the email is printed in the API's terminal.
 23. View as the clerk, stop, then Dev → **View-as log**: type `log` and find
     the session, then `show` and its id to see every page opened.
 
@@ -711,8 +716,11 @@ whole Saturday walked in a browser at phone width.
 - Switching the live registration form over
   (`docs/runbooks/cutover-registration.md`), and a week later removing its old
   database code (5.19).
-- Backups beyond Neon's own history, load testing and monitoring (Phase 10,
-  when the owner says so).
+- Phase 10's parts that only the running system can do: the load tests on
+  staging (`load/README.md`), the backup keys, bucket and nightly service
+  (`docs/deploy-railway.md` §9) and a restore drill with real data
+  (`docs/runbooks/restore.md`), and the uptime monitor (`docs/deployment.md`
+  §10). The code, scripts and alerts are built.
 - For Communications to go live: the Beem account typed into Comms → Settings, and the
   reply URL given to Beem (`docs/deployment.md`, §6a).
 - For Outreach: the files volume

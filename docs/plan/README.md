@@ -20,7 +20,7 @@ file, then `00-decisions.md`, then the phase you are working on.
 | 7 — Departments and Communications | **Built** (25 Sept 2026). Left for the owner: the SMS budget, the Beem account at launch, and a second person walking it (`07`, step 7.16). |
 | 8 — Outreach | **Built** (25 Sept 2026), on the recommendations written into each step. Step 8.1's answers are in. Left for the owner: the files volume on Railway (`docs/deployment.md` §6b), and a second person walking it (`08`, step 8.11). |
 | 9 — Pledges | **Built** (25 Sept 2026), after the owner answered step 9.0 the same day. Left for the owner: Communications giving Finance the pledge audience and approving its templates, and a second person walking it (`09`, step 9.4). |
-| 10 — Strengthening | Only when the owner says yes (§3.4a). |
+| 10 — Strengthening | **Built** (25 Sept 2026), the day the owner said yes: load tests, the job-log and keep-alive fixes they found, the backup role, the nightly encrypted backup, alerts. Left for the owner: the runs on staging, the backup keys, bucket and service, the uptime monitor, and the restore drill with real data (`10`, step 10.5). |
 
 **How to find the very next step.** Open the lowest-numbered phase that is not
 built. Its "steps at a glance" table lists the steps in order; the next step is
@@ -58,7 +58,7 @@ the plan in the same commit and say why (§2).
 | `07-communications.md` | Phase 7 (built) — departments with their leaders and members (D28), then the Communication system: SMS through Beem, templates approved once and used weekly, audiences, recurring "beat" messages, opt-out, and what it all costs. Central control, departments sending their own routine messages. |
 | `08-outreach.md` | Phase 8 (built) — the Outreach & Evangelism portal: the team (its department), Saturday sessions, people reached in four fields, follow-up, one timeline per person, Friday training, the dashboard, and the session report as a PDF. |
 | `09-pledges-and-giving-reminders.md` | Phase 9 (built) — pledges: what someone promised, what they have paid, what is left, and reminding them through Communications, after three decisions by the leadership. |
-| `10-strengthening.md` | Phase 10 — strengthening: performance and load, backups and the restore drill, monitoring and alerts. **Starts only when the owner says so**, after every feature phase is done. |
+| `10-strengthening.md` | Phase 10 (built) — strengthening: performance and load, backups and the restore drill, monitoring and alerts. Started when the owner said so (§3.4a). |
 | `docs/modules/*-brief.md` | What a department actually does, in its own words, filled in before its module is built (step 6.12). `comms-brief.md`, `outreach-brief.md` and `pledges-brief.md` exist. |
 | `multi-tenancy.md` | Retired by D27 (one church, one deployment). Says where each guarantee that outlived it is enforced now. |
 | `appendix-database.md` | Every table in one place, with what owns it and why it exists. |
