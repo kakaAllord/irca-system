@@ -21,7 +21,7 @@ const MarksSchema = z.object({
       }),
     )
     .min(1)
-    .max(300),
+    .max(2000),
 });
 
 /** Friday training, and who came. */

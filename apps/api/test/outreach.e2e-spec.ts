@@ -254,6 +254,64 @@ describe('Outreach (Phase 8)', () => {
       expect(refused.body.error.details.required).toEqual(['outreach.groups.manage']);
     });
   });
+  describe('a big team', () => {
+    it('takes a team of a hundred and fifty: its list, a Saturday team and a register', async () => {
+      const { cookie, department } = await outreach();
+      const values: string[] = [];
+      const params: string[] = [];
+      for (let i = 0; i < 147; i++) {
+        const id = randomUUID();
+        params.push(id);
+        values.push(`($${params.length}::uuid, 'Team Member ${i + 1}', now())`);
+      }
+      await db.query(
+        `insert into people (id, full_name, updated_at) values ${values.join(', ')}`,
+        params,
+      );
+      await db.query(
+        `insert into department_members (id, department_id, person_id)
+         select gen_random_uuid(), $1, id from people where full_name like 'Team Member %'`,
+        [department.id],
+      );
+
+      const team = await portal(app).get('/v1/outreach/team', cookie).expect(200);
+      expect(team.body.people).toHaveLength(151);
+      const everyone = team.body.people.map((p: { personId: string }) => p.personId) as string[];
+
+      const session = await portal(app)
+        .post('/v1/outreach/sessions', { heldOn: '2026-09-19' }, cookie)
+        .expect(201);
+      await portal(app)
+        .post(
+          `/v1/outreach/sessions/${session.body.id}/teams`,
+          { area: 'Everywhere', personIds: everyone.slice(0, 60) },
+          cookie,
+        )
+        .expect(201);
+
+      const training = await portal(app)
+        .post(
+          '/v1/outreach/trainings',
+          { topic: 'All hands', date: '2026-09-18', time: '18:00' },
+          cookie,
+        )
+        .expect(201);
+      await portal(app)
+        .put(
+          `/v1/outreach/trainings/${training.body.id}/attendance`,
+          { marks: everyone.map((personId) => ({ personId, mark: 'ATTENDED' })) },
+          cookie,
+        )
+        .expect(204);
+      const marked = await portal(app)
+        .get(`/v1/outreach/trainings/${training.body.id}`, cookie)
+        .expect(200);
+      expect(
+        marked.body.register.filter((p: { mark: string }) => p.mark === 'ATTENDED'),
+      ).toHaveLength(151);
+    }, 60_000);
+  });
+
   describe('Saturdays (8.5)', () => {
     /** A planned Saturday with one team, made by the leader. */
     async function saturday(cookie: string, personIds: string[], area = 'Sombetini') {

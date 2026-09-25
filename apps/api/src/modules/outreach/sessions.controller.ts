@@ -14,7 +14,7 @@ const StatusSchema = z.object({ status: z.enum(['PLANNED', 'COMPLETED', 'CANCELL
 const TeamSchema = z.object({
   groupId: z.uuid().nullish(),
   area: z.string().trim().min(2, 'Where they are going').max(80),
-  personIds: z.array(z.uuid()).max(12),
+  personIds: z.array(z.uuid()).max(100),
   notes: z.string().trim().max(1000).optional(),
 });
 const SpokenSchema = z.object({ spokenToOnly: z.number().int().min(0).max(10_000) });

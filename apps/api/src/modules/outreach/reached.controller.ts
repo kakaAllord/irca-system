@@ -27,7 +27,7 @@ const RecordSchema = z.object({
     .regex(/^\+?[\d\s-]*$/, 'Digits only')
     .default(''),
   area: z.string().trim().max(80).optional(),
-  reachedByIds: z.array(z.uuid()).max(12).optional(),
+  reachedByIds: z.array(z.uuid()).max(100).optional(),
   lang: z.enum(SMS_LANGS).optional(),
   mayMessage: z.boolean(),
   needsFollowUp: z.boolean().optional(),
