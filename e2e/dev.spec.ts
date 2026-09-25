@@ -117,6 +117,34 @@ test.describe('the dev console', () => {
     await expect(row.getByText('Revoked')).toBeVisible();
   });
 
+  test('alerts: who hears, the storage size, and a test sent on purpose', async ({ page }) => {
+    await signIn(page, DEV);
+    await page.getByRole('link', { name: 'Settings', exact: true }).click();
+    const alerts = page.locator('section', { has: page.getByRole('heading', { name: 'Alerts' }) });
+
+    // The developer may read the Health page, so they hear.
+    await expect(alerts.getByText(DEV.email)).toBeVisible();
+
+    await alerts.getByRole('button', { name: 'Set the size' }).click();
+    const drawer = page.getByRole('dialog');
+    await drawer.getByLabel('Storage (GB)').fill('0');
+    await drawer.getByRole('button', { name: 'Save' }).click();
+    await expect(drawer.getByText('More than 0')).toBeVisible();
+    await drawer.getByLabel('Storage (GB)').fill('5');
+    await drawer.getByRole('button', { name: 'Save' }).click();
+    await expect(alerts.getByText('5 GB, alert past 80%')).toBeVisible();
+    // Put it back, so the next run starts from nothing set.
+    await alerts.getByRole('button', { name: 'Set the size' }).click();
+    await drawer.getByLabel('Storage (GB)').fill('');
+    await drawer.getByRole('button', { name: 'Save' }).click();
+    await expect(alerts.getByText('not set, so not watched')).toBeVisible();
+
+    await alerts.getByRole('button', { name: 'Send a test alert' }).click();
+    await expect(
+      alerts.getByText(/^Sent: \d+ emails? and \d+ texts?\. Check they arrived\.$/),
+    ).toBeVisible();
+  });
+
   test('the dev console is not for an ordinary administrator', async ({ page }) => {
     await signIn(page, { email: 'admin@irca.local', password: 'admin-password-123' });
     await expect(page.getByRole('link', { name: 'Health', exact: true })).toHaveCount(0);
