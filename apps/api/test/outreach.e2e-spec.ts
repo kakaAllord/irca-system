@@ -21,6 +21,7 @@ import {
   setCommsSettings,
   truncateAll,
 } from './helpers.js';
+import { guardedRoutes, refusedByGuard } from './routes.js';
 
 describe('Outreach (Phase 8)', () => {
   let app: NestExpressApplication;
@@ -948,6 +949,110 @@ describe('Outreach (Phase 8)', () => {
         .expect(403);
       expect(refused.body.error.details.required).toEqual(['outreach.reports.read']);
       await portal(app).get(base, cookie).expect(404);
+    });
+  });
+  describe('proving it (8.10)', () => {
+    const ID = '00000000-0000-4000-8000-000000000000';
+    const call = (route: { method: string; path: string }, cookie: string) => {
+      const url = route.path.replace(/:[A-Za-z]+/g, ID);
+      const p = portal(app);
+      return route.method === 'get'
+        ? p.get(url, cookie)
+        : route.method === 'del'
+          ? p.del(url, cookie)
+          : p[route.method as 'post' | 'put' | 'patch'](url, {}, cookie);
+    };
+    const needs = (r: { rule: { all?: string[]; any?: string[] } }) => r.rule.all ?? r.rule.any!;
+    const kind = (permission: string) =>
+      outreachModule.permissions[permission as keyof typeof outreachModule.permissions]?.kind;
+
+    it('lets a viewer open every Outreach page, and refuses every write', async () => {
+      await outreach();
+      const cookie = await viewer();
+      const routes = guardedRoutes(app).filter((r) =>
+        needs(r).every((p) => p.startsWith('outreach.')),
+      );
+      expect(routes.length).toBeGreaterThan(25);
+      const wrong: string[] = [];
+      for (const route of routes) {
+        const res = await call(route, cookie);
+        const writes = needs(route).some((p) => kind(p) === 'write');
+        if (writes !== refusedByGuard(res))
+          wrong.push(`${route.method} ${route.path} → ${res.status}`);
+      }
+      expect(wrong).toEqual([]);
+    });
+
+    it('keeps an Outreach member out of everything under Membership', async () => {
+      await outreach();
+      const cookie = await member();
+      const routes = guardedRoutes(app).filter((r) => r.path.startsWith('/v1/membership'));
+      expect(routes.length).toBeGreaterThan(10);
+      const leaks: string[] = [];
+      for (const route of routes) {
+        const res = await call(route, cookie);
+        if (!refusedByGuard(res)) leaks.push(`${route.method} ${route.path} → ${res.status}`);
+      }
+      expect(leaks).toEqual([]);
+    });
+
+    it('turns fifty records with overlapping numbers and names into exactly the people there are', async () => {
+      const { cookie } = await outreach();
+      const { rows: before } = await db.query<{ n: number }>(
+        `select count(*)::int as n from people`,
+      );
+      // Twenty people with numbers, each met two or three times, the number
+      // typed a different way each time; and five with no number, met twice.
+      const withPhone = Array.from({ length: 20 }, (_, i) => ({
+        name: `Mtu Namba ${i + 1}`,
+        digits: `7${String(i + 1).padStart(2, '0')}555${String(i + 1).padStart(3, '0')}`,
+      }));
+      const noPhone = [
+        'Zawadi Kileo',
+        'Imani Swai',
+        'Faraja Mbise',
+        'Upendo Lyimo',
+        'Tumaini Kaaya',
+      ];
+      const typed = (d: string, n: number) =>
+        [`0${d}`, `+255${d}`, `0${d.slice(0, 3)} ${d.slice(3, 6)} ${d.slice(6)}`][n % 3]!;
+      const records = [
+        ...withPhone.flatMap((p, i) =>
+          Array.from({ length: i < 5 ? 3 : 2 }, (_, n) => ({
+            fullName: n ? p.name.toUpperCase() : p.name,
+            phone: typed(p.digits, n),
+          })),
+        ),
+        ...noPhone.flatMap((name) => [
+          { fullName: name, phone: '' },
+          { fullName: name, phone: '' },
+        ]),
+      ];
+      expect(records).toHaveLength(55);
+
+      // The recorder answers every "same person?" with the first candidate.
+      for (const r of records) {
+        const body = { ...r, mayMessage: true };
+        const first = await portal(app).post('/v1/outreach/reached', body, cookie);
+        if (first.status === 409) {
+          await portal(app)
+            .post(
+              '/v1/outreach/reached',
+              { ...body, samePersonId: first.body.error.details.candidates[0].personId },
+              cookie,
+            )
+            .expect(201);
+        } else expect(first.status).toBe(201);
+      }
+
+      const { rows } = await db.query<{ people: number; reaches: number; orphans: number }>(
+        `select (select count(*)::int from people) - $1::int as people,
+                (select count(*)::int from outreach_reached) as reaches,
+                (select count(*)::int from outreach_reached r
+                  where not exists (select 1 from people p where p.id = r.person_id)) as orphans`,
+        [before[0]!.n],
+      );
+      expect(rows[0]).toEqual({ people: 25, reaches: 55, orphans: 0 });
     });
   });
 });
