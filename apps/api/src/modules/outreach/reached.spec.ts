@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { names, phoneKey } from './reached.service.js';
+import { dialable, names, phoneKey } from './reached.service.js';
 
 describe('phoneKey', () => {
   it('reads one number the same however it was typed', () => {
@@ -26,5 +26,14 @@ describe('names', () => {
     expect(names(['Peter'])).toBe('Peter');
     expect(names(['Peter', 'John'])).toBe('Peter and John');
     expect(names(['Peter', 'John', 'Grace'])).toBe('Peter, John and Grace');
+  });
+});
+
+describe('dialable', () => {
+  it('rings from any phone, without the trunk 0', () => {
+    expect(dialable('+255', '0712345678')).toBe('+255712345678');
+    expect(dialable('+255', '')).toBe('');
+    // Not a number anything could ring: shown as typed, never "corrected".
+    expect(dialable('+255', '12')).toBe('+255 12');
   });
 });

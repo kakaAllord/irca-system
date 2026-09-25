@@ -328,7 +328,7 @@ describe('Outreach (Phase 8)', () => {
       expect(body.rows).toEqual([
         expect.objectContaining({
           name: 'Neema Mollel',
-          phone: '+255 0712345678',
+          phone: '+255712345678',
           area: 'Sombetini',
           reachedOn: '2026-09-19',
           reachedBy: ['Peter Mushi', 'John Laizer'],
@@ -387,6 +387,25 @@ describe('Outreach (Phase 8)', () => {
         )
         .expect(201);
       expect(other.body.personId).not.toBe(first.body.personId);
+    });
+
+    it('refuses a reach on a Saturday still to come', async () => {
+      const { cookie, members } = await outreach();
+      const ahead = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
+      const session = await portal(app)
+        .post('/v1/outreach/sessions', { heldOn: ahead }, cookie)
+        .expect(201);
+      const team = await portal(app)
+        .post(
+          `/v1/outreach/sessions/${session.body.id}/teams`,
+          { area: 'Sombetini', personIds: members.slice(0, 1) },
+          cookie,
+        )
+        .expect(201);
+      const refused = await portal(app)
+        .post('/v1/outreach/reached', { ...neema, teamId: team.body.id }, cookie)
+        .expect(422);
+      expect(refused.body.error.message).toMatch(/has not come yet/);
     });
 
     it('matches on the name only when there is no number', async () => {

@@ -6,6 +6,7 @@ import { RequestAuth } from '../../core/context/request-auth.js';
 import { AppError, notFound } from '../../core/http/app-error.js';
 import { AuditService } from '../../core/audit/audit.service.js';
 import { UsageService } from '../../core/usage/usage.service.js';
+import { toE164 } from '../../core/sms/phone.js';
 import { commsSettings } from '../comms/settings.js';
 import { recordInteraction } from '../membership/timeline.js';
 import { day, toDay } from './sessions.service.js';
@@ -63,6 +64,15 @@ const PERSON_PHONE_KEY = sql`case when p.phone like '+%'
   then regexp_replace(p.phone, '\\D', '', 'g')
   else regexp_replace(p.dial, '\\D', '', 'g')
     || regexp_replace(regexp_replace(p.phone, '\\D', '', 'g'), '^0+', '') end`;
+
+/**
+ * A number as the team dials it: +255712345678, which works from any phone,
+ * or as it was typed when it is not a number anything could ring.
+ */
+export function dialable(dial: string, phone: string): string {
+  if (!phone) return '';
+  return toE164(dial, phone) ?? (phone.startsWith('+') ? phone : `${dial} ${phone}`);
+}
 
 /** "Peter Mushi and John Laizer", "Peter, John and Grace". */
 export function names(list: string[]): string {
@@ -240,7 +250,7 @@ export class ReachedService {
         id: r.id,
         personId: r.person_id,
         name: r.full_name,
-        phone: r.phone ? `${r.phone.startsWith('+') ? '' : `${r.dial} `}${r.phone}` : '',
+        phone: dialable(r.dial, r.phone),
         area: r.area,
         reachedOn: day(r.reached_on),
         reachedBy: r.reached_by_ids.map((id) => nameOf.get(id) ?? 'Someone erased'),
@@ -289,9 +299,14 @@ export class ReachedService {
     }
     reachedOn ??= await today(tx);
     if (reachedOn > (await today(tx))) {
-      throw new AppError(422, ErrorCode.VALIDATION_FAILED, 'That date is in the future.', {
-        reachedOn: ['Not later than today'],
-      });
+      throw new AppError(
+        422,
+        ErrorCode.VALIDATION_FAILED,
+        sessionId
+          ? 'That Saturday has not come yet. Record people on the day, or after it.'
+          : 'That date is in the future.',
+        { reachedOn: ['Not later than today'] },
+      );
     }
 
     // Who reached them: the Saturday's team, or anyone on the Outreach team now.
