@@ -108,3 +108,33 @@ export const shortDay = (iso: string) =>
 /** Today where the church is, as '2026-09-26': a Saturday evening in Arusha is not Sunday. */
 export const churchToday = (timezone = 'Africa/Dar_es_Salaam') =>
   new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date());
+
+export type ReachedPerson = {
+  id: string;
+  name: string;
+  phone: string;
+  stage: import('../membership/types').Stage;
+  lang: string;
+  optedOut: boolean;
+  needsFollowUp: boolean;
+  reaches: {
+    id: string;
+    reachedOn: string;
+    area: string;
+    note: string;
+    needsFollowUp: boolean;
+    reachedBy: string[];
+    session: { id: string; title: string; heldOn: string } | null;
+  }[];
+  timeline: import('../membership/Timeline').TimelineLine[];
+};
+
+export type PendingFollowUp = {
+  personId: string;
+  name: string;
+  phone: string;
+  reachedOn: string;
+  area: string;
+  followups: number;
+  last: { summary: string; at: string } | null;
+};
