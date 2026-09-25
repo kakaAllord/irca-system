@@ -439,10 +439,10 @@ export class PledgesService {
       )
       select c.id, c.name, c.target_amount::text as target_amount, c.starts_on, c.ends_on,
              c.is_active,
-             coalesce(sum(pl.amount) filter (where pl.status <> 'CANCELLED'), 0)::text as promised,
-             coalesce(sum(pl.paid), 0)::text as received,
+             coalesce(sum(pl.amount) filter (where pl.status <> 'CANCELLED'), 0)::numeric(16, 2)::text as promised,
+             coalesce(sum(pl.paid), 0)::numeric(16, 2)::text as received,
              coalesce(sum(greatest(pl.amount - pl.paid, 0))
-                      filter (where pl.status = 'OPEN'), 0)::text as outstanding,
+                      filter (where pl.status = 'OPEN'), 0)::numeric(16, 2)::text as outstanding,
              count(pl.status) filter (where pl.status = 'OPEN')::int as open,
              count(pl.status) filter (where pl.status = 'OPEN' and pl.due_on < ${now}::date)::int
                as overdue,
@@ -483,7 +483,7 @@ export class PledgesService {
       join pledge_campaigns c on c.id = p.campaign_id
       left join people pe on pe.id = p.person_id
       cross join lateral (
-        select coalesce(sum(pp.amount), 0) as paid from pledge_payments pp
+        select coalesce(sum(pp.amount), 0)::numeric(14, 2) as paid from pledge_payments pp
         where pp.pledge_id = p.id and pp.status = 'POSTED'
       ) x
       ${where}
@@ -617,7 +617,7 @@ export async function settle(
     sql`select p.status, (p.amount - x.paid)::text as balance, x.paid >= p.amount as paid_up
         from pledges p
         cross join lateral (
-          select coalesce(sum(pp.amount), 0) as paid from pledge_payments pp
+          select coalesce(sum(pp.amount), 0)::numeric(14, 2) as paid from pledge_payments pp
           where pp.pledge_id = p.id and pp.status = 'POSTED'
         ) x
         where p.id = ${pledgeId}::uuid`,
@@ -661,7 +661,7 @@ export async function checkLink(
   // Two clerks linking to the same Sunday's entry at once are taken in turn.
   await tx.$executeRaw`select pg_advisory_xact_lock(hashtext(${`irca:pledge-link:${transactionId}`}))`;
   const [row] = await tx.$queryRaw<{ linked: string; over: boolean }[]>(sql`
-    select coalesce(sum(amount), 0)::text as linked,
+    select coalesce(sum(amount), 0)::numeric(14, 2)::text as linked,
            coalesce(sum(amount), 0) + ${amount}::numeric > ${entry.amount.toFixed(2)}::numeric as over
     from pledge_payments
     where transaction_id = ${transactionId}::uuid and status = 'POSTED'

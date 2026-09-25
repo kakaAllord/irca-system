@@ -5,16 +5,19 @@ import {
   CreateCampaignSchema,
   CreatePledgeSchema,
   PLEDGE_FILTERS,
+  PaymentChangeRequestSchema,
   RecordPaymentSchema,
   UpdateCampaignSchema,
   type CreateCampaignInput,
   type CreatePledgeInput,
+  type PaymentChangeRequestInput,
   type PledgeFilter,
   type RecordPaymentInput,
   type UpdateCampaignInput,
 } from '@irca/shared';
 import { ZodPipe } from '../../core/http/zod.pipe.js';
 import { RequireAnyPermission, RequirePermission } from '../../core/rbac/decorators.js';
+import { ChangeRequestService } from '../../core/change-requests/change-request.service.js';
 import { PledgesService } from './pledges.service.js';
 
 /**
@@ -125,5 +128,34 @@ export class PledgesController {
     const result = await this.pledges.recordPayment(id, body);
     res.status(result.created ? 201 : 200);
     return result;
+  }
+}
+
+/**
+ * Asking for a payment to be corrected or voided. There is no way to change
+ * one here, because there is no endpoint that would: an administrator
+ * decides the request in Admin → Requests (D17).
+ */
+@Controller('finance/pledge-payments')
+export class PledgePaymentsController {
+  constructor(private readonly changeRequests: ChangeRequestService) {}
+
+  @RequirePermission('finance.pledges.record_payment')
+  @Post(':id/change-requests')
+  @HttpCode(201)
+  requestChange(
+    @Param('id') id: string,
+    @Body(new ZodPipe(PaymentChangeRequestSchema)) body: PaymentChangeRequestInput,
+  ) {
+    const proposed: Record<string, unknown> = { ...body.proposed };
+    // Amounts are compared with what the database holds, which has two decimals.
+    if (proposed.amount !== undefined) proposed.amount = Number(proposed.amount).toFixed(2);
+    return this.changeRequests.create({
+      entityType: 'pledge_payment',
+      entityId: id,
+      action: body.action,
+      proposed: body.action === 'VOID' ? {} : proposed,
+      reason: body.reason,
+    });
   }
 }

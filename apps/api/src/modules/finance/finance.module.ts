@@ -8,7 +8,12 @@ import { FinanceChangeRequestsController } from './change-requests.controller.js
 import { ReportsService } from './reports.service.js';
 import { FinanceReportsController } from './overview.controller.js';
 import { PledgesService } from './pledges.service.js';
-import { PledgeCampaignsController, PledgesController } from './pledges.controller.js';
+import {
+  PledgeCampaignsController,
+  PledgePaymentsController,
+  PledgesController,
+} from './pledges.controller.js';
+import { PledgePaymentChangeHandler } from './pledge-payment-change.handler.js';
 
 /**
  * Money in and money out.
@@ -26,6 +31,7 @@ import { PledgeCampaignsController, PledgesController } from './pledges.controll
     FinanceReportsController,
     PledgeCampaignsController,
     PledgesController,
+    PledgePaymentsController,
   ],
   providers: [
     CatalogService,
@@ -33,6 +39,7 @@ import { PledgeCampaignsController, PledgesController } from './pledges.controll
     ReportsService,
     TransactionChangeHandler,
     PledgesService,
+    PledgePaymentChangeHandler,
   ],
 })
 export class FinanceModule {}

@@ -321,6 +321,110 @@ describe('pledges: what people promised, and what they have paid', () => {
     }
   });
 
+  describe('correcting a payment', () => {
+    async function setUp() {
+      const manager = await as(MANAGER);
+      const clerk = await as(CLERK);
+      const admin = await createUserWithPermissions(
+        db,
+        ['admin.requests.read', 'admin.requests.decide'],
+        { moduleKey: 'admin' },
+      );
+      const adminCookie = sessionCookie(
+        await portal(app)
+          .post('/v1/auth/login', { email: admin.email, password: admin.password })
+          .expect(200),
+      );
+      const { id: campaignId } = await campaign(manager.cookie, { name: 'Ujenzi 2027' });
+      const person = await createPerson(db, { fullName: 'Juma Correction' });
+      const { id } = await pledge(manager.cookie, campaignId, person.id, { amount: '50000' });
+      const paid = (await pay(clerk.cookie, id, { amount: '50000' }).expect(201)).body as {
+        id: string;
+        status: string;
+      };
+      expect(paid.status).toBe('COMPLETED');
+      return { clerk, adminCookie, pledgeId: id, paymentId: paid.id };
+    }
+
+    const ask = (cookie: string, paymentId: string, body: Record<string, unknown>) =>
+      portal(app).post(`/v1/finance/pledge-payments/${paymentId}/change-requests`, body, cookie);
+
+    it('applies an approved correction, and settles the pledge again', async () => {
+      const { clerk, adminCookie, pledgeId, paymentId } = await setUp();
+      // Five thousand was typed as fifty.
+      const asked = await ask(clerk.cookie, paymentId, {
+        action: 'EDIT',
+        proposed: { amount: '5000' },
+        reason: 'Typed an extra zero',
+      }).expect(201);
+
+      // Nothing moves until an administrator says yes.
+      let detail = await portal(app)
+        .get(`/v1/finance/pledges/${pledgeId}`, clerk.cookie)
+        .expect(200);
+      expect(detail.body).toMatchObject({ status: 'COMPLETED', balance: '0.00' });
+      expect(detail.body.payments[0].openRequest).toMatchObject({ isMine: true });
+
+      // What the administrator reads names the campaign and the amounts, not the person.
+      const inbox = await portal(app)
+        .get('/v1/admin/requests?status=PENDING', adminCookie)
+        .expect(200);
+      expect(inbox.body[0].entityLabel).toContain('Ujenzi 2027');
+      expect(inbox.body[0].entityLabel).not.toContain('Juma');
+      expect(inbox.body[0].changes).toEqual([
+        { field: 'amount', label: 'Amount', from: '50,000', to: '5,000' },
+      ]);
+
+      await portal(app)
+        .post(`/v1/admin/requests/${asked.body.id}/approve`, {}, adminCookie)
+        .expect(200);
+      detail = await portal(app).get(`/v1/finance/pledges/${pledgeId}`, clerk.cookie).expect(200);
+      expect(detail.body).toMatchObject({ status: 'OPEN', paid: '5000.00', balance: '45000.00' });
+      expect(detail.body.payments[0]).toMatchObject({ amount: '5000.00', revision: 2 });
+    });
+
+    it('voids a payment on approval, keeping it and reopening the pledge', async () => {
+      const { clerk, adminCookie, pledgeId, paymentId } = await setUp();
+      const asked = await ask(clerk.cookie, paymentId, {
+        action: 'VOID',
+        reason: 'Recorded against the wrong person',
+      }).expect(201);
+      await portal(app)
+        .post(`/v1/admin/requests/${asked.body.id}/approve`, {}, adminCookie)
+        .expect(200);
+
+      const detail = await portal(app)
+        .get(`/v1/finance/pledges/${pledgeId}`, clerk.cookie)
+        .expect(200);
+      expect(detail.body).toMatchObject({ status: 'OPEN', paid: '0.00', balance: '50000.00' });
+      expect(detail.body.payments[0]).toMatchObject({
+        status: 'VOIDED',
+        voidReason: 'Recorded against the wrong person',
+      });
+
+      // Once voided, nothing more can be asked of it.
+      await ask(clerk.cookie, paymentId, {
+        action: 'EDIT',
+        proposed: { note: 'again' },
+        reason: 'One more change',
+      }).expect(409);
+    });
+
+    it('refuses a correction dated in the future, or one that changes nothing', async () => {
+      const { clerk, paymentId } = await setUp();
+      await ask(clerk.cookie, paymentId, {
+        action: 'EDIT',
+        proposed: { paidOn: '2099-01-01' },
+        reason: 'Wrong day',
+      }).expect(422);
+      await ask(clerk.cookie, paymentId, {
+        action: 'EDIT',
+        proposed: { amount: '50000' },
+        reason: 'Same thing',
+      }).expect(400);
+    });
+  });
+
   it('keeps an erased person’s pledges, without their name', async () => {
     const manager = await as(MANAGER);
     const { id: campaignId } = await campaign(manager.cookie);

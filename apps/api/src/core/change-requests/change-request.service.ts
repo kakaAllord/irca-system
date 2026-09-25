@@ -68,7 +68,12 @@ export class ChangeRequestService {
           proposed: ['Change something before asking'],
         });
       }
-      await handler.validate(tx, { action: input.action, proposed, before: entity.before });
+      await handler.validate(tx, {
+        entityId: input.entityId,
+        action: input.action,
+        proposed,
+        before: entity.before,
+      });
       const explained = await handler.explain(tx, {
         action: input.action,
         proposed,
@@ -185,6 +190,7 @@ export class ChangeRequestService {
 
       const proposed = request.proposed as Record<string, unknown>;
       await handler.validate(tx, {
+        entityId: request.entityId,
         action: request.action as ChangeAction,
         proposed,
         before: entity.before,
