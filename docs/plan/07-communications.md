@@ -570,8 +570,11 @@ message someone who asked us not to".
    saved. Known blanks: `first_name`, `full_name`, `church_name`,
    `department_name` (filled from the recipient, the church and the
    department), and `event_name`, `date`, `time`, `venue` (typed by the sender
-   when sending). Any other blank is refused at draft time, by name. (Phase 9
-   adds `amount`, `balance`, `due_date`, `campaign_name`.)
+   when sending). Any other blank is refused at draft time, by name. Phase 9
+   added `campaign_name`, `amount`, `balance` and `due_date`, filled for each
+   person by the audience that knows them (only
+   `finance.pledge_outstanding`); a template using one is refused for any
+   other audience.
 4. **Nobody approves their own**: `comms.templates.approve`, and neither the
    person who wrote it nor the one who submitted it — the same rule as change
    requests (D17), refused the same way: 409, `CANNOT_DECIDE_OWN_REQUEST`.

@@ -19,7 +19,7 @@ file, then `00-decisions.md`, then the phase you are working on.
 | 0–6 | **Built.** What is left of Phase 6 is going live, which is the owner's (`06`, step 6.13). |
 | 7 — Departments and Communications | **Built** (25 Sept 2026). Left for the owner: the SMS budget, the Beem account at launch, and a second person walking it (`07`, step 7.16). |
 | 8 — Outreach | **Built** (25 Sept 2026), on the recommendations written into each step. Step 8.1's answers are in. Left for the owner: the files volume on Railway (`docs/deployment.md` §6b), and a second person walking it (`08`, step 8.11). |
-| 9 — Pledges | After 8, and only once the leadership has answered step 9.0. |
+| 9 — Pledges | **Built** (25 Sept 2026), after the owner answered step 9.0 the same day. Left for the owner: Communications giving Finance the pledge audience and approving its templates, and a second person walking it (`09`, step 9.4). |
 | 10 — Strengthening | Only when the owner says yes (§3.4a). |
 
 **How to find the very next step.** Open the lowest-numbered phase that is not
@@ -57,9 +57,9 @@ the plan in the same commit and say why (§2).
 | `06-dev-console-hardening-launch.md` | Phase 6 (built; launch is the owner's) — the dev console (health, usage, logs, the view-as log, settings and keys), security hardening, the setup and recovery commands, deployment, runbooks and the training guides. Rewritten for D27. Load testing, backups and monitoring are Phase 10. |
 | `07-communications.md` | Phase 7 (built) — departments with their leaders and members (D28), then the Communication system: SMS through Beem, templates approved once and used weekly, audiences, recurring "beat" messages, opt-out, and what it all costs. Central control, departments sending their own routine messages. |
 | `08-outreach.md` | Phase 8 (built) — the Outreach & Evangelism portal: the team (its department), Saturday sessions, people reached in four fields, follow-up, one timeline per person, Friday training, the dashboard, and the session report as a PDF. |
-| `09-pledges-and-giving-reminders.md` | Phase 9 — pledges: what someone promised, what they have paid, what is left, and reminding them through Communications. Waits for three decisions by the leadership. |
+| `09-pledges-and-giving-reminders.md` | Phase 9 (built) — pledges: what someone promised, what they have paid, what is left, and reminding them through Communications, after three decisions by the leadership. |
 | `10-strengthening.md` | Phase 10 — strengthening: performance and load, backups and the restore drill, monitoring and alerts. **Starts only when the owner says so**, after every feature phase is done. |
-| `docs/modules/*-brief.md` | What a department actually does, in its own words, filled in before its module is built (step 6.12). `comms-brief.md` and `outreach-brief.md` exist. |
+| `docs/modules/*-brief.md` | What a department actually does, in its own words, filled in before its module is built (step 6.12). `comms-brief.md`, `outreach-brief.md` and `pledges-brief.md` exist. |
 | `multi-tenancy.md` | Retired by D27 (one church, one deployment). Says where each guarantee that outlived it is enforced now. |
 | `appendix-database.md` | Every table in one place, with what owns it and why it exists. |
 

@@ -246,6 +246,34 @@ The rules around it:
   cell that starts like a spreadsheet formula is quoted, so opening the file
   cannot run anything.
 
+### Pledges
+
+What a person promised towards a campaign, what they have paid and what is
+left: the one place the church names a giver against an amount, as its
+leadership agreed on 25 September 2026 (`docs/modules/pledges-brief.md`).
+
+- **Campaigns.** The finance manager opens one ("Ujenzi 2027"), with a target
+  if there is one. **Finance → Pledges** shows each with a bar of what came
+  in, what was promised, and what is still owed. Closing one stops new
+  pledges; what was promised can still be paid.
+- **Who owes what** is on a campaign's page, largest owed first, with open,
+  overdue, paid in full and cancelled as tabs, only for the finance manager
+  and the pastors (the new **Pledges overseer** role). Everyone else in
+  Pledges sees the totals and counts.
+- **Recording.** The manager records a pledge from the drawer: who, how much,
+  how and by when. A clerk records a payment by finding the person paying by
+  name or number, never by opening the list, and may point it at the income
+  entry that recorded the same money. The balance is worked out every time,
+  never stored; two clerks saving at once cannot leave it wrong.
+- **Corrections.** A payment is never edited or deleted: a clerk asks, and an
+  administrator approves in Admin → Requests, as for a finance entry. A
+  pledge that will not be kept is cancelled, with a reason, and stays in the
+  records. Nothing about pledges is ever deleted.
+- **On the person.** A pledge and each payment are on the person's timeline,
+  without an amount, and only for those who may see pledges; the Membership
+  person page lists their pledges for the same people.
+- **Reminders** go through Communications (section 8e).
+
 ---
 
 ## 7. The registration form, now on this system
@@ -375,6 +403,22 @@ history, one set of approved words and one bill (D21, D22, D25, D26).
   credit left; templates waiting; and the replies people sent. **History**
   shows every message and what happened to each person, with numbers masked
   unless you may read Membership's sensitive details.
+- **Reminders about pledges.** Finance's leaders send to **People who still
+  owe on a pledge** once Communications has given Finance that audience: each
+  person once however many pledges they have, with the blanks
+  `{{campaign_name}}`, `{{amount}}`, `{{balance}}` and `{{due_date}}` filled
+  for them and already written the way a text says them. The leadership's
+  default template names no figure. A reminding audience reaches nobody twice
+  within 14 days (Comms → Settings, **Days between reminders**), whoever
+  sends: two campaigns reminding on the same Monday are one text each, and
+  those left alone are counted Who a reminder reached is shown, in History,
+  only to those who may see pledges; others see how many.
+- **Once a month.** A recurring message can send every week, or once a month
+  on the first, second, third or fourth of its days: "The first Mon of each
+  month at 10:00".
+- **On the timeline.** Every text sent to a person puts a line on their
+  timeline saying who it was from — never what it said — so whoever calls
+  them next knows.
 - **Where the texts go.** Tests keep them in memory; development and a
   deployment without a Beem account write them to the API's log; production
   sends through Beem once Communications has saved the account. Anywhere but
@@ -480,6 +524,10 @@ These hold even if the application code is wrong, which is the point:
   the note and the follow-up flag change afterwards. Saturdays, partner groups
   and trainings are never deleted.
 - A kept file's row is never deleted; replacing a file only marks the old one.
+- Pledges, their payments and campaigns **cannot be deleted** by the
+  application. What was promised, by whom and when never changes, and a
+  payment changes only through an approved change request, like a finance
+  entry. An erased person's pledges stay, without their name.
 
 ---
 
@@ -511,7 +559,7 @@ The portal is on <http://localhost:3000>, the API on <http://localhost:4000>.
 | Email | Password | Who they are |
 | --- | --- | --- |
 | `admin@irca.local` | `admin-password-123` | Church administrator, IRCA |
-| `pastor@irca.local` | `pastor-password-123` | A second administrator (so requests can be approved), and the Membership pastor |
+| `pastor@irca.local` | `pastor-password-123` | A second administrator (so requests can be approved), the Membership pastor, and Pledges overseer |
 | `office@irca.local` | `office-password-123` | Office secretary: everything in Membership except deciding applications |
 | `followup@irca.local` | `followup-password-123` | Follow-up team: visits and calls, cannot read prayer requests |
 | `clerk@irca.local` | `clerk-password-123` | Finance clerk (Neema Mollel) |
@@ -565,6 +613,18 @@ This is the walk that proves the access rules. Half an hour, in a browser.
 12. Ask to void an entry. Then, as the *same* person, try to approve it —
     you cannot; another administrator must. Have `pastor@irca.local` approve
     it. The entry is struck through in the list and the totals drop.
+
+**Pledges**
+
+13. As `mhazini@irca.local`: Finance → Pledges → **+ New campaign**, then
+    **+ Record a pledge** for someone in People, with a date in the past to
+    pay by. It shows as overdue.
+14. As `clerk@irca.local`: the same campaign shows totals and no names.
+    **+ Record a payment**, find the person by name, pay part, and read what
+    is left. Open the pledge and ask to correct the payment; approve it as
+    `admin@irca.local` in Requests, and see the pledge settle again.
+15. As `pastor@irca.local`: the campaign lists who owes what, with nothing to
+    press; the person's page in Membership shows their pledges.
 
 **The registration form and Membership**
 
@@ -658,4 +718,7 @@ whole Saturday walked in a browser at phone width.
 - For Outreach: the files volume
   (`docs/deployment.md` §6b, with its checks before launch), and a
   second person walking it at phone width.
-- Pledges (Phase 9), once the leadership has answered step 9.0.
+- For pledge reminders: Communications gives Finance the audience in Comms →
+  Audiences and approves Finance's reminder templates, a Finance leader sets
+  up the monthly reminder, and a second person walks Pledges from a fresh
+  database.
