@@ -1,0 +1,156 @@
+import type { NestExpressApplication } from '@nestjs/platform-express';
+import type pg from 'pg';
+import { DiscoveryService, MetadataScanner, Reflector } from '@nestjs/core';
+import { RequestMethod, type Type } from '@nestjs/common';
+import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants.js';
+import { ALL_MODULES, moduleByKey } from '@irca/shared';
+import { PERMISSIONS_KEY, type PermissionRule } from '../src/core/rbac/decorators.js';
+import { RegistrySync } from '../src/core/rbac/registry-sync.service.js';
+import {
+  createApp,
+  createChurch,
+  createRole,
+  createUser,
+  grantRole,
+  ownerDb,
+  portal,
+  sessionCookie,
+  truncateAll,
+} from './helpers.js';
+
+type Route = {
+  method: 'get' | 'post' | 'put' | 'patch' | 'del';
+  path: string;
+  rule: PermissionRule;
+};
+
+const VERBS: Partial<Record<RequestMethod, Route['method']>> = {
+  [RequestMethod.GET]: 'get',
+  [RequestMethod.POST]: 'post',
+  [RequestMethod.PUT]: 'put',
+  [RequestMethod.PATCH]: 'patch',
+  [RequestMethod.DELETE]: 'del',
+};
+
+/** Every route that names the permission it needs, read from the controllers themselves. */
+function guardedRoutes(app: NestExpressApplication): Route[] {
+  const discovery = app.get(DiscoveryService);
+  const scanner = app.get(MetadataScanner);
+  const reflector = app.get(Reflector);
+  const join = (...parts: string[]) =>
+    '/' +
+    parts
+      .map((p) => p.replace(/^\/|\/$/g, ''))
+      .filter(Boolean)
+      .join('/');
+  const routes: Route[] = [];
+  for (const wrapper of discovery.getControllers()) {
+    const cls = wrapper.metatype as Type<object> | undefined;
+    if (!cls?.prototype) continue;
+    const base = reflector.get<string>(PATH_METADATA, cls) ?? '';
+    const classRule = reflector.get<PermissionRule>(PERMISSIONS_KEY, cls);
+    for (const name of scanner.getAllMethodNames(cls.prototype)) {
+      const handler = cls.prototype[name as keyof object] as () => unknown;
+      const method = VERBS[reflector.get<RequestMethod>(METHOD_METADATA, handler)];
+      const rule = reflector.get<PermissionRule>(PERMISSIONS_KEY, handler) ?? classRule;
+      if (!method || !rule) continue;
+      const path = reflector.get<string>(PATH_METADATA, handler) ?? '';
+      routes.push({ method, path: join('v1', base, path), rule });
+    }
+  }
+  return routes;
+}
+
+/**
+ * The permission matrix, generated rather than written out.
+ *
+ * Each module's own tests say what its routes do. This says, for every route
+ * any module declares a permission on, the two things the plan asks of every
+ * one: someone holding every other permission in the system is refused, and
+ * someone holding only what it names is let past the check. A route added
+ * tomorrow, in a module that does not exist yet, is in this test the moment
+ * its controller is.
+ */
+describe('the permission matrix', () => {
+  let app: NestExpressApplication;
+  let db: pg.Client;
+  let routes: Route[];
+
+  beforeAll(async () => {
+    app = await createApp();
+    db = await ownerDb();
+    routes = guardedRoutes(app);
+  });
+  afterAll(async () => {
+    await db.end();
+    await app.close();
+  });
+  beforeEach(async () => {
+    await truncateAll(db);
+    await createChurch(
+      db,
+      'IRCA',
+      ALL_MODULES.map((m) => m.key),
+    );
+    await app.get(RegistrySync).sync();
+  });
+
+  /** Signed in as someone holding exactly these permissions, one role per portal. */
+  async function holding(permissions: string[]) {
+    const user = await createUser(db);
+    for (const m of ALL_MODULES) {
+      const own = permissions.filter((p) => moduleByKey(m.key)?.permissions[p]);
+      if (!own.length) continue;
+      const role = await createRole(db, { moduleKey: m.key, permissions: own });
+      await grantRole(db, user.id, role.id);
+    }
+    return sessionCookie(
+      await portal(app)
+        .post('/v1/auth/login', { email: user.email, password: user.password })
+        .expect(200),
+    );
+  }
+
+  const EVERY = ALL_MODULES.flatMap((m) => Object.keys(m.permissions));
+  const ID = '00000000-0000-4000-8000-000000000000';
+  const call = (route: Route, cookie: string) => {
+    const url = route.path.replace(/:[A-Za-z]+/g, ID);
+    return route.method === 'get' || route.method === 'del'
+      ? portal(app)[route.method](url, cookie)
+      : portal(app)[route.method](url, {}, cookie);
+  };
+  const refusedByGuard = (res: { status: number; body: { error?: { details?: unknown } } }) =>
+    res.status === 403 &&
+    Array.isArray((res.body.error?.details as { required?: unknown })?.required);
+
+  it('covers a route in every portal that has any', () => {
+    // So an empty discovery cannot pass the two tests below by checking nothing.
+    expect(routes.length).toBeGreaterThan(40);
+    const covered = new Set(
+      routes.flatMap((r) => (r.rule.all ?? r.rule.any)!.map((p) => p.split('.')[0])),
+    );
+    for (const m of ALL_MODULES) expect(covered).toContain(m.key);
+  });
+
+  it('refuses every route to someone holding everything but what it needs', async () => {
+    const leaks: string[] = [];
+    for (const route of routes) {
+      const needed = route.rule.all ?? route.rule.any!;
+      const cookie = await holding(EVERY.filter((p) => !needed.includes(p)));
+      const res = await call(route, cookie);
+      if (!refusedByGuard(res)) leaks.push(`${route.method} ${route.path} → ${res.status}`);
+    }
+    expect(leaks).toEqual([]);
+  });
+
+  it('lets someone holding only what a route needs past the check', async () => {
+    const refused: string[] = [];
+    for (const route of routes) {
+      const needed = route.rule.all ?? [route.rule.any![0]!];
+      const cookie = await holding(needed);
+      const res = await call(route, cookie);
+      if (refusedByGuard(res)) refused.push(`${route.method} ${route.path}`);
+    }
+    expect(refused).toEqual([]);
+  });
+});

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ClsService } from 'nestjs-cls';
 import { ErrorCode } from '@irca/shared';
-import { PrismaCore } from '../database/prisma-clients.js';
+import { PrismaDb } from '../database/prisma-clients.js';
 import { AppError } from '../http/app-error.js';
 import { RequestAuth } from '../context/request-auth.js';
 import { AuditService } from '../audit/audit.service.js';
@@ -39,7 +39,7 @@ function describeDevice(userAgent: string | null): string {
 @Injectable()
 export class AccountService {
   constructor(
-    private readonly db: PrismaCore,
+    private readonly db: PrismaDb,
     private readonly auth: RequestAuth,
     private readonly passwords: PasswordService,
     private readonly sessions: SessionService,
@@ -93,9 +93,6 @@ export class AccountService {
     }
 
     const hash = await this.passwords.hash(next);
-    const session = await this.db.session.findUniqueOrThrow({
-      where: { id: this.cls.get('sessionId')! },
-    });
     await this.db.user.update({
       where: { id: userId },
       data: { passwordHash: hash, passwordChangedAt: new Date() },
@@ -108,7 +105,6 @@ export class AccountService {
 
     const fresh = await this.sessions.create({
       userId,
-      activeChurchId: session.activeChurchId,
       ip: this.cls.get('ip'),
       userAgent: this.cls.get('userAgent'),
     });

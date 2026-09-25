@@ -42,6 +42,13 @@
   --warn-bg: #fff4e0;
   --warn-fg: #7a4b00;
   --warn-br: #f0d29b;
+  /* Chart series, in this order and never cycled. Checked for colour-blind
+     separation against this surface; slots 3 and 4 are under 3:1 here, which
+     is why every chart has a legend with its numbers and a table view. */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
 }
 
 [data-theme='dark'] {
@@ -75,6 +82,10 @@
   --warn-bg: #3a2e14;
   --warn-fg: #f5d08a;
   --warn-br: #6b5320;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
 }
 
 @theme inline {
@@ -98,12 +109,17 @@
   --color-input: var(--input);
   --color-sidebar: var(--sidebar);
   --color-hover: var(--hover);
+  --color-thead: var(--thead);
   --color-danger: var(--danger);
   --color-danger-bg: var(--danger-bg);
   --color-danger-br: var(--danger-br);
   --color-warn-bg: var(--warn-bg);
   --color-warn-fg: var(--warn-fg);
   --color-warn-br: var(--warn-br);
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
+  --color-series-4: var(--series-4);
   --font-sans: var(--font-geist-sans);
 }
 

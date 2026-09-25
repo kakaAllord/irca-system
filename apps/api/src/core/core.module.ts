@@ -2,7 +2,6 @@ import { Global, Module } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { RequestAuth } from './context/request-auth.js';
-import { PlacementService } from './database/placement.service.js';
 import { PasswordService } from './auth/password.service.js';
 import { SessionService } from './auth/session.service.js';
 import { MeService } from './auth/me.service.js';
@@ -19,7 +18,6 @@ import { AuditInterceptor } from './audit/audit.interceptor.js';
 import { UsageService } from './usage/usage.service.js';
 import { UsageSnapshot } from './usage/usage-snapshot.service.js';
 import { UsageInterceptor } from './usage/usage.interceptor.js';
-import { NoStoreInterceptor } from './http/no-store.interceptor.js';
 import { RateLimitGuard } from './limits/rate-limit.guard.js';
 import { QuotaService } from './limits/quota.service.js';
 import { InvitationService } from './invitations/invitation.service.js';
@@ -28,6 +26,7 @@ import { JobRunner } from './jobs/job-runner.service.js';
 import { ApiClientService } from './clients/api-client.service.js';
 import { PublicClientGuard } from './clients/public-client.guard.js';
 import { SequenceService } from './sequences/sequence.service.js';
+import { LogBufferService, logBuffer } from './logging/log-buffer.service.js';
 import { ChangeRequestRegistry } from './change-requests/registry.service.js';
 import { ChangeRequestService } from './change-requests/change-request.service.js';
 import { ScheduledJobs } from './jobs/scheduled-jobs.service.js';
@@ -42,8 +41,10 @@ import { ScheduledJobs } from './jobs/scheduled-jobs.service.js';
 @Module({
   imports: [DiscoveryModule, ScheduleModule.forRoot()],
   providers: [
+    // The logger already writes into this one; the injector hands out the same
+    // object rather than making a second, empty one.
+    { provide: LogBufferService, useValue: logBuffer },
     RequestAuth,
-    PlacementService,
     PasswordService,
     SessionService,
     MeService,
@@ -71,11 +72,10 @@ import { ScheduledJobs } from './jobs/scheduled-jobs.service.js';
     RateLimitGuard,
     AuditInterceptor,
     UsageInterceptor,
-    NoStoreInterceptor,
   ],
   exports: [
+    LogBufferService,
     RequestAuth,
-    PlacementService,
     PasswordService,
     SessionService,
     MeService,
@@ -101,7 +101,6 @@ import { ScheduledJobs } from './jobs/scheduled-jobs.service.js';
     RateLimitGuard,
     AuditInterceptor,
     UsageInterceptor,
-    NoStoreInterceptor,
   ],
 })
 export class CoreModule {}

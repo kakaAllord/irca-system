@@ -28,16 +28,15 @@ export class ReportsService {
 
   /** The Finance home page: this month, last month, and the year behind it. */
   async overview(month: string) {
-    const churchId = this.auth.requireChurch();
     const [year, m] = parseMonth(month);
     const previous = m === 1 ? [year - 1, 12] : [year, m - 1];
 
     const [totals, previousTotals, bySource, topItems, trend] = await Promise.all([
-      this.monthTotals(churchId, year, m),
-      this.monthTotals(churchId, previous[0]!, previous[1]!),
-      this.groupBy(churchId, 'INCOME', year, m),
-      this.groupBy(churchId, 'EXPENSE', year, m),
-      this.trend(churchId, year, m),
+      this.monthTotals(year, m),
+      this.monthTotals(previous[0]!, previous[1]!),
+      this.groupBy('INCOME', year, m),
+      this.groupBy('EXPENSE', year, m),
+      this.trend(year, m),
     ]);
 
     // The recent entries card is only for people who may see entries at all.
@@ -64,7 +63,6 @@ export class ReportsService {
 
   /** A statement for any range, with a month-by-month table when it spans months. */
   async statement(from: string, to: string) {
-    const churchId = this.auth.requireChurch();
     if (from > to)
       throw new AppError(400, ErrorCode.VALIDATION_FAILED, 'That range runs backwards.');
     if (monthsBetween(from, to) > MAX_MONTHS) {
@@ -76,10 +74,10 @@ export class ReportsService {
     }
 
     const [incomeBySource, expensesByItem, totals, months] = await Promise.all([
-      this.groupByRange(churchId, 'INCOME', from, to),
-      this.groupByRange(churchId, 'EXPENSE', from, to),
-      this.rangeTotals(churchId, from, to),
-      this.monthsInRange(churchId, from, to),
+      this.groupByRange('INCOME', from, to),
+      this.groupByRange('EXPENSE', from, to),
+      this.rangeTotals(from, to),
+      this.monthsInRange(from, to),
     ]);
 
     return {
@@ -95,75 +93,59 @@ export class ReportsService {
     };
   }
 
-  private async monthTotals(churchId: string, year: number, month: number) {
+  private async monthTotals(year: number, month: number) {
     const rows = await this.query<{ kind: string; total: string; count: number }>(
-      sql`-- tenant: church_id is bound below
-       select kind, sum(amount)::text as total, count(*)::int as count
+      sql`       select kind, sum(amount)::text as total, count(*)::int as count
        from finance_transactions
-       where church_id = ${churchId}::uuid and status = 'POSTED'
+       where status = 'POSTED'
          and period_year = ${year} and period_month = ${month}
        group by kind`,
     );
     return summarise(rows);
   }
 
-  private async rangeTotals(churchId: string, from: string, to: string) {
+  private async rangeTotals(from: string, to: string) {
     const rows = await this.query<{ kind: string; total: string; count: number }>(
-      sql`-- tenant: church_id is bound below
-       select kind, sum(amount)::text as total, count(*)::int as count
+      sql`       select kind, sum(amount)::text as total, count(*)::int as count
        from finance_transactions
-       where church_id = ${churchId}::uuid and status = 'POSTED'
+       where status = 'POSTED'
          and txn_date between ${from}::date and ${to}::date
        group by kind`,
     );
     return summarise(rows);
   }
 
-  private groupBy(churchId: string, kind: 'INCOME' | 'EXPENSE', year: number, month: number) {
-    return this.groupQuery(
-      churchId,
-      kind,
-      sql`and t.period_year = ${year} and t.period_month = ${month}`,
-    );
+  private groupBy(kind: 'INCOME' | 'EXPENSE', year: number, month: number) {
+    return this.groupQuery(kind, sql`and t.period_year = ${year} and t.period_month = ${month}`);
   }
 
-  private groupByRange(churchId: string, kind: 'INCOME' | 'EXPENSE', from: string, to: string) {
-    return this.groupQuery(
-      churchId,
-      kind,
-      sql`and t.txn_date between ${from}::date and ${to}::date`,
-    );
+  private groupByRange(kind: 'INCOME' | 'EXPENSE', from: string, to: string) {
+    return this.groupQuery(kind, sql`and t.txn_date between ${from}::date and ${to}::date`);
   }
 
   /** The same grouping for a month or a range; only the dates differ. */
-  private async groupQuery(
-    churchId: string,
-    kind: 'INCOME' | 'EXPENSE',
-    period: Sql,
-  ): Promise<GroupRow[]> {
+  private async groupQuery(kind: 'INCOME' | 'EXPENSE', period: Sql): Promise<GroupRow[]> {
     const table = identifier(
       kind === 'INCOME' ? 'finance_income_sources' : 'finance_expense_items',
     );
     const column = identifier(kind === 'INCOME' ? 'income_source_id' : 'expense_item_id');
     return this.query<GroupRow>(
-      sql`-- tenant: church_id is bound below
-       select i.id, i.name, sum(t.amount)::text as total
+      sql`       select i.id, i.name, sum(t.amount)::text as total
        from finance_transactions t
-       join ${table} i on i.id = t.${column} and i.church_id = t.church_id
-       where t.church_id = ${churchId}::uuid and t.status = 'POSTED' and t.kind = ${kind} ${period}
+       join ${table} i on i.id = t.${column}
+       where t.status = 'POSTED' and t.kind = ${kind} ${period}
        group by i.id, i.name
        order by sum(t.amount) desc`,
     );
   }
 
   /** The last twelve months, ending with the month being shown. */
-  private async trend(churchId: string, year: number, month: number): Promise<MonthRow[]> {
+  private async trend(year: number, month: number): Promise<MonthRow[]> {
     const rows = await this.query<{ month: string; kind: string; total: string }>(
-      sql`-- tenant: church_id is bound below
-       select to_char(make_date(period_year, period_month, 1), 'YYYY-MM') as month,
+      sql`       select to_char(make_date(period_year, period_month, 1), 'YYYY-MM') as month,
               kind, sum(amount)::text as total
        from finance_transactions
-       where church_id = ${churchId}::uuid and status = 'POSTED'
+       where status = 'POSTED'
          and make_date(period_year, period_month, 1)
              between make_date(${year}, ${month}, 1) - interval '11 months'
                  and make_date(${year}, ${month}, 1)
@@ -173,13 +155,12 @@ export class ReportsService {
     return byMonth(rows, lastMonths(year, month, 12));
   }
 
-  private async monthsInRange(churchId: string, from: string, to: string): Promise<MonthRow[]> {
+  private async monthsInRange(from: string, to: string): Promise<MonthRow[]> {
     const rows = await this.query<{ month: string; kind: string; total: string }>(
-      sql`-- tenant: church_id is bound below
-       select to_char(make_date(period_year, period_month, 1), 'YYYY-MM') as month,
+      sql`       select to_char(make_date(period_year, period_month, 1), 'YYYY-MM') as month,
               kind, sum(amount)::text as total
        from finance_transactions
-       where church_id = ${churchId}::uuid and status = 'POSTED'
+       where status = 'POSTED'
          and txn_date between ${from}::date and ${to}::date
        group by 1, 2
        order by 1`,

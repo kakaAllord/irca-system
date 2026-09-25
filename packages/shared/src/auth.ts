@@ -39,27 +39,22 @@ export type MeUser = {
   email: string;
   fullName: string;
   initials: string;
-  platformRole: 'NONE' | 'DEV';
 };
 
+/** The one church this deployment serves. */
 export type MeChurch = {
-  id: string;
   code: string;
-  slug: string;
   name: string;
   timezone: string;
   currency: string;
 };
 
 /**
- * Everything the portal needs to draw itself for the signed-in person. Phase 2
- * fills permissions, modules and role labels, and the impersonation block.
+ * Everything the portal needs to draw itself for the signed-in person.
  */
 export type MeResponse = {
   user: MeUser;
   church: MeChurch | null;
-  /** Every church this person can switch to. */
-  churches: { id: string; name: string }[];
   permissions: string[];
   /** Portals this person can open, with only the pages they may see. */
   modules: { key: string; name: string; home: string; nav: NavItem[] }[];

@@ -1,15 +1,18 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import type pg from 'pg';
-import { ClsService } from 'nestjs-cls';
 import { DiscoveryService, MetadataScanner, Reflector } from '@nestjs/core';
-import type { Type } from '@nestjs/common';
+import { RequestMethod, type Type } from '@nestjs/common';
+import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants.js';
+import { ALL_MODULES } from '@irca/shared';
 import { Db } from '../src/core/database/db.service.js';
 import { ALLOW_WHILE_IMPERSONATING } from '../src/core/impersonation/decorators.js';
 import {
   createApp,
   createChurch,
+  createRole,
   createUser,
   createUserWithPermissions,
+  grantRole,
   ownerDb,
   portal,
   sessionCookie,
@@ -36,14 +39,14 @@ describe('viewing as someone else', () => {
 
   /** An administrator who may view as others, and a clerk to view as. */
   async function church() {
-    const c = await createChurch(db);
-    const admin = await createUserWithPermissions(db, c.id, [
+    await createChurch(db);
+    const admin = await createUserWithPermissions(db, [
       'admin.users.read',
       'admin.users.manage',
       'admin.users.impersonate',
     ]);
-    const clerk = await createUserWithPermissions(db, c.id, ['admin.users.read']);
-    return { c, admin, clerk };
+    const clerk = await createUserWithPermissions(db, ['admin.users.read']);
+    return { admin, clerk };
   }
 
   it('takes on the other person, with nothing that changes anything', async () => {
@@ -70,41 +73,36 @@ describe('viewing as someone else', () => {
 
     const refused = await portal(app).post('/v1/fixture/write', {}, cookie).expect(403);
     expect(refused.body.error.code).toBe('IMPERSONATION_READ_ONLY');
-    // Switching church is a change too.
-    await portal(app)
-      .post('/v1/auth/church', { churchId: crypto.randomUUID() }, cookie)
-      .expect(403);
   });
 
   it('is refused by the database itself, even on a route that slips through', async () => {
-    const { admin, clerk, c } = await church();
+    const { admin, clerk } = await church();
     const cookie = await signIn(admin.email, admin.password);
     await portal(app).post('/v1/impersonation', { subjectUserId: clerk.id }, cookie).expect(200);
 
-    const before = await db.query(`select count(*)::int as n from roles where church_id = $1`, [
-      c.id,
-    ]);
+    const count = async () => (await db.query(`select count(*)::int as n from roles`)).rows[0].n;
+    const before = await count();
     // This route is a GET, so the guards let it by, and it writes on purpose.
     await portal(app).get('/v1/fixture/writes-anyway', cookie).expect(500);
-    const after = await db.query(`select count(*)::int as n from roles where church_id = $1`, [
-      c.id,
-    ]);
-    expect(after.rows[0].n).toBe(before.rows[0].n);
+    expect(await count()).toBe(before);
+
+    // The same route writes perfectly well once the viewing has stopped, so
+    // what refused it was the connection, not something wrong with the write.
+    await portal(app).del('/v1/impersonation', cookie).expect(200);
+    await portal(app).get('/v1/fixture/writes-anyway', cookie).expect(200);
+    expect(await count()).toBe(before + 1);
   });
 
-  it('will not view as yourself, a platform account, or someone outside the church', async () => {
-    const { c, admin, clerk } = await church();
-    const other = await createChurch(db, 'BBB');
-    const outsider = await createUser(db, { churchId: other.id });
-    const dev = await createUser(db, { platformRole: 'DEV', churchId: c.id });
-    const invited = await createUser(db, { churchId: c.id, status: 'INVITED' });
+  it('will not view as yourself, or someone disabled or not yet signed up', async () => {
+    const { admin, clerk } = await church();
+    const invited = await createUser(db, { status: 'INVITED' });
+    const disabled = await createUser(db, { status: 'DISABLED' });
     const cookie = await signIn(admin.email, admin.password);
 
     for (const [subjectUserId, expected] of [
       [admin.id, /yourself/],
-      [dev.id, /Platform accounts/],
-      [outsider.id, /does not have access to this church/],
       [invited.id, /invitation|disabled/],
+      [disabled.id, /invitation|disabled/],
     ] as const) {
       const res = await portal(app)
         .post('/v1/impersonation', { subjectUserId }, cookie)
@@ -115,22 +113,6 @@ describe('viewing as someone else', () => {
     // And no chains: viewing as someone cannot start another view-as.
     await portal(app).post('/v1/impersonation', { subjectUserId: clerk.id }, cookie).expect(200);
     await portal(app).post('/v1/impersonation', { subjectUserId: clerk.id }, cookie).expect(403);
-  });
-
-  it('lets a dev in, without carrying their platform powers along', async () => {
-    const { c, clerk } = await church();
-    const dev = await createUser(db, { platformRole: 'DEV' });
-    const cookie = await signIn(dev.email, dev.password);
-
-    const me = await portal(app).get('/v1/auth/me', cookie).expect(200);
-    expect(me.body.permissions).toContain('platform.churches.read');
-
-    const started = await portal(app)
-      .post('/v1/impersonation', { subjectUserId: clerk.id, churchId: c.id }, cookie)
-      .expect(200);
-    expect(started.body.user.email).toBe(clerk.email);
-    expect(started.body.permissions).toEqual(['admin.users.read']);
-    expect(started.body.permissions).not.toContain('platform.churches.read');
   });
 
   it('ends by itself, and on sign-out, and says which in the log', async () => {
@@ -153,7 +135,7 @@ describe('viewing as someone else', () => {
   });
 
   it('leaves no trace for the church: not for the person, not for an administrator', async () => {
-    const { c, admin, clerk } = await church();
+    const { admin, clerk } = await church();
     const adminCookie = await signIn(admin.email, admin.password);
     await portal(app)
       .post('/v1/impersonation', { subjectUserId: clerk.id }, adminCookie)
@@ -168,14 +150,18 @@ describe('viewing as someone else', () => {
     expect(me.body.impersonation).toBeNull();
 
     // Nor does anything the church itself can read from the log, whatever
-    // query it sends: row-level security hides those rows from it.
-    const cls = app.get(ClsService);
+    // query it sends: the database refuses it that table outright (D16), not
+    // just the rows a filter happens to leave out.
     const scoped = app.get(Db);
-    const visible = await cls.run(async () => {
-      cls.set('churchId', c.id);
-      cls.set('impersonationId', null);
-      return scoped.tx((tx) => tx.$queryRaw<{ action: string }[]>`select action from audit_events`);
-    });
+    await expect(
+      scoped.tx((tx) => tx.$queryRaw<{ action: string }[]>`select action from audit_events`),
+    ).rejects.toThrow(/permission denied/);
+
+    // The one function feature code may read through never has an
+    // impersonation row in it either, however this asks.
+    const visible = await scoped.tx(
+      (tx) => tx.$queryRaw<{ action: string }[]>`select action from church_audit_events()`,
+    );
     expect(visible.filter((r) => r.action.startsWith('impersonation.'))).toEqual([]);
 
     // The platform's own view has every one of them. (The stop request logs
@@ -189,6 +175,38 @@ describe('viewing as someone else', () => {
     expect(counts['impersonation.started']).toBe(1);
     expect(counts['impersonation.ended']).toBe(1);
     expect(counts['impersonation.view']).toBeGreaterThanOrEqual(2);
+  });
+
+  it('can open every page of every portal on the read-only connection', async () => {
+    await createChurch(
+      db,
+      'IRCA',
+      ALL_MODULES.map((m) => m.key),
+    );
+    const admin = await createUserWithPermissions(db, ['admin.users.impersonate']);
+    // Someone who may read everything there is, one role per portal.
+    const everyone = await createUser(db);
+    for (const m of ALL_MODULES) {
+      const role = await createRole(db, {
+        moduleKey: m.key,
+        permissions: Object.keys(m.permissions),
+      });
+      await grantRole(db, everyone.id, role.id);
+    }
+    const cookie = await signIn(admin.email, admin.password);
+    await portal(app).post('/v1/impersonation', { subjectUserId: everyone.id }, cookie).expect(200);
+
+    // A GET that writes anything at all — a counter, a "last seen", a default
+    // row created on first read — fails here with a 500, because the
+    // connection cannot write. Missing records and bad parameters are fine.
+    const failed: string[] = [];
+    for (const path of getRoutes(app)) {
+      if (path.startsWith('/v1/fixture/')) continue;
+      const url = path.replace(/:[A-Za-z]+/g, '00000000-0000-4000-8000-000000000000');
+      const res = await portal(app).get(url, cookie);
+      if (res.status >= 500) failed.push(`${path} → ${res.status}`);
+    }
+    expect(failed).toEqual([]);
   });
 
   it('allows exactly two routes to run while viewing as someone', () => {
@@ -209,3 +227,31 @@ describe('viewing as someone else', () => {
     expect(allowed.sort()).toEqual(['AuthController.logout', 'ImpersonationController.stop']);
   });
 });
+
+/** Every GET route the API serves, as its template (`/v1/people/:id`). */
+function getRoutes(app: NestExpressApplication): string[] {
+  const discovery = app.get(DiscoveryService);
+  const scanner = app.get(MetadataScanner);
+  const reflector = app.get(Reflector);
+  const join = (...parts: string[]) =>
+    '/' +
+    parts
+      .map((p) => p.replace(/^\/|\/$/g, ''))
+      .filter(Boolean)
+      .join('/');
+  const routes: string[] = [];
+  for (const wrapper of discovery.getControllers()) {
+    const cls = wrapper.metatype as Type<object> | undefined;
+    if (!cls?.prototype) continue;
+    const base = reflector.get<string | string[]>(PATH_METADATA, cls) ?? '';
+    for (const name of scanner.getAllMethodNames(cls.prototype)) {
+      const handler = cls.prototype[name as keyof object] as () => unknown;
+      if (reflector.get(METHOD_METADATA, handler) !== RequestMethod.GET) continue;
+      const path = reflector.get<string | string[]>(PATH_METADATA, handler) ?? '';
+      for (const b of [base].flat()) {
+        for (const p of [path].flat()) routes.push(join('v1', b, p));
+      }
+    }
+  }
+  return routes.filter((r) => r !== '/v1/health');
+}

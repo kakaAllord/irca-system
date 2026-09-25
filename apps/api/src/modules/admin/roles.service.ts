@@ -30,7 +30,7 @@ export class RolesService {
   /** Every role, grouped by portal, with how many people hold it. */
   async list(assignableOnly = false) {
     const enabled = new Set(
-      (await this.db.client.churchModule.findMany({ where: { enabled: true } })).map(
+      (await this.db.client.moduleState.findMany({ where: { enabled: true } })).map(
         (m) => m.moduleKey,
       ),
     );
@@ -70,10 +70,9 @@ export class RolesService {
   }
 
   async create(input: RoleInput) {
-    const churchId = this.auth.requireChurch();
     this.checkPermissions(input);
-    const enabled = await this.db.client.churchModule.findUnique({
-      where: { churchId_moduleKey: { churchId, moduleKey: input.moduleKey } },
+    const enabled = await this.db.client.moduleState.findUnique({
+      where: { moduleKey: input.moduleKey },
     });
     if (!enabled?.enabled) {
       throw new AppError(422, ErrorCode.ROLE_NOT_AVAILABLE, 'That portal is turned off.');
@@ -83,7 +82,6 @@ export class RolesService {
       const role = await tx.role.create({
         data: {
           // The extension sets this too; passing it keeps the types honest.
-          churchId,
           moduleKey: input.moduleKey,
           name: input.name.trim(),
           description: input.description.trim(),
@@ -92,7 +90,6 @@ export class RolesService {
       });
       await tx.rolePermission.createMany({
         data: input.permissionKeys.map((permissionKey) => ({
-          churchId,
           roleId: role.id,
           permissionKey,
         })),
@@ -109,7 +106,6 @@ export class RolesService {
   }
 
   async update(roleId: string, input: Omit<RoleInput, 'moduleKey'>) {
-    const churchId = this.auth.requireChurch();
     const role = await this.db.client.role.findUnique({
       where: { id: roleId },
       include: { permissions: true },
@@ -134,7 +130,7 @@ export class RolesService {
       const adding = [...want].filter((p) => !had.has(p));
       if (adding.length) {
         await tx.rolePermission.createMany({
-          data: adding.map((permissionKey) => ({ churchId, roleId, permissionKey })),
+          data: adding.map((permissionKey) => ({ roleId, permissionKey })),
           skipDuplicates: true,
         });
       }
@@ -158,7 +154,7 @@ export class RolesService {
       where: { id: roleId },
       include: {
         _count: { select: { members: true } },
-        members: { include: { membership: { include: { user: true } } } },
+        members: { include: { user: true } },
       },
     });
     if (!role || role.deletedAt) throw new AppError(404, ErrorCode.NOT_FOUND, 'No such role.');
@@ -166,7 +162,7 @@ export class RolesService {
       throw new AppError(409, ErrorCode.SYSTEM_ROLE, 'Built-in roles cannot be deleted.');
     if (role._count.members > 0) {
       throw new AppError(409, ErrorCode.ROLE_IN_USE, 'Take this role away from everyone first.', {
-        people: role.members.map((m) => m.membership.user.fullName),
+        people: role.members.map((m) => m.user.fullName),
       });
     }
 

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AppConfig } from '../../config/app-config.js';
-import { PrismaCore } from '../database/prisma-clients.js';
+import { PrismaDb } from '../database/prisma-clients.js';
 import type { Session, User } from '../../generated/prisma/client.js';
 import { newToken, tokenHash } from './tokens.js';
 
@@ -20,13 +20,12 @@ const TOUCH_EVERY_MS = 5 * 60_000;
 @Injectable()
 export class SessionService {
   constructor(
-    private readonly db: PrismaCore,
+    private readonly db: PrismaDb,
     private readonly config: AppConfig,
   ) {}
 
   async create(input: {
     userId: string;
-    activeChurchId: string | null;
     ip: string | null;
     userAgent: string | null;
   }): Promise<{ token: string; session: Session }> {
@@ -35,7 +34,6 @@ export class SessionService {
       data: {
         tokenHash: tokenHash(token),
         userId: input.userId,
-        activeChurchId: input.activeChurchId,
         ip: input.ip,
         userAgent: input.userAgent,
         expiresAt: new Date(Date.now() + this.config.get('SESSION_ABSOLUTE_HOURS') * 3_600_000),
@@ -63,31 +61,11 @@ export class SessionService {
     // A password change signs out every session made before it.
     if (user.passwordChangedAt && user.passwordChangedAt > session.createdAt) return null;
 
-    const checked = await this.checkActiveChurch(session, user);
-
-    if (now - checked.lastSeenAt.getTime() > TOUCH_EVERY_MS) {
+    if (now - session.lastSeenAt.getTime() > TOUCH_EVERY_MS) {
       // Throttled so a busy page does not write on every request.
-      await this.db.session.update({ where: { id: checked.id }, data: { lastSeenAt: new Date() } });
+      await this.db.session.update({ where: { id: session.id }, data: { lastSeenAt: new Date() } });
     }
-    return { session: checked, user };
-  }
-
-  /**
-   * The church the session works in must still be one this person may use.
-   * If it is not (membership disabled, church suspended), the session survives
-   * but loses the church, and the person picks another or sees "no access".
-   */
-  private async checkActiveChurch(session: Session, user: User): Promise<Session> {
-    if (!session.activeChurchId) return session;
-    const membership = await this.db.churchMembership.findUnique({
-      where: { churchId_userId: { churchId: session.activeChurchId, userId: user.id } },
-      include: { church: true },
-    });
-    const usable =
-      membership?.status === 'ACTIVE' &&
-      (membership.church.status === 'ACTIVE' || user.platformRole === 'DEV');
-    if (usable) return session;
-    return this.db.session.update({ where: { id: session.id }, data: { activeChurchId: null } });
+    return { session, user };
   }
 
   /** For the session guard, which needs the impersonated person's own record. */
@@ -103,12 +81,12 @@ export class SessionService {
     });
   }
 
-  /** When each of these people was last seen working in this church. */
-  async lastSeenInChurch(churchId: string, userIds: string[]): Promise<Map<string, Date>> {
+  /** When each of these people was last seen. */
+  async lastSeen(userIds: string[]): Promise<Map<string, Date>> {
     if (!userIds.length) return new Map();
     const rows = await this.db.session.groupBy({
       by: ['userId'],
-      where: { userId: { in: userIds }, activeChurchId: churchId },
+      where: { userId: { in: userIds } },
       _max: { lastSeenAt: true },
     });
     return new Map(
@@ -116,15 +94,15 @@ export class SessionService {
     );
   }
 
-  /** Signs someone out of one church, leaving their other churches alone. */
-  async revokeForChurch(userId: string, churchId: string, reason: string): Promise<void> {
+  /** Signs someone out everywhere, and stops anyone viewing as them. */
+  async revokeAllFor(userId: string, reason: string): Promise<void> {
     await this.db.session.updateMany({
-      where: { userId, activeChurchId: churchId, revokedAt: null },
+      where: { userId, revokedAt: null },
       data: { revokedAt: new Date(), revokeReason: reason },
     });
-    // Anyone viewing as them in that church stops viewing as them.
+    // Anyone viewing as them stops viewing as them.
     const open = await this.db.impersonationSession.findMany({
-      where: { subjectUserId: userId, churchId, endedAt: null },
+      where: { subjectUserId: userId, endedAt: null },
     });
     for (const impersonation of open) {
       await this.db.impersonationSession.update({
@@ -133,7 +111,7 @@ export class SessionService {
       });
       await this.db.session.updateMany({
         where: { impersonationId: impersonation.id },
-        data: { impersonationId: null, activeChurchId: impersonation.previousChurchId },
+        data: { impersonationId: null },
       });
     }
   }
@@ -147,19 +125,5 @@ export class SessionService {
       },
       data: { revokedAt: new Date(), revokeReason: reason },
     });
-  }
-
-  /**
-   * The church a fresh sign-in starts in: the person's only church if they have
-   * one, otherwise the one they joined first. Null for devs and for anyone with
-   * no active membership, who then see "no access".
-   */
-  async defaultChurchFor(userId: string): Promise<string | null> {
-    const first = await this.db.churchMembership.findFirst({
-      where: { userId, status: 'ACTIVE', church: { status: 'ACTIVE' } },
-      orderBy: [{ joinedAt: 'asc' }, { createdAt: 'asc' }],
-      select: { churchId: true },
-    });
-    return first?.churchId ?? null;
   }
 }

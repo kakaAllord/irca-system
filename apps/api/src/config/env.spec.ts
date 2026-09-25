@@ -3,7 +3,6 @@ import { validateEnv } from './env.js';
 const valid = {
   NODE_ENV: 'development',
   DATABASE_URL: 'postgresql://irca_app:x@localhost:5432/irca_dev',
-  DATABASE_URL_CORE: 'postgresql://irca_core:x@localhost:5432/irca_dev',
   DATABASE_URL_READONLY: 'postgresql://irca_readonly:x@localhost:5432/irca_dev',
   DIRECT_DATABASE_URL: 'postgresql://irca_owner:x@localhost:5432/irca_dev',
   PORTAL_ORIGIN: 'http://localhost:3000',
@@ -21,12 +20,19 @@ describe('validateEnv', () => {
   });
 
   it('names every missing or invalid variable at once', () => {
-    const { PORTAL_ORIGIN: _o, DATABASE_URL_CORE: _c, ...rest } = valid;
+    const { PORTAL_ORIGIN: _o, DATABASE_URL_READONLY: _r, ...rest } = valid;
     expect(() => validateEnv({ ...rest, SESSION_IDLE_HOURS: 'soon' })).toThrow(
-      /PORTAL_ORIGIN[\s\S]*DATABASE_URL_CORE|DATABASE_URL_CORE[\s\S]*PORTAL_ORIGIN/,
+      /PORTAL_ORIGIN[\s\S]*DATABASE_URL_READONLY|DATABASE_URL_READONLY[\s\S]*PORTAL_ORIGIN/,
     );
     expect(() => validateEnv({ ...rest, SESSION_IDLE_HOURS: 'soon' })).toThrow(
       /SESSION_IDLE_HOURS/,
     );
+  });
+
+  it('refuses a production session cookie without the __Host- prefix', () => {
+    expect(() => validateEnv({ ...valid, NODE_ENV: 'production' })).toThrow(/__Host-/);
+    expect(() =>
+      validateEnv({ ...valid, NODE_ENV: 'production', SESSION_COOKIE_NAME: '__Host-irca_session' }),
+    ).not.toThrow();
   });
 });

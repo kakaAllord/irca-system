@@ -6,7 +6,7 @@ import {
   type CatalogSuggestResponse,
   type CreateCatalogItemInput,
 } from '@irca/shared';
-import { Db, type TenantTx } from '../../core/database/db.service.js';
+import { Db, type Tx } from '../../core/database/db.service.js';
 import { identifier, sql, type Sql } from '../../core/database/sql.js';
 import { RequestAuth } from '../../core/context/request-auth.js';
 import { AppError } from '../../core/http/app-error.js';
@@ -55,8 +55,8 @@ export class CatalogService {
   ) {}
 
   /**
-   * Raw SQL through a transaction, because the tenant extension cannot see
-   * inside raw queries: db.tx() is what tells Postgres which church this is.
+   * Raw SQL through db.tx(), where Db keeps it: on the read-only connection
+   * while someone is being viewed as, like every other query here.
    */
   private query<T>(query: Sql): Promise<T[]> {
     return this.db.tx((tx) => tx.$queryRaw<T[]>(query));
@@ -71,22 +71,20 @@ export class CatalogService {
     q: string,
     limit = SUGGEST_LIMIT,
   ): Promise<CatalogSuggestResponse> {
-    const churchId = this.auth.requireChurch();
     const key = nameKey(q ?? '');
     const table = TABLES[kind];
 
     const items = identifier(table.items);
     const column = identifier(table.column);
     const rows = await this.query<{ id: string; name: string; description: string; uses: number }>(
-      sql`-- tenant: church_id is bound below
-       select i.id, i.name, i.description, coalesce(u.uses, 0)::int as uses
+      sql`       select i.id, i.name, i.description, coalesce(u.uses, 0)::int as uses
        from ${items} i
        left join lateral (
          select count(*)::int as uses from finance_transactions t
-         where t.church_id = i.church_id and t.${column} = i.id
+         where t.${column} = i.id
            and t.status = 'POSTED' and t.txn_date > current_date - 180
        ) u on true
-       where i.church_id = ${churchId}::uuid and i.is_active
+       where i.is_active
          and (${key} = '' or i.name_key like '%' || ${key} || '%' or i.name_key % ${key})
        order by (i.name_key like ${key} || '%') desc, similarity(i.name_key, ${key}) desc,
                 uses desc, i.name
@@ -95,9 +93,8 @@ export class CatalogService {
 
     const exact = key
       ? await this.query<{ id: string; name: string; is_active: boolean }>(
-          sql`-- tenant: church_id is bound below
-           select id, name, is_active from ${items}
-           where church_id = ${churchId}::uuid and name_key = ${key}`,
+          sql`           select id, name, is_active from ${items}
+           where name_key = ${key}`,
         )
       : [];
 
@@ -114,7 +111,6 @@ export class CatalogService {
     kind: CatalogKind,
     query: { q?: string; status?: 'active' | 'inactive' | 'all'; page?: number },
   ): Promise<{ rows: CatalogItem[]; total: number }> {
-    const churchId = this.auth.requireChurch();
     const table = TABLES[kind];
     const key = nameKey(query.q ?? '');
     const status = query.status ?? 'active';
@@ -122,19 +118,17 @@ export class CatalogService {
 
     const items = identifier(table.items);
     const column = identifier(table.column);
-    const where = sql`i.church_id = ${churchId}::uuid
-      and (${key} = '' or i.name_key like '%' || ${key} || '%')
+    const where = sql`(${key} = '' or i.name_key like '%' || ${key} || '%')
       and (${status} = 'all' or i.is_active = (${status} = 'active'))`;
 
     const rows = await this.query<ItemRow>(
-      sql`-- tenant: church_id is bound in the where clause
-       select i.id, i.name, i.description, i.is_active,
+      sql`       select i.id, i.name, i.description, i.is_active,
               coalesce(u.uses, 0)::int as uses, u.last_used_on
        from ${items} i
        left join lateral (
          select count(*)::int as uses, max(t.txn_date) as last_used_on
          from finance_transactions t
-         where t.church_id = i.church_id and t.${column} = i.id and t.status = 'POSTED'
+         where t.${column} = i.id and t.status = 'POSTED'
        ) u on true
        where ${where}
        order by i.name
@@ -142,8 +136,7 @@ export class CatalogService {
     );
 
     const counted = await this.query<{ count: bigint }>(
-      sql`-- tenant: church_id is bound in the where clause
-       select count(*) as count from ${items} i where ${where}`,
+      sql`       select count(*) as count from ${items} i where ${where}`,
     );
     const total = Number(counted[0]?.count ?? 0);
 
@@ -165,7 +158,6 @@ export class CatalogService {
    * name twice, and a near-miss the person has not been shown yet.
    */
   async create(kind: CatalogKind, input: CreateCatalogItemInput): Promise<CatalogItem> {
-    const churchId = this.auth.requireChurch();
     const table = TABLES[kind];
     const key = nameKey(input.name);
 
@@ -173,7 +165,6 @@ export class CatalogService {
 
     const created = await this.db.tx(async (tx) => {
       const data = {
-        churchId,
         name: input.name,
         nameKey: key,
         description: input.description ?? '',
@@ -218,7 +209,6 @@ export class CatalogService {
     id: string,
     input: { name?: string; description?: string; confirmDistinct?: boolean },
   ): Promise<void> {
-    const churchId = this.auth.requireChurch();
     const table = TABLES[kind];
     const before = await this.require(kind, id);
     const key = input.name ? nameKey(input.name) : null;
@@ -231,7 +221,7 @@ export class CatalogService {
         ...(input.name ? { name: input.name, nameKey: key! } : {}),
         ...(input.description !== undefined ? { description: input.description } : {}),
       };
-      const where = { churchId_id: { churchId, id } };
+      const where = { id };
       await (kind === 'income'
         ? tx.financeIncomeSource.update({ where, data })
         : tx.financeExpenseItem.update({ where, data }));
@@ -252,12 +242,11 @@ export class CatalogService {
 
   /** Turning an item off keeps every entry that used it; it just stops being offered. */
   async setActive(kind: CatalogKind, id: string, isActive: boolean): Promise<void> {
-    const churchId = this.auth.requireChurch();
     const table = TABLES[kind];
     const item = await this.require(kind, id);
 
     await this.db.tx(async (tx) => {
-      const where = { churchId_id: { churchId, id } };
+      const where = { id };
       await (kind === 'income'
         ? tx.financeIncomeSource.update({ where, data: { isActive } })
         : tx.financeExpenseItem.update({ where, data: { isActive } }));
@@ -273,15 +262,14 @@ export class CatalogService {
 
   /** The item an entry is about to use: it must be this church's, and in use. */
   async requireUsable(
-    tx: TenantTx,
+    tx: Tx,
     kind: CatalogKind,
     id: string,
   ): Promise<{ id: string; name: string }> {
-    const churchId = this.auth.requireChurch();
     const table = TABLES[kind];
     const item = await (kind === 'income'
-      ? tx.financeIncomeSource.findFirst({ where: { churchId, id } })
-      : tx.financeExpenseItem.findFirst({ where: { churchId, id } }));
+      ? tx.financeIncomeSource.findFirst({ where: { id } })
+      : tx.financeExpenseItem.findFirst({ where: { id } }));
 
     if (!item) throw new AppError(404, ErrorCode.NOT_FOUND, `No such ${table.noun}.`);
     if (!item.isActive) {
@@ -295,12 +283,11 @@ export class CatalogService {
   }
 
   async require(kind: CatalogKind, id: string): Promise<CatalogItem> {
-    const churchId = this.auth.requireChurch();
     const table = TABLES[kind];
     const row = await this.db.tx((tx) =>
       kind === 'income'
-        ? tx.financeIncomeSource.findFirst({ where: { churchId, id } })
-        : tx.financeExpenseItem.findFirst({ where: { churchId, id } }),
+        ? tx.financeIncomeSource.findFirst({ where: { id } })
+        : tx.financeExpenseItem.findFirst({ where: { id } }),
     );
     if (!row) throw new AppError(404, ErrorCode.NOT_FOUND, `No such ${table.noun}.`);
     return {
@@ -324,14 +311,12 @@ export class CatalogService {
     name: string,
     confirmDistinct: boolean,
   ): Promise<void> {
-    const churchId = this.auth.requireChurch();
     const table = TABLES[kind];
 
     const items = identifier(table.items);
     const exact = await this.query<{ id: string; name: string; is_active: boolean }>(
-      sql`-- tenant: church_id is bound below
-       select id, name, is_active from ${items}
-       where church_id = ${churchId}::uuid and name_key = ${key}`,
+      sql`       select id, name, is_active from ${items}
+       where name_key = ${key}`,
     );
     if (exact[0]) {
       throw new AppError(409, ErrorCode.ALREADY_EXISTS, `"${exact[0].name}" already exists.`, {
@@ -342,9 +327,8 @@ export class CatalogService {
 
     if (confirmDistinct) return;
     const similar = await this.query<{ id: string; name: string }>(
-      sql`-- tenant: church_id is bound below
-       select id, name from ${items}
-       where church_id = ${churchId}::uuid and similarity(name_key, ${key}) >= ${SIMILAR_ENOUGH}
+      sql`       select id, name from ${items}
+       where similarity(name_key, ${key}) >= ${SIMILAR_ENOUGH}
        order by similarity(name_key, ${key}) desc
        limit 3`,
     );

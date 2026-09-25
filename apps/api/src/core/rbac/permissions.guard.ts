@@ -38,13 +38,6 @@ export class PermissionsGuard implements CanActivate {
       throw new AppError(403, ErrorCode.FORBIDDEN, 'You do not have access to this.', { required });
     }
 
-    // A church is needed only when the permission being used is a church's.
-    // A dev acting on the platform has no church, and must not be asked for one.
-    const usesChurchPermission = held.some((key) => !key.startsWith('platform.'));
-    if (usesChurchPermission && !this.auth.churchId) {
-      throw new AppError(403, ErrorCode.FORBIDDEN, 'Choose a church first.');
-    }
-
     return true;
   }
 }

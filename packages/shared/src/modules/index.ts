@@ -2,20 +2,25 @@ import type { ModuleDef, PermissionDef, PermissionKind } from '../rbac/define';
 import { adminModule } from './admin';
 import { financeModule } from './finance';
 import { membershipModule } from './membership';
-import { platformModule } from './platform';
+import { devModule } from './dev';
 
 /**
- * Every module a church can have. Order is the sidebar's order, except that
- * admin is always shown last.
+ * Every portal this system has. Order is the sidebar's order, except that
+ * admin and the dev console are always shown last.
  *
  * Adding one here, and nowhere else, is what makes it appear in the Portals
  * page, the role editor and the sidebar.
  */
-export const CHURCH_MODULES: ModuleDef[] = [membershipModule, financeModule, adminModule];
+export const CHURCH_MODULES: ModuleDef[] = [
+  membershipModule,
+  financeModule,
+  adminModule,
+  devModule,
+];
 
-export { adminModule, financeModule, membershipModule, platformModule };
+export { adminModule, financeModule, membershipModule, devModule };
 
-export const ALL_MODULES: ModuleDef[] = [...CHURCH_MODULES, platformModule];
+export const ALL_MODULES: ModuleDef[] = CHURCH_MODULES;
 
 export const ALL_PERMISSIONS: Record<string, PermissionDef> = Object.assign(
   {},

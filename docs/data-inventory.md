@@ -63,17 +63,17 @@ resumable on the same phone a week later. So:
 
 | What | Where it lives | Who can read it |
 | --- | --- | --- |
-| Name, email, phone | `users` | anyone with `admin.users.read`, in their own church |
+| Name, email, phone | `users` | anyone with `admin.users.read` |
 | Password | `users.password_hash`, hashed with Argon2id | nobody, including devs |
-| Which churches they work in, and their roles | `church_memberships`, `membership_roles` | `admin.users.read` |
+| Their roles | `user_roles` | `admin.users.read` |
 | Sessions: when, from which address, which browser | `sessions` | nobody through the portal; devs in the database |
 | Invitations sent to them, and whether accepted | `invitations` | `admin.users.read` |
 | Password reset requests | `password_reset_tokens` (hashed) | nobody |
-| Everything they changed, with a summary | `audit_events` | `admin.audit.read`, in their own church |
-| Which days they were active | `user_activity_daily` | devs, as a number per church |
+| Everything they changed, with a summary | `audit_events` | `admin.audit.read` |
+| Which days they were active | `user_activity_daily` | the dev console, as a count per day |
 
-A staff member's email address is also personal data. It is shown inside their
-church and to devs; it is never shown to another church.
+A staff member's email address is also personal data. It is shown to those
+who may read people, and in the dev console only cut short (`ne***@gmail.com`).
 
 ---
 
@@ -88,22 +88,24 @@ consent conversation, not a small feature.
 
 ---
 
-## 4. What the platform team (devs) can see
+## 4. What the developers can see
 
-Devs run the system for every church. They can see:
+The developer holds the dev console's role. Through it they see:
 
-- every church's counts, sizes and usage — numbers, not names;
-- the activity log of any church;
+- counts, sizes and usage over time — numbers, not names;
+- the server's recent log lines and the activity log;
+- the last emails sent, with each address cut short;
 - the database itself, as any administrator of a hosted system can.
 
-**Viewing as someone.** A dev, and a church administrator within their own
-church, can open the portal as another person to see exactly what that person
-sees. It is read-only — every write is refused at the API, and the connection
-used is a read-only database role — and it is silent: the person is not told,
-and their church cannot see it in their log. Every session and every page
-opened in it is written to the view-as log, which only devs can read and which
-nothing in the system can change. Tell staff this exists; it is in
-`docs/help/` for that reason.
+**Viewing as someone.** A developer, and an administrator, can open the
+portal as another person to see exactly what that person sees. It is
+read-only — the portal offers nothing that changes anything, every write is
+refused at the API, and the connection used is a read-only database role —
+and it is silent: the person is not told, and the church's activity log never
+shows it. Every session and every page opened in it is written to the view-as
+log, which only the developer can read and which nothing in the system can
+change. Tell staff this exists; the portal's Help → Getting started says so
+for that reason.
 
 ---
 
@@ -156,9 +158,8 @@ nothing.
 
 ## 7. Where the data physically is
 
-- One PostgreSQL database, hosted (Neon). Every church's rows are in the same
-  tables, separated by `church_id` and by row-level security — see
-  `docs/plan/multi-tenancy.md`.
+- One PostgreSQL database, hosted (Neon), holding this church's data and no
+  one else's. Another church would have a database of its own (D27).
 - Backups are taken by the host and kept as the host's plan says; a copy that
   leaves the host is the church's own export.
 - Email goes out through Resend. Recipient addresses and message bodies pass

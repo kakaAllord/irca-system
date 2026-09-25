@@ -15,7 +15,7 @@ import {
   type Values,
 } from '@irca/shared/registration';
 import type { Registration } from '../../../generated/prisma/client.js';
-import { Db, type TenantTx } from '../../../core/database/db.service.js';
+import { Db, type Tx } from '../../../core/database/db.service.js';
 import { RequestAuth } from '../../../core/context/request-auth.js';
 import { AppError } from '../../../core/http/app-error.js';
 import { AuditService } from '../../../core/audit/audit.service.js';
@@ -50,16 +50,15 @@ export class PublicRegistrationService {
 
   /** A new registration, its token, and the Person the church will care for. */
   async create(rawLang: string): Promise<RegistrationDto> {
-    const churchId = this.auth.requireChurch();
     const lang: Lang = (LANGS as readonly string[]).includes(rawLang) ? (rawLang as Lang) : 'en';
 
     const row = await this.db.tx(async (tx) => {
       const created = await tx.registration.create({
-        data: { churchId, token: newToken(), lang, currentStep: FIRST_STEP },
+        data: { token: newToken(), lang, currentStep: FIRST_STEP },
       });
       // A registration is somebody, from the first tap: the office should see
       // them in the list even if they never finish.
-      await tx.person.create({ data: { churchId, registrationId: created.id } });
+      await tx.person.create({ data: { registrationId: created.id } });
       return created;
     });
 
@@ -77,9 +76,8 @@ export class PublicRegistrationService {
     // would quietly move someone off the language they chose because a value
     // failed to parse, which is worse than doing nothing.
     if (!(LANGS as readonly string[]).includes(raw)) return;
-    const churchId = this.auth.requireChurch();
     await this.db.client.registration.updateMany({
-      where: { churchId, token },
+      where: { token },
       data: { lang: raw },
     });
   }
@@ -157,7 +155,6 @@ export class PublicRegistrationService {
 
   /** Sends it in, re-checking every question they were actually shown. */
   async submit(token: string): Promise<RegistrationDto> {
-    const churchId = this.auth.requireChurch();
     const registration = await this.require(token);
     if (registration.status === 'submitted') return dtoOf(registration);
 
@@ -185,7 +182,6 @@ export class PublicRegistrationService {
         entityType: 'registration',
         entityId: sent.id,
         summary: `${sent.fullname || 'Someone'} finished the registration form`,
-        churchId,
       });
       return sent;
     });
@@ -228,21 +224,19 @@ export class PublicRegistrationService {
   }
 
   /** An application from the form, unless one is already open for them. */
-  private async applyFromForm(tx: TenantTx, row: Registration): Promise<void> {
+  private async applyFromForm(tx: Tx, row: Registration): Promise<void> {
     const person = await tx.person.findFirst({
-      where: { churchId: row.churchId, registrationId: row.id },
+      where: { registrationId: row.id },
     });
     if (!person) return;
     const open = await tx.membershipApplication.findFirst({
       where: {
-        churchId: row.churchId,
-        personId: person.id,
         status: { in: ['UNDER_REVIEW', 'APPROVED'] },
       },
     });
     if (open) return;
     await tx.membershipApplication.create({
-      data: { churchId: row.churchId, personId: person.id, source: 'FORM' },
+      data: { personId: person.id, source: 'FORM' },
     });
   }
 
@@ -251,9 +245,9 @@ export class PublicRegistrationService {
    * are linked. The office may correct a name on the person; that is why the
    * copy is one-way and only from the form's own fields.
    */
-  private async syncPerson(tx: TenantTx, row: Registration): Promise<void> {
+  private async syncPerson(tx: Tx, row: Registration): Promise<void> {
     await tx.person.updateMany({
-      where: { churchId: row.churchId, registrationId: row.id },
+      where: { registrationId: row.id },
       data: {
         fullName: row.fullname.slice(0, 120),
         gender: row.gender.slice(0, 20),
@@ -266,11 +260,10 @@ export class PublicRegistrationService {
   }
 
   private async find(token: string): Promise<Registration | null> {
-    const churchId = this.auth.requireChurch();
     if (!/^[a-f0-9]{32}$/.test(token)) {
       throw new AppError(400, ErrorCode.VALIDATION_FAILED, 'That is not a registration link.');
     }
-    return this.db.client.registration.findFirst({ where: { churchId, token } });
+    return this.db.client.registration.findFirst({ where: { token } });
   }
 
   private async require(token: string): Promise<Registration> {

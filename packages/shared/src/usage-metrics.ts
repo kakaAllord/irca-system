@@ -4,13 +4,13 @@
  * The dev console draws from this list, so adding a metric is one line here
  * plus the code that counts it. `counter` values add up over a day, `max`
  * keeps the largest seen, and `gauge` is a snapshot the nightly job replaces.
- * Per church per local day unless `platform` says otherwise.
+ * One row per metric per day, in `usage_daily`.
  *
  * Metrics named with a `.<something>` tail (per table, per module, per route)
  * are listed once with `*` and expanded by whatever writes them.
  */
 export type MetricType = 'counter' | 'max' | 'gauge';
-export type MetricUnit = 'count' | 'bytes' | 'ms' | 'percent×100' | 'minutes';
+export type MetricUnit = 'count' | 'bytes' | 'ms' | 'minutes';
 
 export type MetricDef = {
   key: string;
@@ -18,8 +18,6 @@ export type MetricDef = {
   type: MetricType;
   unit: MetricUnit;
   label: string;
-  /** True when it is written to platform_usage_daily, with no church. */
-  platform?: boolean;
 };
 
 const m = (
@@ -28,16 +26,14 @@ const m = (
   type: MetricType,
   label: string,
   unit: MetricUnit = 'count',
-  platform = false,
-): MetricDef => ({ area, key, type, label, unit, ...(platform ? { platform } : {}) });
+): MetricDef => ({ area, key, type, label, unit });
 
 export const USAGE_METRICS: MetricDef[] = [
-  m('Database', 'db.rows.*', 'gauge', 'Rows in each church-owned table'),
-  m('Database', 'db.bytes.*', 'gauge', 'Estimated size of each table', 'bytes'),
-  m('Database', 'db.bytes.total', 'gauge', 'Estimated size of all its data', 'bytes'),
-  m('Database', 'db.share_pct', 'gauge', 'Share of the whole database', 'percent×100'),
-  m('Database', 'db.size_bytes', 'gauge', 'Size of the whole database', 'bytes', true),
-  m('Database', 'db.connections.max_today', 'max', 'Most connections at once', 'count', true),
+  m('Database', 'db.rows.*', 'gauge', 'Rows in each table'),
+  m('Database', 'db.bytes.*', 'gauge', 'Size of each table, with its indexes', 'bytes'),
+  m('Database', 'db.bytes.total', 'gauge', 'Size of all the tables', 'bytes'),
+  m('Database', 'db.size_bytes', 'gauge', 'Size of the whole database', 'bytes'),
+  m('Database', 'db.connections.max_today', 'max', 'Most connections at once'),
 
   m('Entities', 'entities.people', 'gauge', 'People'),
   m('Entities', 'entities.registrations.in_progress', 'gauge', 'Unfinished registrations'),
@@ -51,11 +47,14 @@ export const USAGE_METRICS: MetricDef[] = [
   m('Entities', 'entities.roles.custom', 'gauge', 'Custom roles'),
   m('Entities', 'entities.modules.enabled', 'gauge', 'Portals turned on'),
 
+  // Read from user_activity_daily rather than written here: one row per
+  // person per day already exists there, and counting them is the answer.
   m('Activity', 'users.active', 'gauge', 'Staff active that day'),
 
   m('API', 'api.requests', 'counter', 'Requests'),
   m('API', 'api.requests.*', 'counter', 'Requests by module'),
   m('API', 'api.route.*', 'counter', 'Requests by route (the template, never the real path)'),
+  m('API', 'api.route_ms.*', 'counter', 'Time spent answering each route', 'ms'),
   m('API', 'api.errors.4xx', 'counter', 'Requests refused (4xx)'),
   m('API', 'api.errors.5xx', 'counter', 'Requests that failed (5xx)'),
   m('API', 'api.errors.403', 'counter', 'Permission denials'),

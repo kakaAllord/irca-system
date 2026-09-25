@@ -10,9 +10,9 @@ import { Prisma } from '../../generated/prisma/client.js';
  * concatenation even by accident. `$queryRawUnsafe` and `$executeRawUnsafe`
  * are banned by the lint rules, so this is the only way in.
  *
- * Raw SQL must still run inside `db.tx()`: the tenant extension cannot see
- * inside a raw query, and the transaction is what tells Postgres which church
- * is asking.
+ * A single `select` needs nothing more than the connection this file's
+ * caller was already given. Several statements that must stand or fall
+ * together still go through `db.tx()`, exactly as Prisma's own calls do.
  */
 export const sql = Prisma.sql;
 export const join = Prisma.join;

@@ -15,5 +15,12 @@ export default defineConfig({
   // clients gets its own driver adapter and role (src/core/database).
   datasource: {
     url: env('DIRECT_DATABASE_URL'),
+    // Prisma builds a throwaway copy of the schema to work out what a migration
+    // should contain. It normally creates that database itself; set
+    // SHADOW_DATABASE_URL to point at one you made by hand, which is what a
+    // machine whose `template1` the CLI may not copy needs.
+    ...(process.env.SHADOW_DATABASE_URL
+      ? { shadowDatabaseUrl: process.env.SHADOW_DATABASE_URL }
+      : {}),
   },
 });

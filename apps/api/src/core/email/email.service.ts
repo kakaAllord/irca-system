@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { PrismaCore } from '../database/prisma-clients.js';
+import { PrismaDb } from '../database/prisma-clients.js';
 import { UsageService } from '../usage/usage.service.js';
 import { EMAIL_PROVIDER, type EmailProvider } from './email.types.js';
 import { TEMPLATES, type TemplateName } from './templates/index.js';
@@ -7,15 +7,13 @@ import { TEMPLATES, type TemplateName } from './templates/index.js';
 /** Grows with each try: a provider having a bad minute should not lose a message. */
 const BACKOFF_MINUTES = [1, 5, 30, 120, 360];
 const MAX_ATTEMPTS = 6;
-/** At most this many per church per round, so one church's bulk sending waits its turn. */
-const PER_CHURCH = 5;
+/** At most this many a round, so a long queue is sent in steps rather than all at once. */
 const BATCH = 20;
 
 type Enqueue = {
   to: string;
   template: TemplateName;
   payload: Record<string, unknown>;
-  churchId?: string | null;
 };
 
 /** The parts of a transaction this service needs, so callers can pass theirs. */
@@ -34,7 +32,7 @@ export class EmailService {
   private readonly logger = new Logger('Email');
 
   constructor(
-    private readonly db: PrismaCore,
+    private readonly db: PrismaDb,
     private readonly usage: UsageService,
     @Inject(EMAIL_PROVIDER) private readonly provider: EmailProvider,
   ) {}
@@ -43,7 +41,6 @@ export class EmailService {
   async enqueue(tx: TxLike, email: Enqueue): Promise<void> {
     await tx.emailOutbox.create({
       data: {
-        churchId: email.churchId ?? null,
         toEmail: email.to,
         template: email.template,
         payload: email.payload,
@@ -56,10 +53,7 @@ export class EmailService {
     await this.enqueue(this.db as unknown as TxLike, email);
   }
 
-  /**
-   * Sends what is due. Claims at most five per church, so three hundred
-   * reminders for one church never delay another church's password reset.
-   */
+  /** Sends what is due, oldest first, a batch at a time. */
   async sendDue(): Promise<{ sent: number; failed: number }> {
     // Anything left mid-send by a crash is due again.
     await this.db.$executeRaw`
@@ -67,13 +61,9 @@ export class EmailService {
       where status = 'SENDING' and next_attempt_at < now() - interval '10 minutes'`;
 
     const due = await this.db.$queryRaw<{ id: string }[]>`
-      select id from (
-        select id, row_number() over (partition by church_id order by created_at) as rank
-        from email_outbox
-        where status = 'PENDING' and next_attempt_at <= now()
-      ) ranked
-      where rank <= ${PER_CHURCH}
-      order by rank
+      select id from email_outbox
+      where status = 'PENDING' and next_attempt_at <= now()
+      order by created_at
       limit ${BATCH}`;
     if (!due.length) return { sent: 0, failed: 0 };
 
@@ -106,14 +96,14 @@ export class EmailService {
             payload: scrubLinks(row.payload),
           },
         });
-        this.usage.inc('email.sent', 1, row.churchId);
+        this.usage.inc('email.sent', 1);
         sent++;
       } catch (err) {
         failed++;
         const attempts = row.attempts;
         if (attempts >= MAX_ATTEMPTS) {
           await this.giveUp(row.id, (err as Error).message);
-          this.usage.inc('email.failed', 1, row.churchId);
+          this.usage.inc('email.failed', 1);
           continue;
         }
         const minutes = BACKOFF_MINUTES[Math.min(attempts - 1, BACKOFF_MINUTES.length - 1)]!;
@@ -125,7 +115,7 @@ export class EmailService {
             lastError: (err as Error).message.slice(0, 500),
           },
         });
-        this.usage.inc('email.retries', 1, row.churchId);
+        this.usage.inc('email.retries', 1);
         this.logger.warn({ msg: 'email not sent, will try again', minutes, id: row.id });
       }
     }

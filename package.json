@@ -21,6 +21,7 @@
     "db:migrate": "npm run db:migrate -w @irca/api",
     "db:reset": "npm run db:reset -w @irca/api",
     "db:seed": "npm run db:seed -w @irca/api",
+    "db:demo": "npm run db:demo -w @irca/api",
     "e2e": "playwright test",
     "audit": "node scripts/audit-check.mjs"
   },

@@ -9,7 +9,7 @@ import {
   type PaymentMethod,
 } from '@irca/shared';
 import type { Prisma, FinanceTransaction } from '../../generated/prisma/client.js';
-import { Db, type TenantTx } from '../../core/database/db.service.js';
+import { Db, type Tx } from '../../core/database/db.service.js';
 import { RequestAuth } from '../../core/context/request-auth.js';
 import { AppError } from '../../core/http/app-error.js';
 import { AuditService } from '../../core/audit/audit.service.js';
@@ -70,12 +70,11 @@ export class TransactionService {
   async create(
     input: CreateTransactionInput,
   ): Promise<{ transaction: FinanceTransactionView; created: boolean }> {
-    const churchId = this.auth.requireChurch();
     const church = await this.church();
 
     // A retried submit is the same entry, not a second one.
     const existing = await this.db.client.financeTransaction.findFirst({
-      where: { churchId, clientRequestId: input.clientRequestId },
+      where: { clientRequestId: input.clientRequestId },
     });
     if (existing) return { transaction: await this.view(existing), created: false };
 
@@ -102,7 +101,6 @@ export class TransactionService {
 
       const created = await tx.financeTransaction.create({
         data: {
-          churchId,
           code,
           kind: input.kind,
           txnDate: new Date(`${input.txnDate}T00:00:00Z`),
@@ -213,24 +211,30 @@ export class TransactionService {
    * shown here that was not written down at the time.
    */
   async history(code: string) {
-    const churchId = this.auth.requireChurch();
     const row = await this.rowByCode(code);
     const requests = await this.db.client.changeRequest.findMany({
-      where: { churchId, entityType: 'finance_transaction', entityId: row.id },
+      where: { entityType: 'finance_transaction', entityId: row.id },
       select: { id: true },
     });
-    const events = await this.db.client.auditEvent.findMany({
-      where: {
-        churchId,
-        source: 'feature',
-        OR: [
-          { entityType: 'finance_transaction', entityId: code },
-          { entityType: 'change_request', entityId: { in: requests.map((r) => r.id) } },
-        ],
-      },
-      orderBy: { createdAt: 'asc' },
-      take: 100,
-    });
+    const events = await this.db.client.$queryRaw<
+      {
+        id: string;
+        actorUserId: string | null;
+        action: string;
+        summary: string | null;
+        createdAt: Date;
+      }[]
+    >`
+      select id, "actorUserId", action, summary, "createdAt"
+      from church_audit_events()
+      where source = 'feature'
+        and (
+          ("entityType" = 'finance_transaction' and "entityId" = ${code})
+          or ("entityType" = 'change_request' and "entityId" = any(${requests.map((r) => r.id)}::text[]))
+        )
+      order by "createdAt" asc
+      limit 100
+    `;
     const actors = await this.db.client.user.findMany({
       where: {
         id: { in: [...new Set(events.map((e) => e.actorUserId).filter(Boolean))] as string[] },
@@ -248,27 +252,23 @@ export class TransactionService {
   }
 
   /** The entry a change request is about, inside the caller's transaction. */
-  async rowById(tx: TenantTx, id: string): Promise<FinanceTransaction | null> {
-    const churchId = this.auth.requireChurch();
-    return tx.financeTransaction.findFirst({ where: { id, churchId } });
+  async rowById(tx: Tx, id: string): Promise<FinanceTransaction | null> {
+    return tx.financeTransaction.findFirst({ where: { id } });
   }
 
   private async rowByCode(code: string): Promise<FinanceTransaction> {
-    const churchId = this.auth.requireChurch();
     if (!parseTransactionCode(code)) {
       throw new AppError(404, ErrorCode.NOT_FOUND, 'No entry with that number.');
     }
-    const row = await this.db.client.financeTransaction.findFirst({ where: { churchId, code } });
+    const row = await this.db.client.financeTransaction.findFirst({ where: { code } });
     if (!row) throw new AppError(404, ErrorCode.NOT_FOUND, 'No entry with that number.');
     return row;
   }
 
   private where(query: TransactionQuery): Prisma.FinanceTransactionWhereInput {
-    const churchId = this.auth.requireChurch();
     const status = query.status ?? 'POSTED';
     const q = query.q?.trim();
     return {
-      churchId,
       ...(query.kind ? { kind: query.kind } : {}),
       ...(status === 'all' ? {} : { status }),
       ...(query.from || query.to
@@ -326,8 +326,7 @@ export class TransactionService {
   }
 
   private async church() {
-    const churchId = this.auth.requireChurch();
-    const church = await this.db.client.church.findFirst({ where: { id: churchId } });
+    const church = await this.db.client.church.findFirst();
     if (!church) throw new AppError(404, ErrorCode.NOT_FOUND, 'No such church.');
     return church;
   }
@@ -339,14 +338,13 @@ export class TransactionService {
   /** Rows as pages show them: names instead of ids, amounts as strings. */
   async views(rows: FinanceTransaction[]): Promise<FinanceTransactionView[]> {
     if (!rows.length) return [];
-    const churchId = this.auth.requireChurch();
     const [sources, items, people, links] = await Promise.all([
       this.db.client.financeIncomeSource.findMany({
-        where: { churchId, id: { in: ids(rows.map((r) => r.incomeSourceId)) } },
+        where: { id: { in: ids(rows.map((r) => r.incomeSourceId)) } },
         select: { id: true, name: true },
       }),
       this.db.client.financeExpenseItem.findMany({
-        where: { churchId, id: { in: ids(rows.map((r) => r.expenseItemId)) } },
+        where: { id: { in: ids(rows.map((r) => r.expenseItemId)) } },
         select: { id: true, name: true },
       }),
       this.db.client.user.findMany({
@@ -355,7 +353,6 @@ export class TransactionService {
       }),
       this.db.client.financeTransaction.findMany({
         where: {
-          churchId,
           OR: [
             { id: { in: ids(rows.map((r) => r.replacesId)) } },
             { replacesId: { in: rows.map((r) => r.id) } },

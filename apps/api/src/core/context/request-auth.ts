@@ -7,6 +7,9 @@ import type { RequestContext } from './request-context.js';
 /**
  * Who this request is for, and what it may do. The only way anything outside
  * core reads the request context, so nothing has to know about CLS.
+ *
+ * There is no church here. This system serves one, so every row in the
+ * database is already its own; a second church gets its own deployment.
  */
 @Injectable()
 export class RequestAuth {
@@ -22,20 +25,12 @@ export class RequestAuth {
     return this.cls.get('actorUserId');
   }
 
-  get churchId(): string | null {
-    return this.cls.get('churchId');
-  }
-
   get isImpersonating(): boolean {
     return this.cls.get('impersonationId') !== null;
   }
 
   get impersonationId(): string | null {
     return this.cls.get('impersonationId');
-  }
-
-  get isDev(): boolean {
-    return this.cls.get('platformRole') === 'DEV';
   }
 
   get permissions(): ReadonlySet<string> {
@@ -57,12 +52,5 @@ export class RequestAuth {
         required: [permission],
       });
     }
-  }
-
-  /** The church, or a 403 explaining that one must be chosen first. */
-  requireChurch(): string {
-    const churchId = this.churchId;
-    if (!churchId) throw new AppError(403, ErrorCode.FORBIDDEN, 'Choose a church first.');
-    return churchId;
   }
 }

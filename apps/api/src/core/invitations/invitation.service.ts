@@ -2,10 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { ClsService } from 'nestjs-cls';
 import { ErrorCode, normalizeEmail } from '@irca/shared';
 import { AppConfig } from '../../config/app-config.js';
-import { PrismaCore } from '../database/prisma-clients.js';
+import { PrismaDb } from '../database/prisma-clients.js';
 import { AppError } from '../http/app-error.js';
 import { RequestAuth } from '../context/request-auth.js';
-import { AuditService } from '../audit/audit.service.js';
+import { AuditService, insertAuditEvent } from '../audit/audit.service.js';
 import { EmailService } from '../email/email.service.js';
 import { UsageService } from '../usage/usage.service.js';
 import { PasswordService } from '../auth/password.service.js';
@@ -33,7 +33,7 @@ export type InviteInput = { email: string; fullName: string; roleIds: string[] }
 @Injectable()
 export class InvitationService {
   constructor(
-    private readonly db: PrismaCore,
+    private readonly db: PrismaDb,
     private readonly config: AppConfig,
     private readonly auth: RequestAuth,
     private readonly audit: AuditService,
@@ -46,40 +46,28 @@ export class InvitationService {
   ) {}
 
   async invite(input: InviteInput): Promise<{ userId: string }> {
-    return this.inviteInto(this.auth.requireChurch(), input);
-  }
-
-  /**
-   * The same, into a church named outright rather than the one the request is
-   * in: how the dev console gives a new church its first administrator.
-   */
-  async inviteInto(churchId: string, input: InviteInput): Promise<{ userId: string }> {
     const email = normalizeEmail(input.email);
-    const roles = await this.assignableRoles(churchId, input.roleIds);
+    const roles = await this.assignableRoles(input.roleIds);
 
-    const church = await this.db.church.findUniqueOrThrow({ where: { id: churchId } });
+    const church = await this.db.church.findFirstOrThrow();
     const inviter = await this.db.user.findUniqueOrThrow({ where: { id: this.auth.actorUserId! } });
-    const existing = await this.db.user.findUnique({
-      where: { email },
-      include: { memberships: { where: { churchId } } },
-    });
+    const existing = await this.db.user.findUnique({ where: { email } });
 
-    const membership = existing?.memberships[0];
-    if (membership?.status === 'ACTIVE') {
+    if (existing?.status === 'ACTIVE') {
       throw new AppError(
         409,
         ErrorCode.ALREADY_MEMBER,
         `${input.fullName} already has access. Change their roles on their page.`,
       );
     }
-    if (membership?.status === 'INVITED') {
+    if (existing?.status === 'INVITED') {
       throw new AppError(
         409,
         ErrorCode.ALREADY_INVITED,
         'They have already been invited. Resend it from their page.',
       );
     }
-    if (membership?.status === 'DISABLED') {
+    if (existing?.status === 'DISABLED') {
       throw new AppError(
         409,
         ErrorCode.MEMBER_DISABLED,
@@ -97,18 +85,14 @@ export class InvitationService {
           data: { email, fullName: input.fullName.trim(), status: 'INVITED' },
         }));
 
-      const created = await tx.churchMembership.create({
-        data: { churchId, userId: user.id, status: 'INVITED', invitedById: inviter.id },
-      });
       for (const role of roles) {
-        await tx.membershipRole.create({
-          data: { churchId, membershipId: created.id, roleId: role.id, grantedById: inviter.id },
+        await tx.userRole.create({
+          data: { userId: user.id, roleId: role.id, grantedById: inviter.id },
         });
       }
       await tx.invitation.create({
         data: {
-          churchId,
-          membershipId: created.id,
+          userId: user.id,
           email,
           tokenHash: tokenHash(token),
           expiresAt,
@@ -116,7 +100,6 @@ export class InvitationService {
         },
       });
       await this.email.enqueue(tx, {
-        churchId,
         to: email,
         template: 'invitation',
         payload: {
@@ -129,19 +112,16 @@ export class InvitationService {
           needsPassword: !user.passwordHash,
         },
       });
-      await tx.auditEvent.create({
-        data: {
-          churchId,
-          source: 'feature',
-          actorUserId: inviter.id,
-          subjectUserId: inviter.id,
-          action: 'admin.user.invited',
-          entityType: 'user',
-          entityId: user.id,
-          summary: `Invited ${email} as ${roles.map((r) => r.name).join(', ') || 'no role yet'}`,
-          after: { email, roles: roles.map((r) => r.name) },
-          requestId: null,
-        },
+      await insertAuditEvent(tx, {
+        source: 'feature',
+        actorUserId: inviter.id,
+        subjectUserId: inviter.id,
+        action: 'admin.user.invited',
+        entityType: 'user',
+        entityId: user.id,
+        summary: `Invited ${email} as ${roles.map((r) => r.name).join(', ') || 'no role yet'}`,
+        after: { email, roles: roles.map((r) => r.name) },
+        requestId: null,
       });
       return user.id;
     });
@@ -152,11 +132,10 @@ export class InvitationService {
 
   /** A new token and a new email; the old link stops working. */
   async resend(userId: string): Promise<void> {
-    const churchId = this.auth.requireChurch();
-    const { membership, invitation } = await this.pending(churchId, userId);
+    const { user: invited, invitation } = await this.pending(userId);
 
     const sentToday = await this.db.invitation.count({
-      where: { membershipId: membership.id, lastSentAt: { gt: new Date(Date.now() - 86_400_000) } },
+      where: { userId: invited.id, lastSentAt: { gt: new Date(Date.now() - 86_400_000) } },
     });
     if (sentToday >= MAX_SENDS_PER_DAY) {
       throw new AppError(
@@ -166,7 +145,7 @@ export class InvitationService {
       );
     }
 
-    const church = await this.db.church.findUniqueOrThrow({ where: { id: churchId } });
+    const church = await this.db.church.findFirstOrThrow();
     const inviter = await this.db.user.findUniqueOrThrow({ where: { id: this.auth.actorUserId! } });
     const token = newToken();
     const expiresAt = new Date(Date.now() + VALID_HOURS * 3_600_000);
@@ -180,9 +159,8 @@ export class InvitationService {
       }
       await tx.invitation.create({
         data: {
-          churchId,
-          membershipId: membership.id,
-          email: membership.user.email,
+          userId: invited.id,
+          email: invited.email,
           tokenHash: tokenHash(token),
           expiresAt,
           createdById: inviter.id,
@@ -190,17 +168,16 @@ export class InvitationService {
         },
       });
       await this.email.enqueue(tx, {
-        churchId,
-        to: membership.user.email,
+        to: invited.email,
         template: 'invitation',
         payload: {
           churchName: church.name,
           inviterName: inviter.fullName,
-          personName: membership.user.fullName,
+          personName: invited.fullName,
           roleSummary: 'the roles you were given',
           link: `${this.config.get('PORTAL_ORIGIN')}/accept-invite?token=${token}`,
           expiresOn: formatIn(expiresAt, church.timezone),
-          needsPassword: !membership.user.passwordHash,
+          needsPassword: !invited.passwordHash,
         },
       });
     });
@@ -208,14 +185,13 @@ export class InvitationService {
       action: 'admin.invitation.resent',
       entityType: 'user',
       entityId: userId,
-      summary: `Sent ${membership.user.email} their invitation again`,
+      summary: `Sent ${invited.email} their invitation again`,
     });
   }
 
   /** Cancels it: the link stops working and their place is closed. */
   async revoke(userId: string): Promise<void> {
-    const churchId = this.auth.requireChurch();
-    const { membership, invitation } = await this.pending(churchId, userId);
+    const { user: invited, invitation } = await this.pending(userId);
 
     await this.db.$transaction(async (tx) => {
       if (invitation) {
@@ -224,43 +200,35 @@ export class InvitationService {
           data: { revokedAt: new Date() },
         });
       }
-      await tx.churchMembership.update({
-        where: { id: membership.id },
+      await tx.user.update({
+        where: { id: invited.id },
         data: { status: 'DISABLED' },
       });
-      // Someone who never set a password and belongs nowhere else has no
-      // account to keep.
-      const others = await tx.churchMembership.count({
-        where: { userId, status: { not: 'DISABLED' }, NOT: { id: membership.id } },
-      });
-      if (!others && !membership.user.passwordHash) {
-        await tx.user.update({ where: { id: userId }, data: { status: 'DISABLED' } });
-      }
     });
     await this.audit.recordNow({
       action: 'admin.invitation.revoked',
       entityType: 'user',
       entityId: userId,
-      summary: `Cancelled the invitation for ${membership.user.email}`,
+      summary: `Cancelled the invitation for ${invited.email}`,
     });
   }
 
   /** What the accept page shows before anyone types anything. */
   async describe(token: string) {
     const invitation = await this.valid(token);
-    const membership = await this.db.churchMembership.findUniqueOrThrow({
-      where: { id: invitation.membershipId },
-      include: { user: true, church: true, roles: { include: { role: true } } },
+    const invited = await this.db.user.findUniqueOrThrow({
+      where: { id: invitation.userId },
+      include: { roles: { include: { role: true } } },
     });
+    const church = await this.db.church.findFirstOrThrow();
     const inviter = await this.db.user.findUnique({ where: { id: invitation.createdById } });
     return {
-      churchName: membership.church.name,
-      email: membership.user.email,
-      fullName: membership.user.fullName,
+      churchName: church.name,
+      email: invited.email,
+      fullName: invited.fullName,
       inviterName: inviter?.fullName ?? 'Your church administrator',
-      roleSummary:
-        membership.roles.map((r) => r.role.name).join(' and ') || 'a member of the office',
-      needsPassword: !membership.user.passwordHash,
+      roleSummary: invited.roles.map((r) => r.role.name).join(' and ') || 'a member of the office',
+      needsPassword: !invited.passwordHash,
     };
   }
 
@@ -271,12 +239,11 @@ export class InvitationService {
     context: { ip: string | null; userAgent: string | null },
   ): Promise<{ sessionToken: string }> {
     const invitation = await this.valid(token);
-    const membership = await this.db.churchMembership.findUniqueOrThrow({
-      where: { id: invitation.membershipId },
-      include: { user: true },
+    const invited = await this.db.user.findUniqueOrThrow({
+      where: { id: invitation.userId },
     });
 
-    const needsPassword = !membership.user.passwordHash;
+    const needsPassword = !invited.passwordHash;
     if (needsPassword) {
       if (!input.password) {
         throw new AppError(422, ErrorCode.VALIDATION_FAILED, 'Choose a password.', {
@@ -296,12 +263,8 @@ export class InvitationService {
         where: { id: invitation.id },
         data: { acceptedAt: new Date() },
       });
-      await tx.churchMembership.update({
-        where: { id: membership.id },
-        data: { status: 'ACTIVE', joinedAt: new Date() },
-      });
       await tx.user.update({
-        where: { id: membership.userId },
+        where: { id: invited.id },
         data: {
           status: 'ACTIVE',
           ...(input.fullName?.trim() ? { fullName: input.fullName.trim() } : {}),
@@ -313,24 +276,20 @@ export class InvitationService {
             : {}),
         },
       });
-      await tx.auditEvent.create({
-        data: {
-          churchId: invitation.churchId,
-          source: 'feature',
-          actorUserId: membership.userId,
-          subjectUserId: membership.userId,
-          action: 'admin.invitation.accepted',
-          entityType: 'user',
-          entityId: membership.userId,
-          summary: `${membership.user.email} accepted their invitation`,
-        },
+      await insertAuditEvent(tx, {
+        source: 'feature',
+        actorUserId: invited.id,
+        subjectUserId: invited.id,
+        action: 'admin.invitation.accepted',
+        entityType: 'user',
+        entityId: invited.id,
+        summary: `${invited.email} accepted their invitation`,
       });
     });
 
-    this.usage.inc('admin.invitations.accepted', 1, invitation.churchId);
+    this.usage.inc('admin.invitations.accepted');
     const { token: sessionToken, session } = await this.sessions.create({
-      userId: membership.userId,
-      activeChurchId: invitation.churchId,
+      userId: invited.id,
       ip: context.ip,
       userAgent: context.userAgent,
     });
@@ -338,21 +297,16 @@ export class InvitationService {
     // The rest of this request is them, so the answer already describes their
     // portal rather than making the page ask again.
     this.cls.set('sessionId', session.id);
-    this.cls.set('userId', membership.userId);
-    this.cls.set('actorUserId', membership.userId);
-    this.cls.set('churchId', invitation.churchId);
-    this.cls.set('platformRole', 'NONE');
-    this.cls.set(
-      'permissions',
-      await this.permissions.forMember(membership.userId, invitation.churchId),
-    );
+    this.cls.set('userId', invited.id);
+    this.cls.set('actorUserId', invited.id);
+    this.cls.set('permissions', await this.permissions.forUser(invited.id));
     return { sessionToken };
   }
 
-  /** Roles an administrator may hand out: this church's, of portals that are on. */
-  private async assignableRoles(churchId: string, roleIds: string[]) {
+  /** Roles an administrator may hand out: those of portals that are on. */
+  private async assignableRoles(roleIds: string[]) {
     const roles = await this.db.role.findMany({
-      where: { id: { in: roleIds }, churchId, deletedAt: null },
+      where: { id: { in: roleIds }, deletedAt: null },
     });
     if (roles.length !== roleIds.length) {
       throw new AppError(
@@ -362,9 +316,7 @@ export class InvitationService {
       );
     }
     const enabled = new Set(
-      (await this.db.churchModule.findMany({ where: { churchId, enabled: true } })).map(
-        (m) => m.moduleKey,
-      ),
+      (await this.db.moduleState.findMany({ where: { enabled: true } })).map((m) => m.moduleKey),
     );
     const off = roles.find((r) => !enabled.has(r.moduleKey));
     if (off) {
@@ -377,13 +329,10 @@ export class InvitationService {
     return roles;
   }
 
-  private async pending(churchId: string, userId: string) {
-    const membership = await this.db.churchMembership.findUnique({
-      where: { churchId_userId: { churchId, userId } },
-      include: { user: true },
-    });
-    if (!membership) throw new AppError(404, ErrorCode.NOT_FOUND, 'No such person here.');
-    if (membership.status !== 'INVITED') {
+  private async pending(userId: string) {
+    const invited = await this.db.user.findUnique({ where: { id: userId } });
+    if (!invited) throw new AppError(404, ErrorCode.NOT_FOUND, 'No such person here.');
+    if (invited.status !== 'INVITED') {
       throw new AppError(
         409,
         ErrorCode.CONFLICT,
@@ -391,10 +340,10 @@ export class InvitationService {
       );
     }
     const invitation = await this.db.invitation.findFirst({
-      where: { membershipId: membership.id, acceptedAt: null, revokedAt: null },
+      where: { userId: invited.id, acceptedAt: null, revokedAt: null },
       orderBy: { createdAt: 'desc' },
     });
-    return { membership, invitation };
+    return { user: invited, invitation };
   }
 
   private async valid(token: string) {

@@ -51,11 +51,11 @@ Roles that follow: **Outreach leader** (team, Saturdays, training, messages),
 - **Prayer requests** and follow-up notes written by the Membership team:
   both are behind `membership.people.read_sensitive`, which only the leader
   holds, and the member role must not be able to reach them.
-- Finance, Admin and every other church.
+- Finance and Admin.
 
 ## 6. What leaves the system, and who pays?
 
-- SMS reminders to the team, through Comms, counted against the church's cap.
+- SMS reminders to the team, through Comms, counted against the daily cap.
 - Session reports as PDFs, uploaded by the leader and kept in object storage
   (Phase 8, step 8.9). They may contain names and locations, and
   `person:erase` cannot reach inside a PDF — the erasure runbook says to check

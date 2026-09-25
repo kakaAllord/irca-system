@@ -27,9 +27,9 @@ export class ChurchModulesService {
   ) {}
 
   async list() {
-    const rows = await this.db.client.churchModule.findMany();
+    const rows = await this.db.client.moduleState.findMany();
     const state = new Map(rows.map((r) => [r.moduleKey, r]));
-    const counts = await this.db.client.membershipRole.groupBy({
+    const counts = await this.db.client.userRole.groupBy({
       by: ['roleId'],
       _count: { roleId: true },
     });
@@ -51,7 +51,6 @@ export class ChurchModulesService {
   }
 
   async setEnabled(moduleKey: string, enabled: boolean): Promise<void> {
-    const churchId = this.auth.requireChurch();
     const module = moduleByKey(moduleKey);
     if (!module || module.key === 'platform')
       throw new AppError(404, ErrorCode.NOT_FOUND, 'No such portal.');
@@ -60,13 +59,12 @@ export class ChurchModulesService {
     }
 
     await this.db.tx(async (tx) => {
-      await tx.churchModule.upsert({
-        where: { churchId_moduleKey: { churchId, moduleKey } },
+      await tx.moduleState.upsert({
+        where: { moduleKey },
         update: enabled
           ? { enabled: true, enabledAt: new Date(), enabledById: this.auth.actorUserId }
           : { enabled: false, disabledAt: new Date(), disabledById: this.auth.actorUserId },
         create: {
-          churchId,
           moduleKey,
           enabled,
           enabledAt: new Date(),
@@ -82,7 +80,7 @@ export class ChurchModulesService {
     });
 
     // Its built-in roles appear the moment it is turned on.
-    if (enabled) await this.registry.syncModuleRoles(churchId, moduleKey);
+    if (enabled) await this.registry.syncModuleRoles(moduleKey);
     this.usage.inc('admin.modules.toggled');
   }
 }

@@ -42,9 +42,9 @@ describe('running a church: people, roles and portals', () => {
 
   /** A church with its built-in roles, and an administrator holding them all. */
   async function church(code = 'IRCA') {
-    const c = await createChurch(db, code);
-    await registry.syncModuleRoles(c.id, 'admin');
-    const admin = await createUserWithPermissions(db, c.id, [
+    await createChurch(db, code);
+    await registry.syncModuleRoles('admin');
+    const admin = await createUserWithPermissions(db, [
       'admin.users.read',
       'admin.users.invite',
       'admin.users.manage',
@@ -56,11 +56,10 @@ describe('running a church: people, roles and portals', () => {
     ]);
     const cookie = await signIn(admin.email, admin.password);
     const { rows } = await db.query<{ id: string; system_key: string }>(
-      `select id, system_key from roles where church_id = $1 and system_key is not null`,
-      [c.id],
+      `select id, system_key from roles where system_key is not null`,
     );
     const systemRole = (key: string) => rows.find((r) => r.system_key === key)!.id;
-    return { c, admin, cookie, systemRole };
+    return { admin, cookie, systemRole };
   }
 
   /** Sends what the outbox owes and returns the link in the last message. */
@@ -114,8 +113,23 @@ describe('running a church: people, roles and portals', () => {
       .expect(410);
   });
 
+  it('limits how many invitation links one address can look up, twenty a minute', async () => {
+    const describe = () => portal(app, '10.9.9.12').get('/v1/invitations/not-a-real-token');
+    for (let i = 0; i < 20; i++) await describe().expect(410);
+    await describe().expect(429);
+  });
+
+  it('limits how many times one address can try to accept an invitation, twenty a minute', async () => {
+    const accept = () =>
+      portal(app, '10.9.9.13').post('/v1/invitations/not-a-real-token/accept', {
+        password: 'kilimanjaro sunrise tea',
+      });
+    for (let i = 0; i < 20; i++) await accept().expect(410);
+    await accept().expect(429);
+  });
+
   it('will not invite the same person twice, or hand out a role of a portal that is off', async () => {
-    const { cookie, systemRole, c } = await church();
+    const { cookie, systemRole } = await church();
     const role = systemRole('admin.auditor');
     const invite = (email: string, roleIds = [role]) =>
       portal(app).post(
@@ -130,13 +144,12 @@ describe('running a church: people, roles and portals', () => {
 
     // A role from a portal this church has turned off cannot be given out.
     await db.query(
-      `insert into church_modules (church_id, module_key, enabled) values ($1, 'finance', false)`,
-      [c.id],
+      `insert into module_state (module_key, enabled) values ('finance', false)
+       on conflict (module_key) do update set enabled = false`,
     );
     const { rows } = await db.query<{ id: string }>(
-      `insert into roles (id, church_id, module_key, name, updated_at)
-       values (gen_random_uuid(), $1, 'finance', 'Finance clerk', now()) returning id`,
-      [c.id],
+      `insert into roles (id, module_key, name, updated_at)
+       values (gen_random_uuid(), 'finance', 'Finance clerk', now()) returning id`,
     );
     const refused = await invite('clerk@example.com', [rows[0]!.id]).expect(422);
     expect(refused.body.error.code).toBe('ROLE_NOT_AVAILABLE');
@@ -161,8 +174,8 @@ describe('running a church: people, roles and portals', () => {
   });
 
   it('signs someone out of the church the moment their access is disabled', async () => {
-    const { c, cookie } = await church();
-    const person = await createUserWithPermissions(db, c.id, ['admin.users.read']);
+    const { cookie } = await church();
+    const person = await createUserWithPermissions(db, ['admin.users.read']);
     const theirs = await signIn(person.email, person.password);
     await portal(app).get('/v1/auth/me', theirs).expect(200);
 
@@ -203,12 +216,12 @@ describe('running a church: people, roles and portals', () => {
           moduleKey: 'admin',
           name: 'Sneaky',
           description: '',
-          permissionKeys: ['platform.churches.read'],
+          permissionKeys: ['dev.health.read'],
         },
         cookie,
       )
       .expect(422);
-    expect(foreign.body.error.details.permissionKeys).toEqual(['platform.churches.read']);
+    expect(foreign.body.error.details.permissionKeys).toEqual(['dev.health.read']);
 
     // Built-in roles are the code's, not a church's, to change.
     const { rows } = await db.query<{ id: string }>(
@@ -234,6 +247,13 @@ describe('running a church: people, roles and portals', () => {
       .expect(409);
     expect(core.body.error.message).toMatch(/always on/);
 
+    // The dev console became core too, once there was no longer a platform
+    // above the church to run it instead (D-decisions: single-church pivot).
+    const devCore = await portal(app)
+      .put('/v1/admin/modules/dev', { enabled: false }, cookie)
+      .expect(409);
+    expect(devCore.body.error.message).toMatch(/always on/);
+
     // Only portals that exist in the code can be turned on at all, which is
     // what stops anyone inventing one. Media arrives in a later phase.
     await portal(app).put('/v1/admin/modules/media', { enabled: true }, cookie).expect(404);
@@ -243,11 +263,12 @@ describe('running a church: people, roles and portals', () => {
       'membership',
       'finance',
       'admin',
+      'dev',
     ]);
   });
 
   it('shows what changed in the church, and never a view-as', async () => {
-    const { c, cookie, systemRole } = await church();
+    const { cookie, systemRole } = await church();
     await portal(app)
       .post(
         '/v1/admin/users/invitations',
@@ -267,9 +288,8 @@ describe('running a church: people, roles and portals', () => {
 
     // Sign-ins and view-as rows belong to the platform, not to the church.
     await db.query(
-      `insert into audit_events (id, church_id, source, action, created_at)
-       values (gen_random_uuid(), $1, 'core', 'impersonation.started', now())`,
-      [c.id],
+      `insert into audit_events (id, source, action, created_at)
+       values (gen_random_uuid(), 'core', 'impersonation.started', now())`,
     );
     const after = await portal(app).get('/v1/admin/audit', cookie).expect(200);
     expect(
@@ -278,8 +298,7 @@ describe('running a church: people, roles and portals', () => {
   });
 
   it('lets someone reset a forgotten password, and says the same thing either way', async () => {
-    const { c } = await church();
-    const person = await createUser(db, { churchId: c.id });
+    const person = await createUser(db);
 
     const unknown = await portal(app)
       .post('/v1/auth/forgot-password', { email: 'nobody@example.com' })
@@ -306,36 +325,5 @@ describe('running a church: people, roles and portals', () => {
       .post('/v1/auth/reset-password', { token, password: 'another long password' })
       .expect(410);
     await signIn(person.email, 'new long password here');
-  });
-
-  it('sends each church its share when many emails are waiting', async () => {
-    const a = await church('AAA');
-    const b = await church('BBB');
-    for (let i = 0; i < 8; i++) {
-      await portal(app)
-        .post(
-          '/v1/admin/users/invitations',
-          {
-            email: `a${i}@example.com`,
-            fullName: `Person ${i}`,
-            roleIds: [a.systemRole('admin.auditor')],
-          },
-          a.cookie,
-        )
-        .expect(201);
-    }
-    await portal(app)
-      .post(
-        '/v1/admin/users/invitations',
-        { email: 'b0@example.com', fullName: 'B Person', roleIds: [b.systemRole('admin.auditor')] },
-        b.cookie,
-      )
-      .expect(201);
-
-    // One church's pile must not delay another church's single message.
-    emails.sent.length = 0;
-    await outbox.sendDue();
-    expect(emails.sent.some((m) => m.to === 'b0@example.com')).toBe(true);
-    expect(emails.sent.filter((m) => m.to.startsWith('a')).length).toBeLessThanOrEqual(5);
   });
 });

@@ -9,7 +9,7 @@ import {
   type PaymentMethod,
 } from '@irca/shared';
 import type { ChangeRequest, FinanceTransaction } from '../../generated/prisma/client.js';
-import type { TenantTx } from '../../core/database/db.service.js';
+import type { Tx } from '../../core/database/db.service.js';
 import { RequestAuth } from '../../core/context/request-auth.js';
 import { AppError } from '../../core/http/app-error.js';
 import { AuditService } from '../../core/audit/audit.service.js';
@@ -64,7 +64,7 @@ export class TransactionChangeHandler implements ChangeRequestHandler, OnModuleI
     this.registry.register(this);
   }
 
-  async describe(tx: TenantTx, entityId: string): Promise<DescribedEntity | null> {
+  async describe(tx: Tx, entityId: string): Promise<DescribedEntity | null> {
     const row = await this.row(tx, entityId);
     if (!row) return null;
     return {
@@ -75,7 +75,7 @@ export class TransactionChangeHandler implements ChangeRequestHandler, OnModuleI
   }
 
   async validate(
-    tx: TenantTx,
+    tx: Tx,
     input: {
       action: ChangeAction;
       proposed: Record<string, unknown>;
@@ -100,9 +100,7 @@ export class TransactionChangeHandler implements ChangeRequestHandler, OnModuleI
       await this.catalog.requireUsable(tx, 'expense', text(proposed.expenseItemId));
     }
     if (proposed.txnDate) {
-      const church = await tx.church.findFirstOrThrow({
-        where: { id: this.auth.requireChurch() },
-      });
+      const church = await tx.church.findFirstOrThrow();
       const today = new Intl.DateTimeFormat('en-CA', { timeZone: church.timezone }).format(
         new Date(),
       );
@@ -115,7 +113,7 @@ export class TransactionChangeHandler implements ChangeRequestHandler, OnModuleI
   }
 
   async explain(
-    tx: TenantTx,
+    tx: Tx,
     input: {
       action: ChangeAction;
       proposed: Record<string, unknown>;
@@ -156,7 +154,7 @@ export class TransactionChangeHandler implements ChangeRequestHandler, OnModuleI
     return { changes, warning };
   }
 
-  async apply(tx: TenantTx, request: ChangeRequest): Promise<Record<string, unknown> | null> {
+  async apply(tx: Tx, request: ChangeRequest): Promise<Record<string, unknown> | null> {
     const row = await this.row(tx, request.entityId);
     if (!row) throw new AppError(404, ErrorCode.NOT_FOUND, 'The entry no longer exists.');
     const proposed = request.proposed as Record<string, unknown>;
@@ -242,13 +240,12 @@ export class TransactionChangeHandler implements ChangeRequestHandler, OnModuleI
    * either number learns the whole story.
    */
   private async replace(
-    tx: TenantTx,
+    tx: Tx,
     row: FinanceTransaction,
     request: ChangeRequest,
     proposed: Record<string, unknown>,
   ): Promise<FinanceTransaction> {
-    const churchId = this.auth.requireChurch();
-    const church = await tx.church.findFirstOrThrow({ where: { id: churchId } });
+    const church = await tx.church.findFirstOrThrow();
     const date = text(proposed.txnDate);
     const year = Number(date.slice(0, 4));
     const month = Number(date.slice(5, 7));
@@ -264,7 +261,6 @@ export class TransactionChangeHandler implements ChangeRequestHandler, OnModuleI
 
     const replacement = await tx.financeTransaction.create({
       data: {
-        churchId,
         code,
         kind: row.kind,
         txnDate: new Date(`${date}T00:00:00Z`),
@@ -291,7 +287,7 @@ export class TransactionChangeHandler implements ChangeRequestHandler, OnModuleI
   }
 
   private async void(
-    tx: TenantTx,
+    tx: Tx,
     row: FinanceTransaction,
     request: ChangeRequest,
     reason: string,
@@ -309,23 +305,21 @@ export class TransactionChangeHandler implements ChangeRequestHandler, OnModuleI
     });
   }
 
-  private async row(tx: TenantTx, id: string): Promise<FinanceTransaction | null> {
-    const churchId = this.auth.requireChurch();
+  private async row(tx: Tx, id: string): Promise<FinanceTransaction | null> {
     if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
-    return tx.financeTransaction.findFirst({ where: { id, churchId } });
+    return tx.financeTransaction.findFirst({ where: { id } });
   }
 
-  private async itemNames(tx: TenantTx, ids: unknown[]): Promise<Map<string, string>> {
-    const churchId = this.auth.requireChurch();
+  private async itemNames(tx: Tx, ids: unknown[]): Promise<Map<string, string>> {
     const wanted = [...new Set(ids.filter(Boolean).map(String))];
     if (!wanted.length) return new Map();
     const [sources, items] = await Promise.all([
       tx.financeIncomeSource.findMany({
-        where: { churchId, id: { in: wanted } },
+        where: { id: { in: wanted } },
         select: { id: true, name: true },
       }),
       tx.financeExpenseItem.findMany({
-        where: { churchId, id: { in: wanted } },
+        where: { id: { in: wanted } },
         select: { id: true, name: true },
       }),
     ]);

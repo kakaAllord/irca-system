@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { PrismaCore } from '../database/prisma-clients.js';
+import { PrismaDb } from '../database/prisma-clients.js';
 import { ImpersonationService } from '../impersonation/impersonation.service.js';
 import { EmailService } from '../email/email.service.js';
 import { JobRunner } from './job-runner.service.js';
@@ -15,12 +15,12 @@ export class ScheduledJobs {
   constructor(
     private readonly jobs: JobRunner,
     private readonly impersonation: ImpersonationService,
-    private readonly db: PrismaCore,
+    private readonly db: PrismaDb,
     private readonly email: EmailService,
     private readonly snapshot: UsageSnapshot,
   ) {}
 
-  /** How much of the database each church uses, before anyone is awake. */
+  /** How big each table is, and what there is, measured before anyone is awake. */
   @Cron('0 2 * * *', { name: 'usage-snapshot', timeZone: 'Africa/Dar_es_Salaam' })
   snapshotUsage() {
     return this.jobs.run('usage-snapshot', () => this.snapshot.run());

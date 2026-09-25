@@ -53,13 +53,11 @@ never stored (Phase 7, step 7.5).
   Comms holds it for phone numbers — so the person detail Comms is served
   must be the gated shape, and prayer requests must not be in it. Check this
   with a test, not by looking.
-- Another church's anything.
 - Finance's transactions, beyond pledge balances in Phase 9.
 
 ## 6. What leaves the system, and who pays?
 
-SMS through **Beem Africa**, one platform account, credentials held by the
-owner and set in the host's environment. Cost is counted per segment
-(`sms.segments`, `sms.cost_minor`) and charged to the church, with a daily cap
-per church so a mistake cannot empty the credit. The owner's monthly budget:
-_TBC — needed for the cap._
+SMS through **Beem Africa**, one account for the church, whose key and secret
+Communications enters and changes itself in the portal (D26). Cost is counted
+per segment (`sms.segments`, `sms.cost`), with a daily cap so a mistake cannot
+empty the credit. The monthly budget: _TBC — needed for the cap._

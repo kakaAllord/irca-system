@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import type { ApiClient } from '../../generated/prisma/client.js';
-import { PrismaCore } from '../database/prisma-clients.js';
+import { PrismaDb } from '../database/prisma-clients.js';
 
 /** Long enough that guessing is hopeless, short enough to paste into an env file. */
 const BYTES = 32;
@@ -12,7 +12,8 @@ const TOUCH_EVERY_MS = 60_000;
 export const hashKey = (key: string) => createHash('sha256').update(key).digest('hex');
 
 /**
- * The keys a church's own app uses to reach the API.
+ * The keys the church's own apps use to reach the API: today, the
+ * registration form.
  *
  * Only the hash is stored, as with sessions and invitations: a leak of the
  * table is not a leak of the keys. The first characters are kept in the clear
@@ -20,18 +21,16 @@ export const hashKey = (key: string) => createHash('sha256').update(key).digest(
  */
 @Injectable()
 export class ApiClientService {
-  constructor(private readonly db: PrismaCore) {}
+  constructor(private readonly db: PrismaDb) {}
 
   /** Makes a key. The plain text is returned once and never stored. */
   async create(input: {
-    churchId: string;
     kind: 'REGISTRATION';
     name: string;
   }): Promise<{ key: string; client: ApiClient }> {
     const key = PREFIX + randomBytes(BYTES).toString('base64url');
     const client = await this.db.apiClient.create({
       data: {
-        churchId: input.churchId,
         kind: input.kind,
         name: input.name,
         keyPrefix: key.slice(0, 12),
@@ -59,14 +58,6 @@ export class ApiClientService {
     return client;
   }
 
-  async churchIsActive(churchId: string): Promise<boolean> {
-    const church = await this.db.church.findUnique({
-      where: { id: churchId },
-      select: { status: true },
-    });
-    return church?.status === 'ACTIVE';
-  }
-
   async revoke(id: string): Promise<boolean> {
     const { count } = await this.db.apiClient.updateMany({
       where: { id, revokedAt: null },
@@ -75,10 +66,7 @@ export class ApiClientService {
     return count > 0;
   }
 
-  list(churchId?: string) {
-    return this.db.apiClient.findMany({
-      where: churchId ? { churchId } : {},
-      orderBy: { createdAt: 'desc' },
-    });
+  list() {
+    return this.db.apiClient.findMany({ orderBy: { createdAt: 'desc' } });
   }
 }

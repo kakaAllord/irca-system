@@ -251,7 +251,7 @@ alone keeps churches apart, and tests prove each one on its own (02, step 2.4a).
 - `audit_events`' policy also hides impersonation rows from church readers
   (D16 enforced by the database).
 - **Cost:** a few extra round trips per standalone query, about 1 ms each in
-  region, measured in 6.6. Interactive transactions and raw SQL must go through
+  region, measured in 10 step 10.1. Interactive transactions and raw SQL must go through
   `db.tx()`, which ESLint enforces.
 
 | Option considered | Why not |
@@ -279,6 +279,71 @@ of its sections names the phase step that builds it.
 **Choice: A.** A church moves to its own database when its share of the
 database passes about 30%, it dominates latency, or a contract or data-residency
 requirement asks. The owner decides, on the dev console's evidence.
+
+**Superseded 23 Sept 2026 — see D27.** The owner decided against multi-tenancy
+altogether, not just against building it now: a second church gets its own
+deployment and its own database from day one, so there is never a shared
+database whose share to watch or move away from.
+
+---
+
+## D27. One church, one deployment: multi-tenancy removed (owner, 23 Sept 2026)
+
+D20 chose a shared database with the door left open to dedicated ones later.
+The owner closed that door instead: **a second church is a second
+deployment**, with its own database, its own environment variables and its
+own domain, not a row in a shared one. Reasoning, in the owner's terms: IRCA
+is the only church for the foreseeable future, and the machinery D20 asked
+for — the Prisma tenant extension, row-level security scoped by
+`church_id`, a placement table and cluster registry, a platform role sitting
+above every church, per-church rate-limit fairness, a move tool for a church
+that outgrows the shared database — all of it guarded a boundary that would
+never be crossed, while making every query, every test and every new
+module's first slice harder to write than it needed to be. The 17 September
+notes and the module briefs never asked for one church to see or affect
+another; they asked for the church's own work to go well.
+
+**What this undoes.** Every business table loses its `church_id` and the
+composite keys built on it. Roles hang off the user directly instead of a
+church membership, since a user now belongs to exactly one church — this
+deployment's. The `churches` table becomes `church`, one row of settings
+(name, timezone, currency, the code entry numbers are built from) held to
+exactly one row by a check constraint, not a table of tenants. The platform
+role, the platform-wide usage table, memberships and placements are gone. The
+dev console (Phase 6) stops being a view onto every church and becomes an
+ordinary portal — `dev` — with an ordinary role, because there is no longer
+an "above the church" for anyone to stand on. `multi-tenancy.md` is retired;
+its still-true rules that were never about tenancy (the activity log cannot
+be rewritten, a finance entry changes only through an approved request) live
+on as database grants and triggers, unchanged.
+
+**What replaces it, if IRCA is ever not the only church.** A second church is
+stood up the way 6.7 already describes standing up an environment: its own
+Neon database, migrated the same way, its own copy of every app, its own
+domain. Nothing shared, nothing to keep apart, because nothing is together.
+The cost is a second everything to deploy and pay for from day one, which the
+owner judged cheaper than carrying multi-tenancy's weight through every phase
+for a church that may never arrive.
+
+**Impact on the rest of the plan.** `06-dev-console-hardening-launch.md`,
+`multi-tenancy.md` and `appendix-database.md` are rewritten to match. Phases 7,
+8 and 9 were drafted before this decision and still give every one of their
+new tables a `church_id` column and `[churchId, …]` unique constraints; those
+need the same treatment the schema itself already got — the column dropped,
+the constraint narrowed to what it was really protecting. Phase 10's per-church
+export, import, move and purge tooling (its whole reason for existing was
+moving one church out of a shared database) has nothing left to do in a
+world where a second church is a second deployment, and needs rewriting to
+keep only what is still real: backups of the one database, the restore
+drill, load testing and monitoring.
+
+**Done on 24 September 2026:** `06-dev-console-hardening-launch.md`,
+`multi-tenancy.md` (retired, with a table of where each surviving guarantee
+now lives) and `appendix-database.md` are rewritten. One thing the first pass
+at this decision removed by mistake was put back: the read-only database role
+for viewing as someone, which was never about tenancy. Phases 7, 8, 9 and
+10 were rewritten the same day for one church, and so that someone new to
+the code can follow them step by step.
 
 ---
 
@@ -319,8 +384,8 @@ and enforced in one place so no caller can forget them:
    form and on the evangelism capture screen — and every message carries the
    way out (`Jibu ACHA kuacha.` / `Reply STOP to stop.`), counted into the
    cost so the figure is honest.
-2. **A STOP is permanent.** An inbound reply blocks that number for the
-   church and sets `sms_opt_out` on the matching person or membership. The
+2. **A STOP is permanent.** An inbound reply blocks that number and sets
+   `sms_opt_out` on the matching person or staff user. The
    resolver refuses blocked numbers, counts them as skipped, and shows the
    sender "12 of 143 were left alone".
 3. **A department's contacts are not its team.** The owner chose: a
@@ -370,16 +435,15 @@ is the first file the system keeps, and the finance receipts of Q7 are the
 second, so it is decided once:
 
 - S3-compatible object storage (Cloudflare R2 or Backblaze B2), one bucket,
-  keys prefixed by church slug and module. Private; read through a
-  short-lived signed URL.
-- One core `files` table recording church, module, what it belongs to, the
-  key, the size and who uploaded it — so the next module does not invent a
-  second one.
+  keys prefixed by module. Private; read through a short-lived signed URL.
+- One core `files` table recording the module, what it belongs to, the key,
+  the size and who uploaded it — so the next module does not invent a second
+  one.
 - The browser uploads straight to storage with a presigned POST; a 10 MB PDF
   never travels through the API. Type and size are refused by the presign
   itself.
-- `storage.bytes` and `storage.files` per church, which the dev console has
-  been reserving since Phase 6.
+- `storage.bytes` and `storage.files`, charted by the dev console like every
+  other metric.
 - **Erasure cannot reach inside a PDF.** `docs/data-inventory.md` and the
   erasure runbook say so plainly, and the runbook tells the operator to check
   the period's session reports by hand.
@@ -391,14 +455,37 @@ second, so it is decided once:
 A message is not a unit: 160 GSM-7 characters are one segment, 161 are two,
 and one curly apostrophe pasted from Word turns the whole thing into UCS-2 at
 70. Swahili reminders are exactly the long ones. So the system counts
-segments (shared code, unit-tested), multiplies by a rate held in church
+segments (shared code, unit-tested), multiplies by a price held in the
 settings, and shows the total **before** the send button does anything:
 "Send to 143 people · about 4,290 TZS".
 
-Beside it, two guards the owner's budget depends on: a per-church **daily
-cap** that refuses an over-budget send and names the figure it would have
-been, and an hourly read of Beem's balance into `sms.balance_minor`, which the
-monitoring of 6.9 alerts on before a Sunday rather than after one.
+Beside it, two guards the owner's budget depends on: a **daily cap** that
+refuses an over-budget send and names the figure it would have been, and an
+hourly read of Beem's balance into `sms.balance`, which the
+monitoring of 10 step 10.4 alerts on before a Sunday rather than after one.
+
+---
+
+## D26. The Beem key is held in the database, not `.env` (owner, 24 Sept 2026)
+
+The original design (07 step 7.4) put the Beem API key and secret in the
+host's environment, set once by the owner. The owner changed this: Beem hands
+out a new key, or the church moves to a different Beem account, without
+warning, and an env-var change means a redeploy every time — a delay Comms
+should not have to wait on. So the credentials are a row in the database,
+edited by Comms itself from `Settings → Beem account` behind
+`comms.settings.manage`, the same permission that already held the sender id
+and daily cap.
+
+They cannot use the hash-only pattern the codebase already uses for session
+and API client keys (`hashKey`), because those only ever need to be
+*verified* — the Beem key and secret must come back out in plaintext, since
+the API sends them to Beem on every message. They are encrypted at rest
+instead (AES-256-GCM, the encryption key itself in `.env` as
+`BEEM_SETTINGS_KEY`, since that key is generated once and never needs to
+change the way the Beem account does), masked in the UI to the last four
+characters, and never sent back to the browser in full. Every save is
+audited, by summary only — never the key, before or after.
 
 ---
 
@@ -408,7 +495,7 @@ monitoring of 6.9 alerts on before a Sunday rather than after one.
 | --- | --- | --- |
 | Q1 | May a church admin give themselves roles in other modules (e.g. Finance manager)? | **Yes, audited.** They can already see everything through impersonation, so blocking it only adds friction. The audit log and the "who has access" page keep it visible. |
 | Q2 | Can a church admin impersonate *other admins*? | **Yes** ("admin can impersonate any other user"). Never a dev, never themselves, never while already impersonating. |
-| Q3 | Should a dev have direct *write* access to church data? | **No.** A dev sees church data only by impersonating (read-only) and runs platform operations (create a church, invite its first admin, suspend, view usage). Church financial records and prayer requests should never be silently editable by the vendor. If a fix is ever needed, it is a reviewed migration or script, not a click. |
+| Q3 | Should a dev have direct *write* access to church data? | **No.** A dev sees church data only by viewing as someone (read-only) and through the dev console. Church financial records and prayer requests should never be silently editable by whoever runs the system. If a fix is ever needed, it is a reviewed migration or script, not a click. |
 | Q4 | Your notes (17 Sept) describe portal users *requesting* access and an admin approving. This request says the admin invites by email. | **Build the invite flow now (Phase 3), and add "request access" later** as a small `access_requests` table that, once approved, calls the same invite code. |
 | Q5 | Should income sources also be a suggest-or-create catalog like expenses? | **Yes.** Same component, same rules, so "Tithe", "Sadaka" and "Harambee" do not end up spelled five ways. |
 | Q6 | Can a posted transaction be edited? | *Superseded by D17 (21 Sept 2026): nothing is edited directly; every change is a request an administrator approves.* |
@@ -418,4 +505,4 @@ monitoring of 6.9 alerts on before a Sunday rather than after one.
 
 | Q10 | Does a pledge reminder name the figure someone still owes? | **No by default.** A text saying "you promised 200,000 and have paid 50,000" is readable by whoever picks up the phone. The default template invites them to the office instead; a template carrying `{{balance}}` is possible, and needs the leadership's approval like any other (Phase 7 step 7.6, Phase 9 step 9.0). |
 | Q11 | Who owns a person reached by Outreach who never comes to church? | **The church, as an ordinary person record**, with `source = 'OUTREACH'` and their interactions. They are not a lesser kind of record. The retention question in `docs/data-inventory.md` section 5 covers them: if the church sets a period for never-followed-up registrations, it covers these too. |
-| Q12 | One Beem account for the platform, or one per church? | **One platform account at launch**, credentials in the host's environment, with the sender id settable per church. A church that grows into its own account gets `comms.provider_credentials` in its settings later; nothing in the schema assumes the shared one. |
+| Q12 | One Beem account for the platform, or one per church? | *Superseded by D26 and D27: there is one church per deployment, and its Beem account is held in the database, set by Communications itself.* |

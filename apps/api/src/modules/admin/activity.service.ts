@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Db } from '../../core/database/db.service.js';
 import { RequestAuth } from '../../core/context/request-auth.js';
+import { sql, join, type Sql } from '../../core/database/sql.js';
 
 export type ActivityQuery = {
   actorUserId?: string;
@@ -11,12 +12,25 @@ export type ActivityQuery = {
   limit: number;
 };
 
+type AuditRow = {
+  id: string;
+  actorUserId: string | null;
+  action: string;
+  summary: string | null;
+  entityType: string | null;
+  entityId: string | null;
+  before: unknown;
+  after: unknown;
+  createdAt: Date;
+};
+
 /**
  * What has been changed in this church.
  *
- * Impersonation is not here, and cannot be: those rows are the platform's, and
- * the database refuses them to a church reader as well (D16). The only reader
- * is the dev console's view-as log.
+ * Impersonation is not here, and cannot be: `church_audit_events()` can never
+ * return one of those rows, whatever this query asks for (D16, enforced in
+ * the database, see the init migration). The only reader of them is the dev
+ * console's view-as log.
  */
 @Injectable()
 export class ActivityService {
@@ -26,29 +40,22 @@ export class ActivityService {
   ) {}
 
   async list(query: ActivityQuery) {
-    const churchId = this.auth.requireChurch();
-    const rows = await this.db.client.auditEvent.findMany({
-      where: {
-        churchId,
-        source: 'feature',
-        impersonationId: null,
-        ...(query.actorUserId ? { actorUserId: query.actorUserId } : {}),
-        ...(query.action ? { action: { startsWith: query.action } } : {}),
-        ...(query.from || query.to
-          ? {
-              createdAt: {
-                ...(query.from ? { gte: new Date(query.from) } : {}),
-                ...(query.to ? { lte: new Date(`${query.to}T23:59:59.999Z`) } : {}),
-              },
-            }
-          : {}),
-        // Keyset paging: the audit log only grows, and counting pages would
-        // get slower every month.
-        ...(query.before ? { createdAt: { lt: new Date(query.before) } } : {}),
-      },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: query.limit + 1,
-    });
+    const conditions: Sql[] = [sql`source = 'feature'`];
+    if (query.actorUserId) conditions.push(sql`"actorUserId" = ${query.actorUserId}`);
+    if (query.action) conditions.push(sql`action like ${query.action + '%'}`);
+    if (query.from) conditions.push(sql`"createdAt" >= ${new Date(query.from)}`);
+    if (query.to) conditions.push(sql`"createdAt" <= ${new Date(`${query.to}T23:59:59.999Z`)}`);
+    // Keyset paging: the audit log only grows, and counting pages would get
+    // slower every month.
+    if (query.before) conditions.push(sql`"createdAt" < ${new Date(query.before)}`);
+
+    const rows = await this.db.client.$queryRaw<AuditRow[]>`
+      select id, "actorUserId", action, summary, "entityType", "entityId", before, after, "createdAt"
+      from church_audit_events()
+      where ${join(conditions, ' and ')}
+      order by "createdAt" desc, id desc
+      limit ${query.limit + 1}
+    `;
 
     const page = rows.slice(0, query.limit);
     const actors = await this.db.client.user.findMany({

@@ -1,6 +1,6 @@
 import { ErrorCode } from '@irca/shared';
 import type { PersonStage } from '../../generated/prisma/client.js';
-import type { TenantTx } from '../../core/database/db.service.js';
+import type { Tx } from '../../core/database/db.service.js';
 import { AppError } from '../../core/http/app-error.js';
 
 /** The journey, in order: from first visit to confirmed member. */
@@ -51,20 +51,19 @@ export function checkManualMove(from: PersonStage, to: PersonStage, note?: strin
  * always has an answer. Every stage change goes through here.
  */
 export async function moveStage(
-  tx: TenantTx,
-  person: { id: string; churchId: string; stage: PersonStage },
+  tx: Tx,
+  person: { id: string; stage: PersonStage },
   to: PersonStage,
   by: string | null,
   note?: string,
 ): Promise<void> {
   if (person.stage === to) return;
   await tx.person.update({
-    where: { churchId_id: { churchId: person.churchId, id: person.id } },
+    where: { id: person.id },
     data: { stage: to },
   });
   await tx.personStageEvent.create({
     data: {
-      churchId: person.churchId,
       personId: person.id,
       fromStage: person.stage,
       toStage: to,
@@ -75,13 +74,9 @@ export async function moveStage(
 }
 
 /** The stage someone was at before the latest move, for undoing a rejection. */
-export async function previousStage(
-  tx: TenantTx,
-  churchId: string,
-  personId: string,
-): Promise<PersonStage | null> {
+export async function previousStage(tx: Tx, personId: string): Promise<PersonStage | null> {
   const last = await tx.personStageEvent.findFirst({
-    where: { churchId, personId },
+    where: { personId },
     orderBy: { at: 'desc' },
   });
   return last?.fromStage ?? null;

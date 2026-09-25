@@ -12,7 +12,6 @@ import { ImpersonationService } from './impersonation.service.js';
 const StartSchema = z.object({
   subjectUserId: z.uuid(),
   /** Devs say which church; an administrator's own church is used. */
-  churchId: z.uuid().optional(),
 });
 
 @Controller('impersonation')
@@ -22,14 +21,14 @@ export class ImpersonationController {
     private readonly me: MeService,
   ) {}
 
-  @RequireAnyPermission('admin.users.impersonate', 'platform.users.impersonate')
+  @RequireAnyPermission('admin.users.impersonate', 'dev.users.impersonate')
   @WriteWithReadPermission("changes only the actor's own session, and grants read-only access")
   @Post()
   @HttpCode(200)
   async start(
     @Body(new ZodPipe(StartSchema)) body: z.infer<typeof StartSchema>,
   ): Promise<MeResponse> {
-    await this.impersonation.start(body.subjectUserId, body.churchId);
+    await this.impersonation.start(body.subjectUserId);
     // The portal reloads into the subject's view from this.
     return this.me.build();
   }

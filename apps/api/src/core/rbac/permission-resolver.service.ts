@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { ALL_PERMISSIONS, permissionKind, platformModule } from '@irca/shared';
-import { PrismaCore } from '../database/prisma-clients.js';
+import { ALL_PERMISSIONS, permissionKind } from '@irca/shared';
+import { PrismaDb } from '../database/prisma-clients.js';
 
-const IMPERSONATE = ['admin.users.impersonate', 'platform.users.impersonate'];
+const IMPERSONATE = ['admin.users.impersonate'];
 
 /**
- * What a request may do, worked out from roles, the church, and which modules
- * that church has switched on.
+ * What a request may do, worked out from the person's roles and which portals
+ * are switched on.
  *
  * One indexed query per request. There is deliberately no cache: this is a
  * join over a handful of small tables, and a stale permission is a security
@@ -14,51 +14,30 @@ const IMPERSONATE = ['admin.users.impersonate', 'platform.users.impersonate'];
  */
 @Injectable()
 export class PermissionResolver {
-  constructor(private readonly db: PrismaCore) {}
+  constructor(private readonly db: PrismaDb) {}
 
-  /** Everything a person may do in one church. */
-  async forMember(userId: string, churchId: string): Promise<Set<string>> {
+  /**
+   * Everything a person may do. Used by the session guard and by sign-in, so
+   * both answer the same thing.
+   *
+   * A role of a portal that is switched off grants nothing, which is what
+   * makes turning a portal off safe: the roles and the data stay, and come
+   * back untouched when it is switched on again.
+   */
+  async forUser(userId: string): Promise<Set<string>> {
     const rows = await this.db.$queryRaw<{ permission_key: string }[]>`
-      -- tenant: filtered by m.church_id below; core connection, so RLS does not scope it
       select distinct rp.permission_key
-      from church_memberships m
-      -- Every join is pinned to the same church: a role of another church,
-      -- linked here by a bug or on purpose, must grant nothing. The database
-      -- refuses such a link too (composite foreign keys), and this is the
-      -- second lock on the same door.
-      join membership_roles mr on mr.membership_id = m.id and mr.church_id = m.church_id
-      join roles r             on r.id = mr.role_id and r.church_id = m.church_id and r.deleted_at is null
-      join role_permissions rp on rp.role_id = r.id and rp.church_id = r.church_id
+      from user_roles ur
+      join roles r             on r.id = ur.role_id and r.deleted_at is null
+      join role_permissions rp on rp.role_id = r.id
       join permissions p       on p.key = rp.permission_key and p.retired_at is null
-      join church_modules cm   on cm.church_id = m.church_id
-                              and cm.module_key = r.module_key
-                              and cm.enabled
-      where m.user_id = ${userId}::uuid
-        and m.church_id = ${churchId}::uuid
-        and m.status = 'ACTIVE'
+      join module_state ms     on ms.module_key = r.module_key and ms.enabled
+      join users u             on u.id = ur.user_id
+      where ur.user_id = ${userId}::uuid
+        and u.status = 'ACTIVE'
     `;
     // A permission that no longer exists in code grants nothing.
     return new Set(rows.map((r) => r.permission_key).filter((key) => key in ALL_PERMISSIONS));
-  }
-
-  /**
-   * Everything a signed-in person may do right now: their roles in the church
-   * they are working in, plus the dev console if they are a dev. Used by the
-   * session guard and by sign-in, so both answer the same thing.
-   */
-  async forSignedIn(
-    userId: string,
-    platformRole: 'NONE' | 'DEV',
-    churchId: string | null,
-  ): Promise<Set<string>> {
-    const own = churchId ? await this.forMember(userId, churchId) : new Set<string>();
-    if (platformRole !== 'DEV') return own;
-    return new Set([...this.forDev(), ...own]);
-  }
-
-  /** A platform dev's own permissions: the dev console, and nothing of any church. */
-  forDev(): Set<string> {
-    return new Set(Object.keys(platformModule.permissions));
   }
 
   /**

@@ -58,7 +58,10 @@ describe('module definitions', () => {
     expect(permissionKind('admin.users.invite')).toBe('write');
   });
 
-  it('has exactly one core church module, admin', () => {
-    expect(CHURCH_MODULES.filter((m) => m.kind === 'core').map((m) => m.key)).toEqual(['admin']);
+  it('keeps the core portals last, so they sit at the bottom of the sidebar', () => {
+    expect(CHURCH_MODULES.filter((m) => m.kind === 'core').map((m) => m.key)).toEqual([
+      'admin',
+      'dev',
+    ]);
   });
 });

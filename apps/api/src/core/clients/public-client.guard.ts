@@ -39,13 +39,7 @@ export class PublicClientGuard implements CanActivate {
     if (!client) {
       throw new AppError(401, ErrorCode.UNAUTHENTICATED, 'This app is not allowed to do that.');
     }
-    // A paused church's form stops taking registrations, as its staff stop
-    // signing in: the church is paused, not just its people.
-    if (!(await this.clients.churchIsActive(client.churchId))) {
-      throw new AppError(403, ErrorCode.FORBIDDEN, "This church's account is paused.");
-    }
 
-    this.cls.set('churchId', client.churchId);
     this.cls.set('apiClientId', client.id);
     return true;
   }

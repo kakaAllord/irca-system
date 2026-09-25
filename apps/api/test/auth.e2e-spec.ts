@@ -29,8 +29,8 @@ describe('signing in and out', () => {
     portal(app, ip).post('/v1/auth/login', { email, password });
 
   it('signs in with the right password and sets a safe cookie', async () => {
-    const church = await createChurch(db);
-    const u = await createUser(db, { churchId: church.id });
+    await createChurch(db);
+    const u = await createUser(db);
     const res = await login(u.email, u.password).expect(200);
 
     expect(res.body.user.email).toBe(u.email);
@@ -82,6 +82,25 @@ describe('signing in and out', () => {
     expect(res.body.error.code).toBe('RATE_LIMITED');
   });
 
+  it('limits forgot-password requests from one address, five per fifteen minutes', async () => {
+    const forgot = () =>
+      portal(app, '10.9.9.10').post('/v1/auth/forgot-password', { email: 'nobody@example.com' });
+    for (let i = 0; i < 5; i++) await forgot().expect(202);
+    await forgot().expect(429);
+  });
+
+  it('limits reset-password attempts from one address, ten per fifteen minutes', async () => {
+    const reset = () =>
+      portal(app, '10.9.9.11').post('/v1/auth/reset-password', {
+        token: 'not-a-real-token',
+        password: 'kilimanjaro sunrise tea',
+      });
+    // The token is wrong every time, so each call fails on its own before the
+    // eleventh ever reaches the handler.
+    for (let i = 0; i < 10; i++) await reset().expect(410);
+    await reset().expect(429);
+  });
+
   it('knows who is signed in, and forgets them after sign-out', async () => {
     const u = await createUser(db);
     await portal(app).get('/v1/auth/me').expect(401);
@@ -111,16 +130,6 @@ describe('signing in and out', () => {
     await portal(app).get('/v1/auth/me', cookie).expect(401);
   });
 
-  it('drops a church the person no longer belongs to, but keeps them signed in', async () => {
-    const church = await createChurch(db);
-    const u = await createUser(db, { churchId: church.id });
-    const cookie = sessionCookie(await login(u.email, u.password).expect(200));
-    await db.query(`update church_memberships set status = 'DISABLED' where user_id = $1`, [u.id]);
-    const me = await portal(app).get('/v1/auth/me', cookie).expect(200);
-    expect(me.body.church).toBeNull();
-    expect(me.body.churches).toEqual([]);
-  });
-
   it('refuses writes without the portal header, or from another origin', async () => {
     const server = request(app.getHttpServer());
     const noHeader = await server.post('/v1/auth/logout').expect(403);
@@ -143,6 +152,32 @@ describe('signing in and out', () => {
       `select abs(extract(epoch from (created_at - now()))) as drift from sessions`,
     );
     expect(Number(rows[0].drift)).toBeLessThan(60);
+  });
+
+  it('tells every cache not to keep an answer, signed in or not', async () => {
+    const u = await createUser(db);
+    const cookie = sessionCookie(
+      await portal(app)
+        .post('/v1/auth/login', { email: u.email, password: u.password })
+        .expect(200),
+    );
+    for (const res of [
+      await portal(app).get('/v1/auth/me', cookie).expect(200),
+      await portal(app).get('/v1/auth/me').expect(401),
+    ]) {
+      expect(res.headers['cache-control']).toBe('private, no-store');
+    }
+  });
+
+  it('answers with the safe headers, says nothing about itself, and allows no other site', async () => {
+    const res = await portal(app)
+      .get('/v1/auth/me')
+      .set('Origin', 'https://elsewhere.example')
+      .expect(401);
+    expect(res.headers['x-powered-by']).toBeUndefined();
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
+    expect(res.headers['strict-transport-security']).toMatch(/max-age=/);
+    expect(res.headers['access-control-allow-origin']).toBeUndefined();
   });
 
   it('stores only a hash of the session token', async () => {

@@ -49,17 +49,17 @@ describe('the books: numbers, items and corrections', () => {
 
   /** A church running Finance, with someone holding the permissions asked for. */
   async function church(code = 'IRCA', permissions: string[] = ALL_FINANCE) {
-    const c = await createChurch(db, code, ['admin', 'finance']);
-    await registry.syncModuleRoles(c.id, 'finance');
-    const person = await createUserWithPermissions(db, c.id, permissions, {
+    await createChurch(db, code, ['admin', 'finance']);
+    await registry.syncModuleRoles('finance');
+    const person = await createUserWithPermissions(db, permissions, {
       moduleKey: 'finance',
     });
-    return { c, person, cookie: await signIn(person.email, person.password) };
+    return { person, cookie: await signIn(person.email, person.password) };
   }
 
   /** Someone in the same church with only these permissions. */
-  async function alsoIn(churchId: string, permissions: string[], moduleKey = 'finance') {
-    const person = await createUserWithPermissions(db, churchId, permissions, { moduleKey });
+  async function alsoIn(permissions: string[], moduleKey = 'finance') {
+    const person = await createUserWithPermissions(db, permissions, { moduleKey });
     return { person, cookie: await signIn(person.email, person.password) };
   }
 
@@ -144,18 +144,6 @@ describe('the books: numbers, items and corrections', () => {
 
       const next = await record(cookie, { kind: 'EXPENSE', expenseItemId: item.id }).expect(201);
       expect(next.body.code).toBe('IRCA-EXP-2026-09-000002');
-    });
-
-    it('counts each church on its own', async () => {
-      const irca = await church('IRCA');
-      const test = await church('TEST');
-      const ircaItem = await newItem(irca.cookie, 'Generator fuel');
-      const testItem = await newItem(test.cookie, 'Generator fuel');
-
-      const a = await record(irca.cookie, { kind: 'EXPENSE', expenseItemId: ircaItem.id });
-      const b = await record(test.cookie, { kind: 'EXPENSE', expenseItemId: testItem.id });
-      expect(a.body.code).toBe('IRCA-EXP-2026-09-000001');
-      expect(b.body.code).toBe('TEST-EXP-2026-09-000001');
     });
 
     it('returns the first entry when the same submit arrives twice', async () => {
@@ -252,7 +240,7 @@ describe('the books: numbers, items and corrections', () => {
 
   describe('what the database itself refuses', () => {
     it('will not let the app delete or rewrite an entry', async () => {
-      const { c, cookie } = await church();
+      const { cookie } = await church();
       const item = await newItem(cookie, 'Generator fuel');
       await record(cookie, { kind: 'EXPENSE', expenseItemId: item.id }).expect(201);
 
@@ -260,7 +248,6 @@ describe('the books: numbers, items and corrections', () => {
         connectionString: process.env.DATABASE_URL,
       });
       await asApp.connect();
-      await asApp.query(`select set_config('app.church_id', $1, false)`, [c.id]);
 
       await expect(asApp.query(`delete from finance_transactions`)).rejects.toThrow(
         /permission denied/,
@@ -276,26 +263,26 @@ describe('the books: numbers, items and corrections', () => {
     });
 
     it('freezes a church code once the church has entries', async () => {
-      const { c, cookie } = await church();
+      const { cookie } = await church();
       const item = await newItem(cookie, 'Generator fuel');
       await record(cookie, { kind: 'EXPENSE', expenseItemId: item.id }).expect(201);
 
-      await expect(
-        db.query(`update churches set code = 'NEW' where id = $1`, [c.id]),
-      ).rejects.toThrow(/cannot change/);
+      await expect(db.query(`update church set code = 'NEW' where id = 1`)).rejects.toThrow(
+        /cannot change/,
+      );
     });
   });
 
   describe('corrections', () => {
     /** An entry, its clerk, and two administrators who can decide about it. */
     async function withEntry() {
-      const { c, cookie } = await church();
+      const { cookie } = await church();
       const item = await newItem(cookie, 'Generator fuel');
       const entry = (await record(cookie, { kind: 'EXPENSE', expenseItemId: item.id }).expect(201))
         .body;
-      const admin = await alsoIn(c.id, ['admin.requests.read', 'admin.requests.decide'], 'admin');
-      const other = await alsoIn(c.id, ['admin.requests.read', 'admin.requests.decide'], 'admin');
-      return { c, cookie, item, entry, admin, other };
+      const admin = await alsoIn(['admin.requests.read', 'admin.requests.decide'], 'admin');
+      const other = await alsoIn(['admin.requests.read', 'admin.requests.decide'], 'admin');
+      return { cookie, item, entry, admin, other };
     }
 
     const ask = (cookie: string, code: string, body: Record<string, unknown>) =>
@@ -328,14 +315,13 @@ describe('the books: numbers, items and corrections', () => {
     });
 
     it('lets nobody decide their own request', async () => {
-      const { c, cookie, entry } = await withEntry();
+      const { cookie, entry } = await withEntry();
       // Someone who may both ask and decide still may not decide their own.
       const both = await alsoIn(
-        c.id,
         ['finance.transactions.read', 'finance.transactions.request_change'],
         'finance',
       );
-      await alsoIn(c.id, ['admin.requests.decide'], 'admin');
+      await alsoIn(['admin.requests.decide'], 'admin');
       const asked = await ask(cookie, entry.code, {
         action: 'VOID',
         proposed: {},
@@ -381,9 +367,9 @@ describe('the books: numbers, items and corrections', () => {
 
       // A request written against the old amount, decided after the change.
       await db.query(
-        `insert into change_requests (id, church_id, module_key, entity_type, entity_id,
+        `insert into change_requests (id, module_key, entity_type, entity_id,
            entity_label, action, before, proposed, reason, requested_by_id)
-         select gen_random_uuid(), church_id, 'finance', 'finance_transaction', id::text,
+         select gen_random_uuid(), 'finance', 'finance_transaction', id::text,
            code, 'EDIT', jsonb_build_object('amount', '150000.00'),
            jsonb_build_object('amount', '99000.00'), 'stale', $2::uuid
          from finance_transactions where code = $1`,
@@ -509,18 +495,15 @@ describe('the books: numbers, items and corrections', () => {
       await portal(app)[route[0]](route[1], allowed.cookie).expect(200);
 
       // Someone in the same church holding every other finance permission.
-      const without = await alsoIn(
-        allowed.c.id,
-        ALL_FINANCE.filter((p) => p !== permission),
-      );
+      const without = await alsoIn(ALL_FINANCE.filter((p) => p !== permission));
       await portal(app)[route[0]](route[1], without.cookie).expect(403);
     });
 
     it('refuses recording, creating items and asking for changes without the permission', async () => {
-      const { c, cookie } = await church();
+      const { cookie } = await church();
       const item = await newItem(cookie, 'Generator fuel');
       const entry = (await record(cookie, { kind: 'EXPENSE', expenseItemId: item.id })).body;
-      const viewer = await alsoIn(c.id, [
+      const viewer = await alsoIn([
         'finance.transactions.read',
         'finance.catalog.read',
         'finance.overview.read',
@@ -542,34 +525,17 @@ describe('the books: numbers, items and corrections', () => {
         .patch(`/v1/finance/expense-items/${item.id}`, { name: 'Renamed' }, viewer.cookie)
         .expect(403);
     });
-
-    it('gives another church nothing of this one', async () => {
-      const irca = await church('IRCA');
-      const test = await church('TEST');
-      const item = await newItem(irca.cookie, 'Generator fuel');
-      const entry = (await record(irca.cookie, { kind: 'EXPENSE', expenseItemId: item.id })).body;
-
-      await portal(app).get(`/v1/finance/transactions/${entry.code}`, test.cookie).expect(404);
-      const theirs = await portal(app).get('/v1/finance/transactions', test.cookie).expect(200);
-      expect(theirs.body.rows).toHaveLength(0);
-      const suggestions = await portal(app)
-        .get('/v1/finance/expense-items/suggest?q=generator', test.cookie)
-        .expect(200);
-      expect(suggestions.body.items).toHaveLength(0);
-      // Nor can they use this church's item for an entry of their own.
-      await record(test.cookie, { kind: 'EXPENSE', expenseItemId: item.id }).expect(404);
-    });
   });
 
   describe('totals and downloads', () => {
     it('adds up what is posted, and leaves out what was voided', async () => {
       const { cookie, entry, admin } = await (async () => {
-        const { c, cookie } = await church();
+        const { cookie } = await church();
         const item = await newItem(cookie, 'Generator fuel');
         const source = await newItem(cookie, 'Sunday offering', 'income-sources');
         await record(cookie, { kind: 'INCOME', incomeSourceId: source.id, amount: '2340000' });
         const entry = (await record(cookie, { kind: 'EXPENSE', expenseItemId: item.id })).body;
-        const admin = await alsoIn(c.id, ['admin.requests.decide'], 'admin');
+        const admin = await alsoIn(['admin.requests.decide'], 'admin');
         return { cookie, entry, admin };
       })();
 
@@ -612,9 +578,9 @@ describe('the books: numbers, items and corrections', () => {
 
   describe('while being viewed as', () => {
     it('refuses every write, whatever the person could otherwise do', async () => {
-      const { c, cookie, person } = await church();
+      const { cookie, person } = await church();
       const item = await newItem(cookie, 'Generator fuel');
-      const admin = await alsoIn(c.id, ['admin.users.impersonate', 'admin.users.read'], 'admin');
+      const admin = await alsoIn(['admin.users.impersonate', 'admin.users.read'], 'admin');
 
       await portal(app)
         .post('/v1/impersonation', { subjectUserId: person.id }, admin.cookie)

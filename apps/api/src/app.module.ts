@@ -12,9 +12,8 @@ import { InvitationsModule } from './core/invitations/invitations.module.js';
 import { AdminModule } from './modules/admin/admin.module.js';
 import { FinanceModule } from './modules/finance/finance.module.js';
 import { MembershipModule } from './modules/membership/membership.module.js';
-import { PlatformModule } from './modules/platform/platform.module.js';
+import { DevModule } from './modules/dev/dev.module.js';
 import { AllExceptionsFilter } from './core/http/all-exceptions.filter.js';
-import { NoStoreInterceptor } from './core/http/no-store.interceptor.js';
 import { HealthController } from './core/health/health.controller.js';
 import { AuthModule } from './core/auth/auth.module.js';
 import { SessionGuard } from './core/auth/session.guard.js';
@@ -48,7 +47,7 @@ import { UsageInterceptor } from './core/usage/usage.interceptor.js';
     AdminModule,
     FinanceModule,
     MembershipModule,
-    PlatformModule,
+    DevModule,
   ],
   controllers: [
     HealthController,
@@ -68,7 +67,6 @@ import { UsageInterceptor } from './core/usage/usage.interceptor.js';
     { provide: APP_GUARD, useExisting: RateLimitGuard },
     { provide: APP_GUARD, useExisting: ReadOnlyGuard },
     { provide: APP_GUARD, useExisting: PermissionsGuard },
-    { provide: APP_INTERCEPTOR, useExisting: NoStoreInterceptor },
     { provide: APP_INTERCEPTOR, useExisting: UsageInterceptor },
     { provide: APP_INTERCEPTOR, useExisting: AuditInterceptor },
   ],

@@ -6,8 +6,9 @@ export const EnvSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']),
     PORT: z.coerce.number().int().positive().default(4000),
+    /** Everything the app does, as irca_app. */
     DATABASE_URL: z.url(),
-    DATABASE_URL_CORE: z.url(),
+    /** Feature code while viewing as someone, as irca_readonly: reads only. */
     DATABASE_URL_READONLY: z.url(),
     DIRECT_DATABASE_URL: z.url(),
     PORTAL_ORIGIN: z.url(),
@@ -18,6 +19,8 @@ export const EnvSchema = z
     SESSION_IDLE_HOURS: z.coerce.number().int().positive(),
     TRUST_PROXY: z.coerce.number().int().min(0).default(1),
     LOG_LEVEL: z.enum(LOG_LEVELS).default('info'),
+    /** How many recent log lines the dev console can read back. */
+    LOG_BUFFER_LINES: z.coerce.number().int().min(0).max(20_000).default(2_000),
 
     /** 'log' prints emails, 'memory' keeps them for tests, 'resend' sends them. */
     EMAIL_PROVIDER: z.enum(['log', 'memory', 'resend']).default('log'),
@@ -27,6 +30,12 @@ export const EnvSchema = z
   .refine((env) => env.EMAIL_PROVIDER !== 'resend' || !!env.RESEND_API_KEY, {
     message: 'RESEND_API_KEY is required when EMAIL_PROVIDER is resend',
     path: ['RESEND_API_KEY'],
+  })
+  // Browsers accept a __Host- cookie only from this exact host, over HTTPS,
+  // for every path, so a neighbouring subdomain cannot plant a session.
+  .refine((env) => env.NODE_ENV !== 'production' || env.SESSION_COOKIE_NAME.startsWith('__Host-'), {
+    message: 'SESSION_COOKIE_NAME must start with __Host- in production',
+    path: ['SESSION_COOKIE_NAME'],
   })
   .refine((env) => env.EMAIL_PROVIDER !== 'memory' || env.NODE_ENV === 'test', {
     message: 'EMAIL_PROVIDER=memory is only for tests',

@@ -6,15 +6,13 @@ import { RequestAuth } from '../context/request-auth.js';
 import { UsageService } from '../usage/usage.service.js';
 
 const SAFE_WINDOW_MS = 60_000;
-/** One person cannot flood their own church. */
+/** One person cannot flood the API for everyone else. */
 const PER_USER = 300;
-/** One church cannot use up the capacity every church shares. */
-const PER_CHURCH = 1_200;
 
 type Window = { count: number; resetAt: number };
 
 /**
- * Limits per person and per church, on top of the per-address limit the
+ * A limit per person, on top of the per-address limit the
  * throttler applies.
  *
  * Counters are in memory, which is right for one API instance. Before running
@@ -36,16 +34,8 @@ export class RateLimitGuard implements CanActivate {
     if (req.path === '/health') return true;
 
     const userId = this.auth.actorUserId;
-    const churchId = this.auth.churchId;
     if (userId)
       this.hit(`u:${userId}`, PER_USER, 'You are making too many requests. Wait a minute.');
-    if (churchId) {
-      this.hit(
-        `c:${churchId}`,
-        PER_CHURCH,
-        'Your church is making too many requests at once. Wait a minute and try again.',
-      );
-    }
     return true;
   }
 

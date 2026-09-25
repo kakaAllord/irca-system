@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import pg from 'pg';
-import { PrismaCore } from '../src/core/database/prisma-clients.js';
+import { PrismaDb } from '../src/core/database/prisma-clients.js';
 import { erasePerson } from '../src/cli/commands/person-erase.js';
 import { createApp, createChurch, createUser, ownerDb, truncateAll } from './helpers.js';
 
@@ -20,75 +20,73 @@ describe('erasing one person, at their request', () => {
   beforeEach(() => truncateAll(db));
 
   /** A person with everything a person can have, and another one beside her. */
-  async function seed(churchId: string) {
-    const staff = await createUser(db, { churchId });
+  async function seed() {
+    const staff = await createUser(db);
     const registrationId = randomUUID();
     const personId = randomUUID();
     await db.query(
-      `insert into registrations (id, church_id, token, lang, status, fullname, phone, prayer, updated_at)
-       values ($1, $2, $3, 'sw', 'submitted', 'Neema Mollel', '712345678', 'Pray for my mother', now())`,
-      [registrationId, churchId, 'n'.repeat(32)],
+      `insert into registrations (id, token, lang, status, fullname, phone, prayer, updated_at)
+       values ($1, $2, 'sw', 'submitted', 'Neema Mollel', '712345678', 'Pray for my mother', now())`,
+      [registrationId, 'n'.repeat(32)],
     );
     await db.query(
-      `insert into people (id, church_id, registration_id, full_name, phone, stage, updated_at)
-       values ($1, $2, $3, 'Neema Mollel', '712345678', 'VISITOR', now())`,
-      [personId, churchId, registrationId],
+      `insert into people (id, registration_id, full_name, phone, stage, updated_at)
+       values ($1, $2, 'Neema Mollel', '712345678', 'VISITOR', now())`,
+      [personId, registrationId],
     );
     await db.query(
-      `insert into person_notes (id, church_id, person_id, kind, body, author_id, created_at)
-       values (gen_random_uuid(), $1, $2, 'VISIT', 'Visited at home', $3, now())`,
-      [churchId, personId, staff.id],
+      `insert into person_notes (id, person_id, kind, body, author_id, created_at)
+       values (gen_random_uuid(), $1, 'VISIT', 'Visited at home', $2, now())`,
+      [personId, staff.id],
     );
     await db.query(
-      `insert into person_stage_events (id, church_id, person_id, to_stage, at)
-       values (gen_random_uuid(), $1, $2, 'VISITOR', now())`,
-      [churchId, personId],
+      `insert into person_stage_events (id, person_id, to_stage, at)
+       values (gen_random_uuid(), $1, 'VISITOR', now())`,
+      [personId],
     );
     await db.query(
-      `insert into membership_applications (id, church_id, person_id, source, submitted_at)
-       values (gen_random_uuid(), $1, $2, 'FORM', now())`,
-      [churchId, personId],
+      `insert into membership_applications (id, person_id, source, submitted_at)
+       values (gen_random_uuid(), $1, 'FORM', now())`,
+      [personId],
     );
     const groupId = randomUUID();
-    await db.query(
-      `insert into foundation_groups (id, church_id, name) values ($1, $2, 'Thursday group')`,
-      [groupId, churchId],
-    );
+    await db.query(`insert into foundation_groups (id, name) values ($1, 'Thursday group')`, [
+      groupId,
+    ]);
     const enrollmentId = randomUUID();
     await db.query(
-      `insert into foundation_enrollments (id, church_id, person_id, group_id) values ($1, $2, $3, $4)`,
-      [enrollmentId, churchId, personId, groupId],
+      `insert into foundation_enrollments (id, person_id, group_id) values ($1, $2, $3)`,
+      [enrollmentId, personId, groupId],
     );
     await db.query(
-      `insert into foundation_attendance (church_id, enrollment_id, session_no, mark, marked_by_id, marked_at)
-       values ($1, $2, 1, 'ATTENDED', $3, now())`,
-      [churchId, enrollmentId, staff.id],
+      `insert into foundation_attendance (enrollment_id, session_no, mark, marked_by_id, marked_at)
+       values ($1, 1, 'ATTENDED', $2, now())`,
+      [enrollmentId, staff.id],
     );
     await db.query(
-      `insert into audit_events (id, church_id, source, action, entity_type, entity_id, summary, after)
-       values (gen_random_uuid(), $1, 'feature', 'membership.person.added', 'person', $2,
+      `insert into audit_events (id, source, action, entity_type, entity_id, summary, after)
+       values (gen_random_uuid(), 'feature', 'membership.person.added', 'person', $1,
                'Added Neema Mollel to the people', '{"fullName":"Neema Mollel"}')`,
-      [churchId, personId],
+      [personId],
     );
     return { personId, registrationId };
   }
 
-  const erase = (churchCode: string, personId: string, dryRun = false) =>
+  const erase = (personId: string, dryRun = false) =>
     erasePerson({
-      churchCode,
       personId,
       dryRun,
-      db: app.get(PrismaCore),
+      db: app.get(PrismaDb),
       ownerUrl: process.env.DIRECT_DATABASE_URL!,
     });
 
   const rows = async (sql: string, params: unknown[] = []) => (await db.query(sql, params)).rows;
 
   it('takes everything about them, and leaves the log standing without their name', async () => {
-    const church = await createChurch(db, 'IRCA', ['admin', 'membership']);
-    const { personId, registrationId } = await seed(church.id);
+    await createChurch(db, 'IRCA', ['admin', 'membership']);
+    const { personId, registrationId } = await seed();
 
-    const result = await erase(church.code, personId);
+    const result = await erase(personId);
 
     expect(result).toMatchObject({
       registrationErased: true,
@@ -130,10 +128,10 @@ describe('erasing one person, at their request', () => {
   });
 
   it('changes nothing on a dry run', async () => {
-    const church = await createChurch(db, 'IRCA', ['admin', 'membership']);
-    const { personId } = await seed(church.id);
+    await createChurch(db, 'IRCA', ['admin', 'membership']);
+    const { personId } = await seed();
 
-    const result = await erase(church.code, personId, true);
+    const result = await erase(personId, true);
 
     expect(result.notes).toBe(1);
     expect(await rows('select 1 from people')).toHaveLength(1);
@@ -141,25 +139,15 @@ describe('erasing one person, at their request', () => {
     expect(await rows(`select 1 from audit_events where action = 'person.erased'`)).toHaveLength(0);
   });
 
-  it('refuses a person who belongs to another church', async () => {
-    const irca = await createChurch(db, 'IRCA', ['admin', 'membership']);
-    const other = await createChurch(db, 'TEST', ['admin', 'membership']);
-    const { personId } = await seed(irca.id);
-
-    await expect(erase(other.code, personId)).rejects.toThrow(/No person/);
-    expect(await rows('select 1 from people')).toHaveLength(1);
-  });
-
   it('will not take a confirmation that is not the person id', async () => {
-    const church = await createChurch(db, 'IRCA', ['admin', 'membership']);
-    const { personId } = await seed(church.id);
+    await createChurch(db, 'IRCA', ['admin', 'membership']);
+    const { personId } = await seed();
 
     await expect(
       erasePerson({
-        churchCode: church.code,
         personId,
         dryRun: false,
-        db: app.get(PrismaCore),
+        db: app.get(PrismaDb),
         ownerUrl: process.env.DIRECT_DATABASE_URL!,
         confirm: async () => 'yes',
       }),

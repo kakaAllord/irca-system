@@ -36,8 +36,8 @@ describe('the registration form, served by the API', () => {
 
   /** A church with a form of its own. */
   async function church(code = 'IRCA') {
-    const c = await createChurch(db, code, ['admin', 'membership']);
-    return { c, form: asForm(app, await createApiClient(db, c.id)) };
+    await createChurch(db, code, ['admin', 'membership']);
+    return { form: asForm(app, await createApiClient(db)) };
   }
 
   const start = async (form: ReturnType<typeof asForm>, lang = 'en') =>
@@ -49,14 +49,14 @@ describe('the registration form, served by the API', () => {
     };
 
   it('starts a registration, in the language asked for, and makes a person', async () => {
-    const { c, form } = await church();
+    const { form } = await church();
     const registration = await start(form, 'sw');
 
     expect(registration.token).toMatch(/^[a-f0-9]{32}$/);
     expect(registration.lang).toBe('sw');
     expect(registration.currentStep).toBe('who');
     // The office should see somebody from the first tap, finished or not.
-    const { rows } = await db.query(`select stage from people where church_id = $1`, [c.id]);
+    const { rows } = await db.query(`select stage from people`);
     expect(rows).toHaveLength(1);
     expect(rows[0].stage).toBe('VISITOR');
   });
@@ -150,28 +150,18 @@ describe('the registration form, served by the API', () => {
     expect((await form.get(`/v1/public/registrations/${token}`)).body.lang).toBe('fr');
   });
 
-  it('refuses a token that is not one, and one from another church', async () => {
-    const mine = await church('IRCA');
-    const theirs = await church('TEST');
-    const { token } = await start(mine.form);
-
-    await mine.form.get('/v1/public/registrations/not-a-token').expect(400);
-    await mine.form.get(`/v1/public/registrations/${'0'.repeat(32)}`).expect(404);
-    await theirs.form.get(`/v1/public/registrations/${token}`).expect(404);
-  });
-
   it('refuses a request with no key, a made-up key, or a revoked one', async () => {
-    const { c, form } = await church();
+    const { form } = await church();
     const { token } = await start(form);
 
     await asForm(app, 'irk_nonsense').get(`/v1/public/registrations/${token}`).expect(401);
-    const key = await createApiClient(db, c.id);
+    const key = await createApiClient(db);
     await db.query(`update api_clients set revoked_at = now() where key_hash is not null`);
     await asForm(app, key).get(`/v1/public/registrations/${token}`).expect(401);
   });
 
   it('sends the form in at the last question, and records it once', async () => {
-    const { c, form } = await church();
+    const { form } = await church();
     const { token } = await start(form);
 
     // The whole path a visitor who lives in Arusha is shown.
@@ -196,10 +186,7 @@ describe('the registration form, served by the API', () => {
 
     // One line in the log for the whole form, and nobody is the actor: the
     // visitor is not a user of this system.
-    const { rows } = await db.query(
-      `select action, actor_user_id from audit_events where church_id = $1`,
-      [c.id],
-    );
+    const { rows } = await db.query(`select action, actor_user_id from audit_events`);
     expect(rows).toHaveLength(1);
     expect(rows[0].action).toBe('membership.registration.submitted');
     expect(rows[0].actor_user_id).toBeNull();
@@ -231,9 +218,8 @@ describe('the registration form, served by the API', () => {
   });
 
   it('slows down one visitor starting registration after registration', async () => {
-    const { c } = await church();
     // One visitor address for all of them; the limit is per visitor.
-    const form = asForm(app, await createApiClient(db, c.id), '41.1.2.3');
+    const form = asForm(app, await createApiClient(db), '41.1.2.3');
     for (let i = 0; i < 20; i++) {
       await form.post('/v1/public/registrations', { lang: 'en' }).expect(201);
     }

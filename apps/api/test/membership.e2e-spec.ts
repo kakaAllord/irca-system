@@ -71,16 +71,16 @@ describe('the Membership portal', () => {
 
   /** A church running Membership, with its form, and someone holding these permissions. */
   async function church(permissions: string[] = ALL, code = 'IRCA') {
-    const c = await createChurch(db, code, ['admin', 'membership']);
-    const form = asForm(app, await createApiClient(db, c.id));
-    const person = await createUserWithPermissions(db, c.id, permissions, {
+    await createChurch(db, code, ['admin', 'membership']);
+    const form = asForm(app, await createApiClient(db));
+    const person = await createUserWithPermissions(db, permissions, {
       moduleKey: 'membership',
     });
-    return { c, form, cookie: await signIn(person.email, person.password) };
+    return { form, cookie: await signIn(person.email, person.password) };
   }
 
-  async function also(churchId: string, permissions: string[]) {
-    const person = await createUserWithPermissions(db, churchId, permissions, {
+  async function also(permissions: string[]) {
+    const person = await createUserWithPermissions(db, permissions, {
       moduleKey: 'membership',
     });
     return signIn(person.email, person.password);
@@ -109,9 +109,9 @@ describe('the Membership portal', () => {
 
   describe('what people wrote in confidence', () => {
     it('is in the record for those allowed, and not even a key for anyone else', async () => {
-      const { c, form, cookie } = await church();
+      const { form, cookie } = await church();
       const { personId } = await registered(form);
-      const followUp = await also(c.id, WITHOUT_SENSITIVE);
+      const followUp = await also(WITHOUT_SENSITIVE);
 
       const full = await portal(app).get(`/v1/membership/people/${personId}`, cookie).expect(200);
       expect(full.body.sensitive.prayer).toBe('For my mother');
@@ -127,9 +127,9 @@ describe('the Membership portal', () => {
     });
 
     it('cannot be found by searching for an email one may not see', async () => {
-      const { c, form, cookie } = await church();
+      const { form, cookie } = await church();
       await registered(form, { email: 'neema@example.com' });
-      const followUp = await also(c.id, WITHOUT_SENSITIVE);
+      const followUp = await also(WITHOUT_SENSITIVE);
 
       const found = await portal(app).get('/v1/membership/people?q=neema@example', cookie);
       expect(found.body.total).toBe(1);
@@ -268,12 +268,9 @@ describe('the Membership portal', () => {
 
   describe('applications', () => {
     it('are the pastors’ to decide, and confirm only after the probation month', async () => {
-      const { c, form, cookie } = await church();
+      const { form, cookie } = await church();
       const { personId } = await registered(form);
-      const office = await also(
-        c.id,
-        ALL.filter((p) => p !== 'membership.applications.decide'),
-      );
+      const office = await also(ALL.filter((p) => p !== 'membership.applications.decide'));
 
       const created = await portal(app)
         .post('/v1/membership/applications', { personId }, office)
@@ -337,21 +334,6 @@ describe('the Membership portal', () => {
         .expect(204);
       const person = await portal(app).get(`/v1/membership/people/${personId}`, cookie);
       expect(person.body.stage).toBe('NEW_CONVERT');
-    });
-  });
-
-  describe('keeping churches apart', () => {
-    it('gives another church nothing of this one', async () => {
-      const mine = await church(ALL, 'IRCA');
-      const theirs = await church(ALL, 'TEST');
-      const { personId } = await registered(mine.form);
-
-      await portal(app).get(`/v1/membership/people/${personId}`, theirs.cookie).expect(404);
-      const list = await portal(app).get('/v1/membership/people', theirs.cookie).expect(200);
-      expect(list.body.total).toBe(0);
-      await portal(app)
-        .post('/v1/membership/applications', { personId }, theirs.cookie)
-        .expect(404);
     });
   });
 
@@ -437,9 +419,9 @@ describe('the Membership portal', () => {
       ];
 
     it.each(Object.keys(ROLES))('%s can do exactly what it says', async (roleKey) => {
-      const { c, form } = await church();
+      const { form } = await church();
       const { personId } = await registered(form);
-      const cookie = await also(c.id, [...ROLES[roleKey]!]);
+      const cookie = await also([...ROLES[roleKey]!]);
 
       for (const route of ROUTES) {
         const status = await route.call(cookie, personId);
@@ -452,12 +434,11 @@ describe('the Membership portal', () => {
 
   describe('while being viewed as', () => {
     it('refuses every change, and still shows the pages', async () => {
-      const { c, form } = await church();
+      const { form } = await church();
       const { personId } = await registered(form);
-      const pastor = await createUserWithPermissions(db, c.id, ALL, { moduleKey: 'membership' });
+      const pastor = await createUserWithPermissions(db, ALL, { moduleKey: 'membership' });
       const admin = await createUserWithPermissions(
         db,
-        c.id,
         ['admin.users.impersonate', 'admin.users.read'],
         { moduleKey: 'admin' },
       );

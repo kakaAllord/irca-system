@@ -19,6 +19,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:reset": "prisma migrate reset --force",
     "db:seed": "prisma db seed",
+    "db:demo": "tsx prisma/demo.ts",
     "cli": "npm run -s build && node dist/cli/main.js"
   },
   "dependencies": {

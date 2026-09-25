@@ -1,11 +1,11 @@
 import { Controller, Get, Res } from '@nestjs/common';
 import type { Response } from 'express';
-import { PrismaCore } from '../database/prisma-clients.js';
+import { PrismaDb } from '../database/prisma-clients.js';
 import { Public } from '../auth/decorators.js';
 
 @Controller('health')
 export class HealthController {
-  constructor(private readonly db: PrismaCore) {}
+  constructor(private readonly db: PrismaDb) {}
 
   /**
    * For uptime monitors and the host's health check: 200 when the API can reach

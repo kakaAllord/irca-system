@@ -5,48 +5,65 @@
 //
 // It runs from the compiled build, never through tsx: Nest's dependency
 // injection needs the decorator metadata that tsc emits and esbuild does not.
+// The runbooks in docs/runbooks say when to reach for each one.
 //
-// Commands:
+// Setting up:
+//   church:setup --code IRCA --name "<church name>" [--timezone <tz>] [--currency TZS]
+//       Writes the church's one row of settings into a fresh database. Once
+//       only; after that the settings are changed in the dev console.
+//
 //   user:create-dev --email <email> --name "<full name>"
-//       Creates the account, or promotes an existing one, to the platform dev
-//       role, and sets its password (asked for twice, never echoed). The only
-//       way anyone becomes a dev: no endpoint can grant it.
+//       Creates the account, or takes over an existing one, sets its password
+//       (asked for twice, never echoed) and gives it the Developer and
+//       Church administrator roles, which is how the first person gets in.
 //
 //   registry:sync
 //       Writes the permissions and built-in roles the code defines into the
 //       database. The API does this at every boot; this is for a fresh
 //       database that must be seeded before the API has ever run.
 //
-//   api-client:create --church <CODE> --kind REGISTRATION --name "<what it is>"
-//       Makes a key a church's own app uses to call the API. The key is
+// When something has gone wrong:
+//   user:send-reset --email <email>
+//       Queues the same reset email "Forgot password" sends. The API sends it.
+//
+//   role:grant --email <email> --role <built-in role key, e.g. admin.administrator>
+//       The last resort for a church with no administrator who can sign in.
+//
+//   sessions:revoke --email <email>
+//       Signs someone out of every browser now. Pair it with disabling them.
+//
+// The registration form's keys:
+//   api-client:create --name "<what it is>" [--kind REGISTRATION]
+//       Makes a key the registration form uses to call the API. The key is
 //       printed once and never stored, only its hash.
 //
-//   registrations:import --from <old database url> --church <CODE> [--dry-run]
+//   api-client:list
+//   api-client:revoke --id <uuid>
+//       A revoked key stops working at once; the row stays, so the log of
+//       which key did what still reads.
+//
+// Data:
+//   registrations:import --from <old database url> [--dry-run]
 //       Copies the live registrations into this database, keeping tokens and
 //       timestamps exactly. Re-runnable: it brings across only what changed.
 //
-//   registrations:export-back --to <old database url> --church <CODE> --since <iso time>
+//   registrations:export-back --to <old database url> --since <iso time>
 //       The other direction, for rolling a cutover back.
 //
-//   job:run <usage-snapshot | db-sample>
-//       Runs a scheduled job now, recorded like any other run.
-//
-//   person:erase --church <CODE> --person <uuid> [--dry-run]
+//   person:erase --person <uuid> [--dry-run]
 //       For an erasure request under the Personal Data Protection Act. Erases
 //       the person, their registration and answers, notes, journey, class
 //       records; keeps the activity log's lines with the name replaced by
 //       "[erased]". Asks for the id back before it does anything, and cannot
 //       be undone.
 //
-//   api-client:list [--church <CODE>]
-//   api-client:revoke --id <uuid>
-//       A revoked key stops working at once; the row stays, so the log of
-//       which key did what still reads.
+//   job:run <usage-snapshot | db-sample>
+//       Runs a scheduled job now, recorded like any other run.
 import { parseArgs } from 'node:util';
 import { NestFactory } from '@nestjs/core';
 import { normalizeEmail } from '@irca/shared';
 import { CliModule } from './cli.module.js';
-import { PrismaCore } from '../core/database/prisma-clients.js';
+import { PrismaDb } from '../core/database/prisma-clients.js';
 import { PasswordService } from '../core/auth/password.service.js';
 import { AppConfig } from '../config/app-config.js';
 import { RegistrySync } from '../core/rbac/registry-sync.service.js';
@@ -56,6 +73,15 @@ import { UsageService } from '../core/usage/usage.service.js';
 import { UsageSnapshot } from '../core/usage/usage-snapshot.service.js';
 import { exportRegistrationsBack, importRegistrations } from './commands/registrations-import.js';
 import { erasePerson, reportErasure } from './commands/person-erase.js';
+import {
+  DEV_ROLE_KEYS,
+  checkResettable,
+  grantRole,
+  revokeSessions,
+  setupChurch,
+} from './commands/access.js';
+import { SessionService } from '../core/auth/session.service.js';
+import { PasswordResetService } from '../core/auth/password-reset.service.js';
 import { promptHidden, promptLine } from './prompt.js';
 
 /* eslint-disable no-console -- a command-line tool reports to its terminal */
@@ -75,10 +101,12 @@ async function createDev(args: string[]) {
     throw new Error('Usage: user:create-dev --email <email> --name "<full name>"');
   const email = normalizeEmail(values.email);
 
-  const app = await NestFactory.createApplicationContext(CliModule, { logger: ['error', 'warn'] });
-  try {
+  await withApp(async (app) => {
     const passwords = app.get(PasswordService);
-    const db = app.get(PrismaCore);
+    const db = app.get(PrismaDb);
+    if (!(await db.church.findUnique({ where: { id: 1 } }))) {
+      throw new Error('Set the church up first: church:setup --code <CODE> --name "<name>".');
+    }
 
     const password = await promptHidden('Password: ');
     const problem = passwords.check(password);
@@ -90,20 +118,21 @@ async function createDev(args: string[]) {
     const now = new Date();
     const user = await db.user.upsert({
       where: { email },
-      update: { platformRole: 'DEV', status: 'ACTIVE', passwordHash, passwordChangedAt: now },
+      update: { status: 'ACTIVE', passwordHash, passwordChangedAt: now },
       create: {
         email,
-        fullName: values.name,
-        platformRole: 'DEV',
+        fullName: values.name!,
         status: 'ACTIVE',
         passwordHash,
         passwordChangedAt: now,
       },
     });
-    console.log(`${user.email} is a dev and can sign in.`);
-  } finally {
-    await app.close();
-  }
+    // The roles come from the code; on a database the API has never booted
+    // against, they are not written yet.
+    await app.get(RegistrySync).sync();
+    for (const roleKey of DEV_ROLE_KEYS) await grantRole({ db, email, roleKey });
+    console.log(`${user.email} is a developer and an administrator, and can sign in.`);
+  });
 }
 
 async function syncRegistry() {
@@ -135,23 +164,20 @@ async function createApiClient(args: string[]) {
   const { values } = parseArgs({
     args,
     options: {
-      church: { type: 'string' },
       kind: { type: 'string', default: 'REGISTRATION' },
       name: { type: 'string' },
     },
   });
-  if (!values.church || !values.name) {
-    throw new Error('Usage: api-client:create --church <CODE> --name "<what it is>"');
+  if (!values.name) {
+    throw new Error('Usage: api-client:create --name "<what it is>"');
   }
   if (values.kind !== 'REGISTRATION') throw new Error('The only kind today is REGISTRATION.');
 
   await withApp(async (app) => {
-    const db = app.get(PrismaCore);
-    const church = await db.church.findUnique({ where: { code: values.church!.toUpperCase() } });
-    if (!church) throw new Error(`No church with the code ${values.church}.`);
+    const db = app.get(PrismaDb);
+    const church = await db.church.findFirstOrThrow();
 
     const { key, client } = await app.get(ApiClientService).create({
-      churchId: church.id,
       kind: 'REGISTRATION',
       name: values.name!,
     });
@@ -164,15 +190,9 @@ async function createApiClient(args: string[]) {
 }
 
 async function listApiClients(args: string[]) {
-  const { values } = parseArgs({ args, options: { church: { type: 'string' } } });
+  parseArgs({ args, options: {} });
   await withApp(async (app) => {
-    const db = app.get(PrismaCore);
-    const church = values.church
-      ? await db.church.findUnique({ where: { code: values.church.toUpperCase() } })
-      : null;
-    if (values.church && !church) throw new Error(`No church with the code ${values.church}.`);
-
-    const clients = await app.get(ApiClientService).list(church?.id);
+    const clients = await app.get(ApiClientService).list();
     if (!clients.length) return console.log('No keys.');
     for (const client of clients) {
       const state = client.revokedAt
@@ -197,19 +217,17 @@ async function importRegistrationsCommand(args: string[]) {
     args,
     options: {
       from: { type: 'string' },
-      church: { type: 'string' },
       'dry-run': { type: 'boolean', default: false },
     },
   });
-  if (!values.from || !values.church) {
-    throw new Error('Usage: registrations:import --from <url> --church <CODE> [--dry-run]');
+  if (!values.from) {
+    throw new Error('Usage: registrations:import --from <url> [--dry-run]');
   }
   await withApp((app) =>
     importRegistrations({
       from: values.from!,
-      churchCode: values.church!,
       dryRun: values['dry-run'] ?? false,
-      db: app.get(PrismaCore),
+      db: app.get(PrismaDb),
     }),
   );
 }
@@ -217,19 +235,16 @@ async function importRegistrationsCommand(args: string[]) {
 async function exportRegistrationsCommand(args: string[]) {
   const { values } = parseArgs({
     args,
-    options: { to: { type: 'string' }, church: { type: 'string' }, since: { type: 'string' } },
+    options: { to: { type: 'string' }, since: { type: 'string' } },
   });
-  if (!values.to || !values.church || !values.since) {
-    throw new Error(
-      'Usage: registrations:export-back --to <url> --church <CODE> --since <iso time>',
-    );
+  if (!values.to || !values.since) {
+    throw new Error('Usage: registrations:export-back --to <url> --since <iso time>');
   }
   await withApp((app) =>
     exportRegistrationsBack({
       to: values.to!,
-      churchCode: values.church!,
       since: values.since!,
-      db: app.get(PrismaCore),
+      db: app.get(PrismaDb),
     }),
   );
 }
@@ -254,22 +269,20 @@ async function erasePersonCommand(args: string[]) {
   const { values } = parseArgs({
     args,
     options: {
-      church: { type: 'string' },
       person: { type: 'string' },
       'dry-run': { type: 'boolean', default: false },
     },
   });
-  if (!values.church || !values.person) {
-    throw new Error('Usage: person:erase --church <CODE> --person <uuid> [--dry-run]');
+  if (!values.person) {
+    throw new Error('Usage: person:erase --person <uuid> [--dry-run]');
   }
   const dryRun = values['dry-run'] ?? false;
 
   await withApp(async (app) => {
     const result = await erasePerson({
-      churchCode: values.church!,
       personId: values.person!,
       dryRun,
-      db: app.get(PrismaCore),
+      db: app.get(PrismaDb),
       ownerUrl: app.get(AppConfig).get('DIRECT_DATABASE_URL'),
       // Typing the id back is the whole safety catch: it cannot be answered
       // by holding down y, and it proves the right record is in front of them.
@@ -284,7 +297,92 @@ async function erasePersonCommand(args: string[]) {
   });
 }
 
+async function setupChurchCommand(args: string[]) {
+  const { values } = parseArgs({
+    args,
+    options: {
+      code: { type: 'string' },
+      name: { type: 'string' },
+      timezone: { type: 'string' },
+      currency: { type: 'string' },
+    },
+  });
+  if (!values.code || !values.name) {
+    throw new Error(
+      'Usage: church:setup --code IRCA --name "<church name>" [--timezone <tz>] [--currency TZS]',
+    );
+  }
+  await withApp(async (app) => {
+    const church = await setupChurch({
+      db: app.get(PrismaDb),
+      code: values.code!,
+      name: values.name!,
+      timezone: values.timezone,
+      currency: values.currency,
+    });
+    console.log(
+      `${church.name} (${church.code}) is set up, on ${church.timezone} time in ${church.currency}.`,
+    );
+    console.log('Next: user:create-dev for yourself, then sign in and invite the church.');
+  });
+}
+
+async function sendResetCommand(args: string[]) {
+  const { values } = parseArgs({ args, options: { email: { type: 'string' } } });
+  if (!values.email) throw new Error('Usage: user:send-reset --email <email>');
+  await withApp(async (app) => {
+    const user = await checkResettable(app.get(PrismaDb), values.email!);
+    await app.get(PasswordResetService).request(user.email);
+    console.log(`A reset link for ${user.email} is queued. The API sends it within a minute;`);
+    console.log('it works once, for one hour.');
+  });
+}
+
+async function grantRoleCommand(args: string[]) {
+  const { values } = parseArgs({
+    args,
+    options: { email: { type: 'string' }, role: { type: 'string' } },
+  });
+  if (!values.email || !values.role) {
+    throw new Error(
+      'Usage: role:grant --email <email> --role <role key, e.g. admin.administrator>',
+    );
+  }
+  await withApp(async (app) => {
+    const { user, role, granted } = await grantRole({
+      db: app.get(PrismaDb),
+      email: values.email!,
+      roleKey: values.role!,
+    });
+    console.log(
+      granted
+        ? `${user.fullName} now has the ${role.name} role. It is in the church's activity log.`
+        : `${user.fullName} already had the ${role.name} role. Nothing changed.`,
+    );
+  });
+}
+
+async function revokeSessionsCommand(args: string[]) {
+  const { values } = parseArgs({ args, options: { email: { type: 'string' } } });
+  if (!values.email) throw new Error('Usage: sessions:revoke --email <email>');
+  await withApp(async (app) => {
+    const { user, open } = await revokeSessions({
+      db: app.get(PrismaDb),
+      sessions: app.get(SessionService),
+      email: values.email!,
+    });
+    console.log(`${user.email} is signed out of ${open} browser${open === 1 ? '' : 's'}.`);
+    if (user.status === 'ACTIVE') {
+      console.log('Their password still works: disable them in the portal, or send a reset.');
+    }
+  });
+}
+
 const COMMANDS: Record<string, (args: string[]) => Promise<void>> = {
+  'church:setup': setupChurchCommand,
+  'user:send-reset': sendResetCommand,
+  'role:grant': grantRoleCommand,
+  'sessions:revoke': revokeSessionsCommand,
   'job:run': runJob,
   'user:create-dev': createDev,
   'registry:sync': syncRegistry,

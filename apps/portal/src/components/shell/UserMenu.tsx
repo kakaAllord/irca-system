@@ -6,14 +6,12 @@ import { useRouter } from 'next/navigation';
 import { clientApi } from '@/lib/api/client';
 import { useMe } from '@/lib/session';
 import { cn } from '@/lib/cn';
-import { ChurchSwitcher } from './ChurchSwitcher';
 
 /** The signed-in person, at the foot of the sidebar, as in the design. */
 export function UserMenu({ collapsed }: { collapsed: boolean }) {
   const me = useMe();
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [switching, setSwitching] = useState(false);
 
   return (
     <div className="relative border-t border-border2 pt-2">
@@ -51,15 +49,6 @@ export function UserMenu({ collapsed }: { collapsed: boolean }) {
           >
             Account
           </Link>
-          {me.churches.length > 1 && (
-            <button
-              type="button"
-              onClick={() => setSwitching(true)}
-              className="block w-full rounded-[7px] px-2.5 py-1.5 text-left text-[12.5px] text-fg2 hover:bg-hover hover:text-fg"
-            >
-              Switch church
-            </button>
-          )}
           <button
             type="button"
             onClick={async () => {
@@ -73,8 +62,6 @@ export function UserMenu({ collapsed }: { collapsed: boolean }) {
           </button>
         </div>
       )}
-
-      {switching && <ChurchSwitcher onClose={() => setSwitching(false)} />}
     </div>
   );
 }

@@ -19,7 +19,6 @@ import { ImpersonationService } from '../impersonation/impersonation.service.js'
 import { PasswordResetService } from './password-reset.service.js';
 import { Public } from './decorators.js';
 
-const SwitchChurchSchema = z.object({ churchId: z.uuid() });
 const ForgotSchema = z.object({ email: z.string().trim().toLowerCase().pipe(z.email().max(254)) });
 const ResetSchema = z.object({
   token: z.string().min(10).max(200),
@@ -117,16 +116,5 @@ export class AuthController {
   @Get('admins')
   admins(): Promise<{ name: string }[]> {
     return this.meService.administrators();
-  }
-
-  /** For someone who serves more than one church. Not allowed while viewing as someone. */
-  @AuthenticatedOnly()
-  @Post('church')
-  @HttpCode(200)
-  async switchChurch(
-    @Body(new ZodPipe(SwitchChurchSchema)) body: { churchId: string },
-  ): Promise<MeResponse> {
-    await this.auth.switchChurch(body.churchId);
-    return this.meService.build();
   }
 }

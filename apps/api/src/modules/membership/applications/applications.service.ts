@@ -5,7 +5,7 @@ import type {
   MembershipApplication,
   Person,
 } from '../../../generated/prisma/client.js';
-import { Db, type TenantTx } from '../../../core/database/db.service.js';
+import { Db, type Tx } from '../../../core/database/db.service.js';
 import { RequestAuth } from '../../../core/context/request-auth.js';
 import { AppError } from '../../../core/http/app-error.js';
 import { AuditService } from '../../../core/audit/audit.service.js';
@@ -36,13 +36,10 @@ export class ApplicationsService {
   ) {}
 
   async list(status?: ApplicationStatus) {
-    const churchId = this.auth.requireChurch();
-    const probationDays = await this.db.tx((tx) =>
-      setting(tx, churchId, 'membership.probationDays'),
-    );
+    const probationDays = await this.db.tx((tx) => setting(tx, 'membership.probationDays'));
     const [rows, grouped] = await Promise.all([
       this.db.client.membershipApplication.findMany({
-        where: { churchId, ...(status ? { status } : { status: 'UNDER_REVIEW' }) },
+        where: { ...(status ? { status } : { status: 'UNDER_REVIEW' }) },
         orderBy: { submittedAt: 'desc' },
         take: 100,
         include: {
@@ -56,7 +53,7 @@ export class ApplicationsService {
       }),
       this.db.client.membershipApplication.groupBy({
         by: ['status'],
-        where: { churchId },
+        where: {},
         _count: { _all: true },
       }),
     ]);
@@ -103,12 +100,11 @@ export class ApplicationsService {
 
   /** The office enters an application for someone. */
   async submit(personId: string, note?: string) {
-    const churchId = this.auth.requireChurch();
     const application = await this.db.tx(async (tx) => {
-      const person = await tx.person.findFirst({ where: { churchId, id: personId } });
+      const person = await tx.person.findFirst({ where: { id: personId } });
       if (!person) throw new AppError(404, ErrorCode.NOT_FOUND, 'No such person.');
       const open = await tx.membershipApplication.findFirst({
-        where: { churchId, personId, status: { in: OPEN } },
+        where: { personId, status: { in: OPEN } },
       });
       if (open) {
         throw new AppError(
@@ -119,7 +115,6 @@ export class ApplicationsService {
       }
       const created = await tx.membershipApplication.create({
         data: {
-          churchId,
           personId,
           source: 'OFFICE',
           submittedById: this.auth.userId,
@@ -170,7 +165,7 @@ export class ApplicationsService {
       });
       // Back to wherever they were before they applied, as the journey says.
       if (person.stage === 'MEMBERSHIP_REVIEW') {
-        const back = (await previousStage(tx, person.churchId, person.id)) ?? 'VISITOR';
+        const back = (await previousStage(tx, person.id)) ?? 'VISITOR';
         await moveStage(tx, person, back, this.auth.userId, `Application not approved: ${reason}`);
       }
       return `Did not approve ${person.fullName}'s membership application`;
@@ -184,7 +179,7 @@ export class ApplicationsService {
   async confirm(id: string): Promise<{ memberNumber: number }> {
     let memberNumber = 0;
     await this.decide(id, ['APPROVED'], 'confirmed', async (tx, app, person) => {
-      const days = await setting(tx, person.churchId, 'membership.probationDays');
+      const days = await setting(tx, 'membership.probationDays');
       const availableOn = new Date(app.decidedAt!.getTime() + days * DAY)
         .toISOString()
         .slice(0, 10);
@@ -202,7 +197,7 @@ export class ApplicationsService {
         data: { status: 'CONFIRMED', confirmedById: this.auth.userId, confirmedAt: new Date() },
       });
       await tx.person.update({
-        where: { churchId_id: { churchId: person.churchId, id: person.id } },
+        where: { id: person.id },
         data: { memberNumber, confirmedAt: new Date() },
       });
       await moveStage(tx, person, 'CONFIRMED_MEMBER', this.auth.userId, 'Confirmed as a member');
@@ -216,7 +211,7 @@ export class ApplicationsService {
     await this.decide(id, OPEN, 'withdrawn', async (tx, _app, person) => {
       await tx.membershipApplication.update({ where: { id }, data: { status: 'WITHDRAWN' } });
       if (person.stage === 'MEMBERSHIP_REVIEW') {
-        const back = (await previousStage(tx, person.churchId, person.id)) ?? 'VISITOR';
+        const back = (await previousStage(tx, person.id)) ?? 'VISITOR';
         await moveStage(tx, person, back, this.auth.userId, 'Application withdrawn');
       }
       return `Withdrew ${person.fullName}'s membership application`;
@@ -228,16 +223,15 @@ export class ApplicationsService {
     id: string,
     from: ApplicationStatus[],
     action: string,
-    act: (tx: TenantTx, app: MembershipApplication, person: Person) => Promise<string>,
+    act: (tx: Tx, app: MembershipApplication, person: Person) => Promise<string>,
   ): Promise<void> {
-    const churchId = this.auth.requireChurch();
     await this.db.tx(async (tx) => {
-      const app = await tx.membershipApplication.findFirst({ where: { churchId, id } });
+      const app = await tx.membershipApplication.findFirst({ where: { id } });
       if (!app) throw new AppError(404, ErrorCode.NOT_FOUND, 'No such application.');
       if (!from.includes(app.status)) {
         throw new AppError(409, ErrorCode.CONFLICT, 'That application is not at that step.');
       }
-      const person = await tx.person.findFirstOrThrow({ where: { churchId, id: app.personId } });
+      const person = await tx.person.findFirstOrThrow({ where: { id: app.personId } });
       const summary = await act(tx, app, person);
       await this.audit.recordIn(tx, {
         action: `membership.application.${action}`,

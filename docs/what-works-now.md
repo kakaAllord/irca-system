@@ -7,9 +7,26 @@ here does not behave as described, that is a bug worth reporting.
 Built so far: **Phase 1** (sign-in), **Phase 2** (the portal frame, roles and
 viewing as someone), **Phase 3** (the Admin portal), **Phase 4** (the Finance
 portal), **Phase 5** (the registration form on this system, and the
-Membership portal). Still to come: the developer console and going live
-(Phase 6). Switching the live form over is a job for a Sunday evening, with
-the runbook in `docs/plan/05-registration-and-membership.md`, step 5.18.
+Membership portal), and **Phase 6** — the developer console, the security
+hardening, the commands for setting up and recovering, the written way to
+deploy it, the runbooks and the training guides. What is left of Phase 6 is
+going live, which is the owner's (section 13). Then Communications (Phase 7),
+Outreach (Phase 8) and pledges (Phase 9). Switching the live form over is a
+job for a Sunday evening, with `docs/runbooks/cutover-registration.md`.
+
+This system serves **one church**. A second church would get its own copy,
+with its own database, rather than sharing this one (decision D27).
+
+**To see it with data in it**, fill a fresh database with eighteen months of
+plausible history — people, registrations, the books, the class, the activity
+log and the usage charts:
+
+```bash
+npm run db:reset && npm run db:seed && npm run db:demo
+```
+
+It refuses to run twice over the same database, and it never runs outside
+development.
 
 ---
 
@@ -20,13 +37,14 @@ There are three apps and one shared library:
 | Part | What it is |
 | --- | --- |
 | `apps/api` | The server. Everything goes through it: signing in, permissions, the books, the activity log. |
-| `apps/portal` | What staff use in a browser: `/login`, `/admin/…`, `/finance/…`. |
+| `apps/portal` | What staff use in a browser: `/login`, `/admin/…`, `/finance/…`, `/membership/…`, `/dev/…`, `/help`. |
 | `apps/registration` | The visitor's registration form. One setting chooses its back end: its old database (what the live site uses until the cutover) or this system. |
 | `packages/shared` | The rules both sides need to agree on: what a portal is, what a permission is, what an entry number looks like. |
 
-Every church is separate. Nobody sees another church's people, money or
-history, and that is enforced twice: once in the code, once by the database
-itself, so a mistake in the code is not enough to leak anything.
+The rules that matter most — the books cannot be rewritten, the activity log
+cannot be edited, viewing as someone cannot change anything — are enforced
+twice: once in the code, once by the database itself, so a mistake in the code
+is not enough to break them.
 
 ---
 
@@ -74,8 +92,6 @@ person gets an email with a link, chooses their own password, and lands in the
 portal with exactly those roles — no more.
 
 - Invitations last 72 hours and work once. They can be resent or cancelled.
-- Someone who already has an account in another church gets a link that just
-  says "open the portal": they keep their existing password.
 - Roles can be changed before the person accepts.
 - An administrator can only offer roles from portals this church actually has
   turned on.
@@ -120,10 +136,10 @@ click on their page, no form, no reason to type.
   all.
 - It lasts 30 minutes, and ends the moment "Stop viewing" is clicked.
 - The person being viewed is **never told**, anywhere. It is not in the
-  church's activity log, not on their account page, nowhere. Only the platform
-  developer can see who viewed whom, and when.
-- A developer viewing as a clerk is a clerk: their platform powers do not come
-  along for the ride.
+  church's activity log, not on their account page, nowhere. Only the
+  developer can see who viewed whom, and when, in the view-as log.
+- A developer viewing as a clerk is a clerk: their own powers do not come along
+  for the ride.
 
 **Try it:** People → a person → **View as** → walk around → notice there is no
 way to change anything → **Stop viewing**. Then sign in as that person and
@@ -176,7 +192,7 @@ IRCA-EXP-2026-09-000001
 ```
 
 - The **date** decides the month, not the day it was typed in.
-- Income and expenses count separately, and so does every church.
+- Income and expenses count separately.
 - Fifty people saving at the same instant get fifty consecutive numbers.
 - A save that fails spends no number.
 - The church's code is frozen as soon as it has a single entry, because the
@@ -290,6 +306,38 @@ figure is a count before it is a percentage.
 
 ---
 
+## 8a. The developer console
+
+For whoever runs the system, under **Dev** in the sidebar.
+
+- **Health** — the database's size and connections, every background job's
+  last run, the email queue, and the slowest queries.
+- **Usage** — what the system is used for, day by day: an overview, any four
+  numbers on one chart, each table's size and growth, the busiest and slowest
+  parts of the server, sign-ins and lockouts, and the last fifty emails with
+  their addresses cut short.
+- **Logs** — what the server wrote recently, and what people did.
+- **View-as log** — who viewed the portal as whom, drawn as a terminal you
+  type into. The only place this can be seen.
+- **Settings** — the church's name, code, clock and currency (the code locks
+  once it is on an entry number), and the keys the registration form signs in
+  with, each shown once when made.
+
+## 8b. Help
+
+**Help**, at the bottom of the sidebar, has the two one-page guides handed out
+at training: *Getting started* and *Finance in five minutes*. Each prints as a
+single page, or saves as a PDF, with no menus.
+
+## 8c. When something goes wrong
+
+A few commands run on the server for what the portal cannot do: setting up a
+fresh database, sending a password reset, giving back a locked-out
+administrator's role, signing someone out everywhere at once, erasing a person
+at their request. `docs/runbooks/` says when and how, one page per situation.
+
+---
+
 ## 9. Rules the database keeps by itself
 
 These hold even if the application code is wrong, which is the point:
@@ -299,10 +347,10 @@ These hold even if the application code is wrong, which is the point:
   change request for that exact entry — checked by a trigger, on every update.
 - A voided entry is final.
 - A church's code cannot change once it has entries.
-- Each church can only see its own rows: the connection carries the church, and
-  the tables' own policies filter on it.
-- View-as records are invisible to churches, including to any query a church's
-  own code might send.
+- While someone is being viewed as, the pages run on a database connection
+  that can only read.
+- View-as records cannot be read by the application's own connection at all,
+  whatever query it sends; only the dev console's view-as log reaches them.
 - The activity log cannot be updated or deleted by the application.
 - An amount must be more than zero; an income entry must have a source and an
   expense an item; the month on an entry must match its date.
@@ -311,12 +359,12 @@ These hold even if the application code is wrong, which is the point:
 
 ## 10. Running it on your machine
 
-You need PostgreSQL 16+ and Node 22+.
+You need PostgreSQL 16+ and Node 24.
 
 **Once, as the database superuser** (`sudo -u postgres psql`), create the roles
 and databases exactly as `docs/plan/01-foundations-and-login.md` step 1.5 lists
-them (five roles, `irca_dev` and `irca_test`, statement timeouts, and UTC for
-every role).
+them (the roles, `irca_dev` and `irca_test`, statement timeouts, and UTC for
+every role; the `irca_core` role it lists is no longer used).
 
 Then, from the repository root:
 
@@ -325,7 +373,8 @@ npm install
 cp apps/api/.env.example apps/api/.env          # if you have no .env yet
 cp apps/portal/.env.example apps/portal/.env.local
 npm run db:migrate                              # create the tables
-npm run db:seed                                 # two churches and some accounts
+npm run db:seed                                 # the church and some accounts
+npm run db:demo                                 # optional: 18 months of history
 npm run dev                                      # everything, together
 ```
 
@@ -341,11 +390,9 @@ The portal is on <http://localhost:3000>, the API on <http://localhost:4000>.
 | `followup@irca.local` | `followup-password-123` | Follow-up team: visits and calls, cannot read prayer requests |
 | `clerk@irca.local` | `clerk-password-123` | Finance clerk (Neema Mollel) |
 | `mhazini@irca.local` | `manager-password-123` | Finance manager (Joyce Mhazini) |
-| `admin@test.local` | `admin-password-123` | Administrator of a second church, TEST |
-| `dev@irca.local` | `dev-password-123` | The platform developer |
+| `dev@irca.local` | `dev-password-123` | The developer: the dev console, and an administrator too |
 
-IRCA has Membership and Finance turned on; TEST has neither — which is itself
-worth trying. The registration form runs at <http://localhost:3001>; with
+Membership and Finance are turned on. The registration form runs at <http://localhost:3001>; with
 `REGISTRATION_BACKEND=api` in `apps/registration/.env.local` (and the seed's
 local key in `REGISTRATION_API_KEY`) it writes into this system.
 
@@ -403,13 +450,15 @@ This is the walk that proves the access rules. Half an hour, in a browser.
 20. As `followup@irca.local`: the same person opens with **no** prayer request
     section, and there is no Applications page in the sidebar.
 
-**As `admin@test.local` (the other church)**
+**As `dev@irca.local` (the developer)**
 
-21. Finance is not in the sidebar. Turn it on in Portals: the three finance
-    roles appear.
-22. Record an expense: it is numbered `TEST-EXP-…-000001`, counting from one.
-23. Paste an IRCA entry's number into the address bar: "No entry with that
-    number." The item suggestions contain none of IRCA's items.
+21. Dev → **Health**: the database, the jobs and the email queue. Dev →
+    **Usage**: each tab has numbers (run `npm run db:demo` first for history).
+22. Dev → **Settings**: try a timezone that does not exist and read the
+    refusal; make a registration key, copy it, revoke it. Admin → Activity
+    shows both.
+23. View as the clerk, stop, then Dev → **View-as log**: type `log` and find
+    the session, then `show` and its id to see every page opened.
 
 ---
 
@@ -421,8 +470,8 @@ From the repository root:
 npm run typecheck          # types, everywhere
 npm run lint               # the code rules, including who may touch what
 npm test                   # the small unit tests
-npm run test:e2e -w @irca/api  # 106 tests against a real database
-npm run e2e                # 11 journeys through a real browser
+npm run test:e2e -w @irca/api  # the API against a real database
+npm run e2e                # journeys through a real browser
 ```
 
 The API tests use `irca_test`, a separate database; they never touch your
@@ -430,9 +479,10 @@ development data. The browser journeys build the portal, start both servers on
 their own ports (4100 and 3100) and drive Chrome.
 
 What the automated tests cover, in short: signing in and its refusals; that
-every route says who may call it (the API refuses to start otherwise); that one
-church can never read another's anything; that viewing as someone is read-only
-everywhere; invitations end to end, including the email; the Admin API against
+every route says who may call it (the API refuses to start otherwise), and a
+matrix, generated from the routes, of who is let in and who is refused; that
+viewing as someone is read-only in all three layers, with every page of every
+portal opened on the read-only connection; the command line; invitations end to end, including the email; the Admin API against
 each permission; and for Finance — numbering under fifty simultaneous saves,
 the month rules, near-duplicate names, the database's own refusals, change
 requests including self-approval, staleness and month moves, totals, CSV
@@ -442,8 +492,12 @@ safety, and the whole recording-and-approving journey in a browser.
 
 ## 13. What is not built yet
 
-- Switching the live registration form over (the owner, with the 5.18 runbook),
-  and a week later removing its old database code (5.19).
-- The developer console: per-church usage, and the view-as log in a page that
-  looks like a terminal (Phase 6).
-- Deployment and going live (Phase 6).
+- Going live: choosing the domain, deploying (`docs/deployment.md`), the four
+  checks only production can answer (`docs/hardening.md`), and the launch
+  order in `docs/plan/06-dev-console-hardening-launch.md`, step 6.11.
+- Switching the live registration form over
+  (`docs/runbooks/cutover-registration.md`), and a week later removing its old
+  database code (5.19).
+- Backups beyond Neon's own history, load testing and monitoring (Phase 10,
+  when the owner says so).
+- Communications, Outreach and pledges (Phases 7 to 9).
