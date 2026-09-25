@@ -1,3 +1,4 @@
+import { moduleByKey } from '@irca/shared';
 import type { InteractionKind, Prisma } from '../../generated/prisma/client.js';
 import type { Tx } from '../../core/database/db.service.js';
 
@@ -39,4 +40,45 @@ export async function recordInteraction(tx: Tx, input: Interaction): Promise<voi
       meta: input.meta ?? {},
     },
   });
+}
+
+export type TimelineLine = {
+  id: string;
+  kind: InteractionKind;
+  at: string;
+  /** The portal that recorded it, by the name staff see: "Outreach", "Membership". */
+  portal: string;
+  /** The staff member who recorded it, or null when the system did. */
+  by: string | null;
+  summary: string;
+};
+
+/**
+ * A person's timeline, oldest first, the way the owner's own example reads:
+ * evangelised, called, visited, came. One query serves both portals that show
+ * it (08 step 8.6); each checks first that the reader may see this person.
+ */
+export async function readTimeline(
+  db: Pick<Tx, 'personInteraction' | 'user'>,
+  personId: string,
+): Promise<TimelineLine[]> {
+  const rows = await db.personInteraction.findMany({
+    where: { personId },
+    orderBy: [{ at: 'asc' }, { id: 'asc' }],
+    take: 500,
+  });
+  const byIds = [...new Set(rows.map((r) => r.byId).filter((id): id is string => !!id))];
+  const users = await db.user.findMany({
+    where: { id: { in: byIds } },
+    select: { id: true, fullName: true },
+  });
+  const nameOf = new Map(users.map((u) => [u.id, u.fullName]));
+  return rows.map((r) => ({
+    id: r.id,
+    kind: r.kind,
+    at: r.at.toISOString(),
+    portal: moduleByKey(r.moduleKey)?.name ?? r.moduleKey,
+    by: r.byId ? (nameOf.get(r.byId) ?? null) : null,
+    summary: r.summary,
+  }));
 }

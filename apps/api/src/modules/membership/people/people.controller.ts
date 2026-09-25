@@ -112,6 +112,13 @@ export class PeopleController {
     return this.people.get(id);
   }
 
+  /** Everything that happened with them, from every portal (D23). */
+  @RequirePermission('membership.people.read')
+  @Get(':id/timeline')
+  timeline(@Param('id') id: string) {
+    return this.people.timeline(id);
+  }
+
   @RequirePermission('membership.people.update')
   @Post()
   add(@Body(new ZodPipe(AddSchema)) body: z.infer<typeof AddSchema>) {

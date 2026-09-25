@@ -31,7 +31,7 @@ describe('Outreach (Phase 8)', () => {
   });
   beforeEach(async () => {
     await truncateAll(db);
-    await createChurch(db, 'IRCA', ['admin', 'outreach']);
+    await createChurch(db, 'IRCA', ['admin', 'membership', 'outreach']);
     await app.get(RegistrySync).sync();
   });
 
@@ -460,6 +460,119 @@ describe('Outreach (Phase 8)', () => {
       await portal(app).post('/v1/outreach/sessions', { heldOn: '2026-09-26' }, theirs).expect(403);
       await portal(app)
         .post('/v1/outreach/groups', { name: 'Pair', personIds: members.slice(0, 2) }, theirs)
+        .expect(403);
+    });
+  });
+  describe('follow-up and the timeline (8.6)', () => {
+    const grace = { fullName: 'Grace Lema', dial: '+255', phone: '0754 111 222', mayMessage: true };
+
+    it('keeps every call and visit, in order, with who recorded it', async () => {
+      const { cookie } = await outreach();
+      const { body } = await portal(app).post('/v1/outreach/reached', grace, cookie).expect(201);
+      const theirs = await member();
+      const follow = (kind: string, note: string, on: string, who = theirs) =>
+        portal(app)
+          .post(`/v1/outreach/people/${body.personId}/followups`, { kind, note, on }, who)
+          .expect(204);
+      await follow('CALL', 'no answer', '2026-09-01');
+      await follow('CALL', 'will come on Sunday', '2026-09-02');
+      await follow('VISIT', 'met her husband', '2026-09-03', cookie);
+      await follow('CALL', 'reminded her', '2026-09-04');
+      await follow('VISIT', 'prayed together', '2026-09-05');
+      await follow('ATTENDED_SERVICE', '', '2026-09-06', cookie);
+      await follow('ATTENDED_SERVICE', '', '2026-09-07', cookie);
+
+      const person = await portal(app)
+        .get(`/v1/outreach/people/${body.personId}`, theirs)
+        .expect(200);
+      expect(
+        person.body.timeline
+          .slice(0, 7)
+          .map((l: { summary: string; portal: string }) => `${l.summary} · ${l.portal}`),
+      ).toEqual([
+        'Follow-up call — no answer · Outreach',
+        'Follow-up call — will come on Sunday · Outreach',
+        'Home visit — met her husband · Outreach',
+        'Follow-up call — reminded her · Outreach',
+        'Home visit — prayed together · Outreach',
+        'First time at church · Outreach',
+        'Came to church again · Outreach',
+      ]);
+      // Recorded today, after all of those: the doorstep itself comes last here.
+      expect(person.body.timeline.at(-1).summary).toBe('Evangelised');
+      // Each line says which staff account recorded it.
+      expect(person.body.timeline.every((l: { by: string | null }) => l.by)).toBe(true);
+    });
+
+    it('shows one timeline in both portals', async () => {
+      const { cookie } = await outreach();
+      const { body } = await portal(app).post('/v1/outreach/reached', grace, cookie).expect(201);
+      // Something Membership recorded about her.
+      await db.query(
+        `insert into person_interactions (id, person_id, kind, at, module_key, summary)
+         values (gen_random_uuid(), $1, 'CONFIRMED', now(), 'membership', 'Confirmed as a member')`,
+        [body.personId],
+      );
+      await portal(app)
+        .post(`/v1/outreach/people/${body.personId}/followups`, { kind: 'CALL' }, cookie)
+        .expect(204);
+
+      const office = await createUserWithPermissions(db, ['membership.people.read'], {
+        moduleKey: 'membership',
+      });
+      const inMembership = await portal(app)
+        .get(
+          `/v1/membership/people/${body.personId}/timeline`,
+          await signIn(office.email, office.password),
+        )
+        .expect(200);
+      const inOutreach = await portal(app)
+        .get(`/v1/outreach/people/${body.personId}`, await member())
+        .expect(200);
+      const lines = (t: { summary: string }[]) => t.map((l) => l.summary).sort();
+      expect(lines(inMembership.body)).toEqual([
+        'Confirmed as a member',
+        'Evangelised',
+        'Follow-up call',
+      ]);
+      expect(lines(inOutreach.body.timeline)).toEqual(lines(inMembership.body));
+    });
+
+    it('answers 404 for anyone Outreach never reached', async () => {
+      const { cookie } = await outreach();
+      const stranger = await createPerson(db, { fullName: 'Not Reached' });
+      const theirs = await member();
+      await portal(app).get(`/v1/outreach/people/${stranger.id}`, theirs).expect(404);
+      await portal(app)
+        .post(`/v1/outreach/people/${stranger.id}/followups`, { kind: 'CALL' }, cookie)
+        .expect(404);
+      await portal(app).get(`/v1/outreach/people/not-a-uuid`, theirs).expect(404);
+      // And nothing under Membership at all.
+      await portal(app).get(`/v1/membership/people/${stranger.id}`, theirs).expect(403);
+    });
+
+    it('lists who still needs following up, until someone says they are done', async () => {
+      const { cookie } = await outreach();
+      const { body } = await portal(app).post('/v1/outreach/reached', grace, cookie).expect(201);
+      const pending = async () =>
+        (await portal(app).get('/v1/outreach/followup', cookie).expect(200)).body as {
+          name: string;
+          phone: string;
+        }[];
+      expect(await pending()).toEqual([
+        expect.objectContaining({ name: 'Grace Lema', phone: '+255754111222' }),
+      ]);
+      await portal(app)
+        .post(
+          `/v1/outreach/people/${body.personId}/followups`,
+          { kind: 'VISIT', done: true },
+          cookie,
+        )
+        .expect(204);
+      expect(await pending()).toEqual([]);
+      // A viewer reads it and records nothing.
+      await portal(app)
+        .post(`/v1/outreach/people/${body.personId}/followups`, { kind: 'CALL' }, await viewer())
         .expect(403);
     });
   });

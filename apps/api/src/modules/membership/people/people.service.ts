@@ -10,7 +10,7 @@ import { AuditService } from '../../../core/audit/audit.service.js';
 import { UsageService } from '../../../core/usage/usage.service.js';
 import { AppConfig } from '../../../config/app-config.js';
 import { checkManualMove, moveStage } from '../journey.js';
-import { recordInteraction } from '../timeline.js';
+import { readTimeline, recordInteraction } from '../timeline.js';
 import { toPersonDetail, toPersonRow, type PersonRow } from './person.dto.js';
 
 export const TABS = [
@@ -193,6 +193,11 @@ export class PeopleService {
   }
 
   /** Someone who never filled in the form, typed in by the office. */
+  async timeline(id: string) {
+    await this.require(id);
+    return readTimeline(this.db.client, id);
+  }
+
   async add(input: {
     fullName: string;
     gender?: string;

@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { DepartmentsModule } from '../departments/departments.module.js';
+import { FollowupController } from './followup.controller.js';
+import { FollowupService } from './followup.service.js';
 import { ReachedController } from './reached.controller.js';
 import { ReachedService } from './reached.service.js';
 import { SessionsController } from './sessions.controller.js';
@@ -13,7 +15,7 @@ import { TeamService } from './team.service.js';
  */
 @Module({
   imports: [DepartmentsModule],
-  controllers: [TeamController, SessionsController, ReachedController],
-  providers: [TeamService, SessionsService, ReachedService],
+  controllers: [TeamController, SessionsController, ReachedController, FollowupController],
+  providers: [TeamService, SessionsService, ReachedService, FollowupService],
 })
 export class OutreachModule {}
