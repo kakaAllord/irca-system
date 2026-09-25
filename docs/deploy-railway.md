@@ -41,6 +41,7 @@ Railway's own settings. Where the two differ, this page says why.
 | `Postgres` | Railway's PostgreSQL | 1 |
 | `api` | `apps/api`, NestJS | **exactly 1** (see §3) |
 | `portal` | `apps/portal`, Next.js | 1 |
+| `backup` | `ops/backup`, a nightly cron job (§9) | runs once a night, then stops |
 
 **Why the registration form stays on Vercel for now:** visitors use it every
 Sunday, and it moves only at its written cutover. Moving its host at the same
@@ -105,18 +106,31 @@ railway link            # choose the irca project and the production environment
 railway connect Postgres
 ```
 
-That opens `psql` as `postgres`. Paste this, with four passwords you have
-just generated (at least 32 characters each, letters and digits only, so
-they need no escaping in a URL):
+That opens `psql` as `postgres`. Run the three blocks below in order, each
+as its own paste. `create database` cannot run inside a transaction, and
+Railway's web **Data → Query** tab and most GUI clients wrap a multi-statement
+paste in one, so it has to go on its own; in plain `psql` the split costs
+nothing.
+
+First the roles, with four passwords you have just generated (at least 32
+characters each, letters and digits only, so they need no escaping in a URL):
 
 ```sql
 create role irca_owner    login password '<owner password>' createdb;
 create role irca_app      login password '<app password>';
 create role irca_readonly login password '<readonly password>';
 create role irca_backup   login password '<backup password>';
+```
 
+Then the database, alone:
+
+```sql
 create database irca owner irca_owner;
+```
 
+Then the role settings and the check:
+
+```sql
 alter role irca_app      set statement_timeout = '10s';
 alter role irca_readonly set statement_timeout = '10s';
 alter role irca_owner    set timezone = 'UTC';
@@ -134,8 +148,9 @@ Why a separate database `irca`, not Railway's default one: the owner role
 owns it outright, which is what the migrations expect, and `postgres`'s own
 database stays Railway's.
 
-`irca_backup` has no grants yet; Phase 10 gives it some for the nightly
-backup. Create it now anyway, so nobody improvises a role later.
+`irca_backup` is for the nightly backup (§9). A migration gives it read
+access to every table and nothing else, so it must exist before the first
+deploy, like the others.
 
 **Optional, for Dev → Health's slowest-queries table:** while still
 connected, `\c irca` and run
@@ -171,11 +186,14 @@ database handles comfortably.
 
 ### 2.4 Backups
 
-Railway can back up the database's volume on a schedule; turn it on in the
-`Postgres` service's **Backups** tab, daily, and keep at least a week. That
-is the host's copy. The church's own copy, off Railway, and the restore
-drill that proves it works, are Phase 10 (`docs/plan/10-strengthening.md`),
-which starts only when the owner says so.
+Two copies, for two different disasters:
+
+- **Railway's own.** In the `Postgres` service's **Backups** tab, turn on
+  **Daily** (kept 6 days) and **Weekly** (kept 27 days). These restore in a
+  few clicks, but they live on Railway, so they do not help if the account
+  or the platform is what is lost.
+- **The church's own, off Railway:** the nightly encrypted dump of §9. Set it
+  up once the database has its data.
 
 ---
 
@@ -439,11 +457,87 @@ volume attached to the `api` service, so they survive every deploy: the
 service's own disk does not. `api` service → **+ New → Volume**, mount path
 `/data`, then `FILES_DIR=/data/files` in its variables. `docs/deployment.md`
 §6b has the rest: what a volume costs (no replicas, a short stop on each
-deploy) and backing it up.
+deploy) and backing it up. **Turn on the volume's backups** (the volume →
+**Backups**, Daily and Weekly): the nightly dump of §9 holds the database,
+not these files.
 
 ---
 
-## 9. When something goes wrong
+## 9. The nightly backup
+
+Every night a small cron service dumps the database as `irca_backup` (which
+can read everything and change nothing), encrypts the dump to the
+keyholders' public keys, and puts it in a bucket that is **not on Railway**.
+The job is `ops/backup/` in the repository; `docs/plan/10-strengthening.md`,
+step 10.2, says why it is built this way. Restoring it is
+`docs/runbooks/restore.md`.
+
+### 9.1 The keys (once, by people, not servers)
+
+The owner and one pastor each make a key pair on their own computer, with
+[age](https://age-encryption.org):
+
+```bash
+age-keygen -o irca-backup-<name>.key
+```
+
+Each keeps their `.key` file **offline** (a USB stick in a safe place, and a
+printed copy), and sends the `Public key: age1…` line it prints to be added
+to `ops/backup/recipients.txt`, which is committed. Any one private key opens
+any backup; nobody else, including Railway and whoever runs the bucket, can.
+Until a key is in that file, the job refuses to run.
+
+### 9.2 The bucket (off Railway)
+
+Any S3-compatible storage works. Cloudflare R2 is the suggestion: its free
+allowance (10 GB) holds years of these dumps, and it charges nothing to
+download one.
+
+1. Create a bucket, `irca-backups`, **private**.
+2. Add a lifecycle rule that deletes objects **30 days** after they were
+   made. The job never deletes anything itself, so this rule is what keeps
+   the bucket from growing forever.
+3. Create an API token that may **write objects to this bucket only**. It
+   needs no read or delete: the job only adds files. Note its access key id
+   and secret, and the bucket's S3 endpoint.
+
+### 9.3 The service
+
+**New → GitHub Repo →** the same repository. Rename it `backup`.
+
+| Setting | Value |
+| --- | --- |
+| Source branch | `main` |
+| Root Directory | `ops/backup` (Railway then builds its `Dockerfile`) |
+| Cron Schedule | `30 0 * * *` — Railway's schedules are in UTC, so this is 03:30 in Arusha, after the API's nightly jobs |
+| Watch Paths | `ops/backup/**` |
+| Restart policy | Never (a cron run that fails is reported, not retried in a loop) |
+
+| Variable | Value |
+| --- | --- |
+| `BACKUP_DATABASE_URL` | `postgresql://irca_backup:<backup password>@${{Postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/irca` |
+| `BUCKET_URL` | the bucket's S3 address, such as `https://<account id>.r2.cloudflarestorage.com/irca-backups` |
+| `BUCKET_REGION` | `auto` for R2; the bucket's region elsewhere |
+| `BUCKET_ACCESS_KEY_ID`, `BUCKET_SECRET_ACCESS_KEY` | from 9.2, step 3 |
+| `HEARTBEAT_URL` | optional: a heartbeat monitor's address (Better Stack or healthchecks.io, free), which alerts when a night passes with no backup |
+
+The database stays private: the job reaches it over Railway's private
+network, like the API.
+
+### 9.4 Check it
+
+Press **Run now** on the service (or wait for the night). Its log ends with
+`Backed up <n> tables to irca-<date>.dump.age`, and the file is in the
+bucket. Then, before launch and every three months, do the restore drill in
+`docs/runbooks/restore.md`: a backup nobody has restored is a hope.
+
+**If it fails:** `No public key` means 9.1 is not done; `403` from curl means
+the bucket's token or address is wrong; `permission denied for table` means
+the `backup_read` migration has not run (it runs with every API deploy).
+
+---
+
+## 10. When something goes wrong
 
 | What you see | What it usually is |
 | --- | --- |

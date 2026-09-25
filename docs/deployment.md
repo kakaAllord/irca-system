@@ -45,11 +45,12 @@ reset from it. Never point staging's email at real members: until its
 | `irca_owner`    | migrations, `person:erase`               | everything; owns the schema                                  |
 | `irca_app`      | the running API                          | read and write, except rewriting the activity log or deleting a finance entry |
 | `irca_readonly` | feature code while someone is viewed as  | select only, and never the view-as rows                      |
-| `irca_backup`   | the nightly dump (Phase 10)              | select only                                                  |
+| `irca_backup`   | the nightly dump (§9)                    | select only                                                  |
 
-The grants for `irca_app` and `irca_readonly` are in the migrations, so the
-roles must exist before the first migration runs. `irca_backup` has no grants
-yet: Phase 10, step 10.2, adds them with the nightly backup.
+The grants for all three are in the migrations, so the roles must exist
+before the first migration runs. `irca_backup` may read every table, the
+activity and view-as logs included, and write nothing: it is what the nightly
+backup dumps as (§9).
 
 1. In the Neon console, create the project and the database `irca`, owned by
    `irca_owner`. The console makes console-made roles members of
@@ -107,7 +108,7 @@ yet: Phase 10, step 10.2, adds them with the nightly backup.
 
 All three end in `?sslmode=verify-full`, not the `sslmode=require` Neon hands
 out; `apps/registration/README.md` explains why. The backup role's URL goes only
-into the backup job's own secrets, in Phase 10.
+into the nightly backup job's own variables (§9).
 
 ---
 
@@ -265,8 +266,8 @@ check, so there is nothing public to configure.
    volume, and each deploy stops it for a moment while the new one takes the
    disk over, so deploy when nobody is using it, never on a Sunday morning.
 5. **Back it up.** The database's backups do not include these files. Turn on
-   the volume's backups in Railway if the plan has them, and keep the Phase 10
-   copy (`10-strengthening.md`, step 10.2) in mind.
+   the volume's backups in Railway (the volume → **Backups**, Daily and
+   Weekly). The nightly dump of §9 is the database only.
 6. **Check it before launch.** Attach a PDF to a Saturday in Outreach, redeploy
    the API, and open it again: it must still be there. Try a 12 MB PDF and a
    `.docx`: both are refused, and nothing is kept.
@@ -302,3 +303,21 @@ host's own log retention are the record.
   ```sql
   select ip, created_at from sessions order by created_at desc limit 1;
   ```
+
+---
+
+## 9. Backups
+
+Two copies. The host's own (Railway's Backups tab, or Neon's history) is the
+quick way back from a bad change. The church's own is a nightly dump as
+`irca_backup`, encrypted with [age](https://age-encryption.org) to public
+keys committed in `ops/backup/recipients.txt`, whose private keys the owner
+and a pastor hold offline, and kept for 30 days in a bucket that is **not**
+on the database's platform. It runs as a small container (`ops/backup/`) on a
+nightly schedule, next to the database, so the database never needs to be
+reachable from the internet.
+
+`docs/deploy-railway.md` §9 sets it up on Railway, step by step; on another
+host, run the same container on its scheduler with the same variables.
+`docs/runbooks/restore.md` is the way back, and the record of every restore
+drill: one before launch, then one every three months.

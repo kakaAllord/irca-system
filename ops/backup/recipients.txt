@@ -1,0 +1,13 @@
+# The public keys every nightly backup is encrypted to, one per line. Any one
+# of the matching private keys can open a backup; none of them is on a server.
+#
+# Each keyholder makes their own pair, on their own computer:
+#
+#     age-keygen -o irca-backup-<your name>.key
+#
+# keeps the .key file offline (a USB stick in a safe place, and a printed
+# copy), and adds the "Public key: age1…" line it prints below, with their
+# name. Two keyholders, the owner and one pastor, so the church is never one
+# lost key away from its data (docs/runbooks/restore.md).
+#
+# Until a key is here, the backup refuses to run.
