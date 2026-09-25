@@ -462,8 +462,12 @@ tests never touch the network and development never spends credit.
    and `balance()`; `memory.provider.ts` (tests), `log.provider.ts`
    (development, and production until Beem is set up), `beem.provider.ts`
    (reads the account from `comms_beem_account` **on every send**, D26).
-   Tests always get memory; otherwise Beem when an account row exists, else
-   the log.
+   Tests always get memory; otherwise Beem when an account row exists **and**
+   texts are meant to go out — production unless `SMS_LIVE=false`, anywhere
+   else only with `SMS_LIVE=true` — else the log. Without that second
+   condition, a developer who typed a Beem key into their own copy to try the
+   settings page would be texting the demo data's numbers (found while walking
+   this phase in a browser).
 2. **Beem's API**, checked against docs.beem.africa on 24 Sept 2026 — check it
    again before going live, since it is theirs:
    `POST https://apisms.beem.africa/v1/send`, HTTP Basic (key:secret), body

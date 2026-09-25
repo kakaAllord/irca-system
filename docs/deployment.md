@@ -223,7 +223,10 @@ redeploying; its old database stays untouched until the owner retires it.
 1. Communications signs in, opens **Comms → Settings**, and saves the Beem key,
    secret and the sender name Beem registered, then presses **Test
    connection**. It shows the credit left. Until an account is saved, every
-   message is only written to the API's log.
+   message is only written to the API's log. Production sends through Beem
+   once an account is saved; staging and every developer's machine do not,
+   unless `SMS_LIVE=true` is set there on purpose, so a Beem key typed in for
+   a test still texts nobody.
 2. Communications saves a **daily limit** on the same page. Nothing is sent
    until there is one (07 step 7.1).
 3. In Beem's dashboard, under two-way SMS, set the callback URL for replies to

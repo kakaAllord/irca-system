@@ -22,14 +22,18 @@ export type BeemAccountSummary = {
   updatedAt: string | null;
   /** Whether BEEM_SETTINGS_KEY is set, without which none of this can be saved. */
   canSave: boolean;
+  /** Whether texts really go out, or only to the server log (SMS_LIVE). */
+  live: boolean;
 };
 
 /**
  * Which way a text goes, decided every time one is sent.
  *
- * Tests always get memory. Otherwise Beem, as soon as Communications has
- * saved an account (and the API can open it); until then, the log, so a
- * development machine or a fresh deployment never texts anyone. The account
+ * Tests always get memory. Otherwise Beem, once Communications has saved an
+ * account the API can open, and only where texts are meant to go out: in
+ * production unless SMS_LIVE=false, elsewhere only with SMS_LIVE=true.
+ * Until then, the log, so a development machine or a fresh deployment never
+ * texts anyone. The account
  * is read on every use, not once at start-up, because Communications may
  * change the key at any moment (D26).
  *
@@ -52,12 +56,13 @@ export class SmsGateway {
       return { provider: this.memory, senderId: account?.senderId ?? NO_SENDER };
     }
     const opened = await this.openAccount();
-    if (opened)
+    if (opened && this.live()) {
       return {
         provider: new BeemSmsProvider(opened.key, opened.secret),
         senderId: opened.senderId,
       };
-    return { provider: this.log, senderId: NO_SENDER };
+    }
+    return { provider: this.log, senderId: opened?.senderId ?? NO_SENDER };
   }
 
   async summary(): Promise<BeemAccountSummary> {
@@ -68,7 +73,14 @@ export class SmsGateway {
       keyHint: account ? `…${account.keyLast4}` : null,
       updatedAt: account?.updatedAt.toISOString() ?? null,
       canSave: this.settingsKey() !== null,
+      live: this.live(),
     };
+  }
+
+  /** Production sends unless SMS_LIVE=false; anywhere else only when SMS_LIVE=true. */
+  private live(): boolean {
+    const flag = this.config.get('SMS_LIVE');
+    return this.config.get('NODE_ENV') === 'production' ? flag !== 'false' : flag === 'true';
   }
 
   /**
@@ -124,9 +136,18 @@ export class SmsGateway {
 
   /** Asks Beem for the credit with the saved account: the test that it works. */
   async test(): Promise<{ ok: true; credit: string | null } | { ok: false; error: string }> {
-    const { provider } = await this.current();
-    if (provider.name !== 'beem' && this.config.get('NODE_ENV') !== 'test') {
-      return { ok: false, error: 'No Beem account is saved yet, so messages only go to the log.' };
+    // Asking for the credit sends nothing, so it asks Beem even where texts
+    // themselves only go to the log.
+    let provider: SmsProvider = this.memory;
+    if (this.config.get('NODE_ENV') !== 'test') {
+      const opened = await this.openAccount();
+      if (!opened) {
+        return {
+          ok: false,
+          error: 'No Beem account is saved yet, so messages only go to the log.',
+        };
+      }
+      provider = new BeemSmsProvider(opened.key, opened.secret);
     }
     try {
       const balance = await provider.balance();

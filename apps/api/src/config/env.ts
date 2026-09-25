@@ -40,6 +40,13 @@ export const EnvSchema = z
         message: 'must be 32 bytes, base64 (see .env.example for how to make one)',
       }),
     /**
+     * Whether texts really go to Beem once an account is saved. Production
+     * sends unless this says false; anywhere else only when it says true, so
+     * a laptop with a copy of the data and a Beem key typed in for a test
+     * still cannot text a church member by accident (07 step 7.7).
+     */
+    SMS_LIVE: z.enum(['true', 'false']).optional(),
+    /**
      * The password Beem uses when it calls us with a reply: part of the
      * callback URL given to Beem, since Beem sends no signature of its own.
      */
