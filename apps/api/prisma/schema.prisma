@@ -346,8 +346,9 @@ model PasswordResetToken {
   @@map("password_reset_tokens")
 }
 
-/// A file kept in object storage (D24), for any module: Outreach's session
-/// reports first, Finance's receipts later. The bytes live in the bucket; this
+/// A file kept on the church's own disk (D24), for any module: Outreach's
+/// session reports first, Finance's receipts later. The bytes live under
+/// FILES_DIR, on a Railway volume in production; this
 /// row says what they are, whose they are and who put them there. Replacing a
 /// file sets `deleted_at` on the old row and keeps the object, so an earlier
 /// version can still be found. Rows are never deleted by the application.
@@ -358,7 +359,7 @@ model File {
   /// What it belongs to: 'outreach_session' and that session's id.
   entityType   String    @map("entity_type") @db.VarChar(40)
   entityId     String    @map("entity_id") @db.Uuid
-  /// Where it is in the bucket: outreach/sessions/<session-id>/<uuid>.pdf.
+  /// Its path under FILES_DIR: outreach/sessions/<session-id>/<uuid>.pdf.
   key          String    @unique @db.VarChar(300)
   originalName String    @map("original_name") @db.VarChar(200)
   contentType  String    @map("content_type") @db.VarChar(100)

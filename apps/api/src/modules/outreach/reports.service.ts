@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { ErrorCode } from '@irca/shared';
 import { Db } from '../../core/database/db.service.js';
 import { RequestAuth } from '../../core/context/request-auth.js';
-import { AppError, notFound } from '../../core/http/app-error.js';
+import { notFound } from '../../core/http/app-error.js';
 import { AuditService } from '../../core/audit/audit.service.js';
-import { DOWNLOAD_SECONDS, FilesService, type FileRules } from '../../core/files/files.service.js';
+import type { Readable } from 'node:stream';
+import { FilesService, type FileRules } from '../../core/files/files.service.js';
 import { day } from './sessions.service.js';
 
 /** A session report: a PDF of up to 10 MB (08 step 8.9). */
@@ -17,7 +17,7 @@ const ENTITY = 'outreach_session';
 
 /**
  * The report a leader writes after a Saturday, the way they always have,
- * kept beside the session. One per session; attaching another keeps the old
+ * kept beside the session, on the church's own file storage. One per session; attaching another keeps the old
  * one as an earlier version.
  *
  * A report may name people and places, and erasing a person cannot reach
@@ -33,47 +33,46 @@ export class ReportsService {
     private readonly files: FilesService,
   ) {}
 
-  /** Where the browser uploads it: a policy the bucket enforces. */
-  async uploadPolicy(sessionId: string) {
-    await this.session(sessionId);
+  /**
+   * A report the browser sends, checked as it arrives — a PDF, up to 10 MB,
+   * whole — then recorded as the session's report. If recording fails, the
+   * file it wrote goes too.
+   */
+  async attach(
+    sessionId: string,
+    body: Readable,
+    input: { name: string; bytes: number; contentType: string },
+  ) {
+    const session = await this.session(sessionId);
     const key = this.files.newKey(prefix(sessionId), 'pdf');
-    return { key, policy: await this.files.uploadPolicy(key, REPORT) };
-  }
-
-  /** Once uploaded: checked, then recorded as the session's report. */
-  async attach(sessionId: string, input: { key: string; name: string }) {
-    return this.db.tx(async (tx) => {
-      const session = await this.session(sessionId);
-      if (!input.key.startsWith(`${prefix(sessionId)}/`)) {
-        throw new AppError(
-          422,
-          ErrorCode.VALIDATION_FAILED,
-          'That upload was not for this Saturday.',
+    const received = await this.files.receive(key, body, REPORT, input);
+    try {
+      return await this.db.tx(async (tx) => {
+        const file = await this.files.record(
+          tx,
           {
-            key: ['Not this Saturday'],
+            moduleKey: 'outreach',
+            entityType: ENTITY,
+            entityId: sessionId,
+            key,
+            originalName: input.name,
           },
+          received,
+          REPORT,
+          this.auth.userId!,
         );
-      }
-      const file = await this.files.record(
-        tx,
-        {
-          moduleKey: 'outreach',
-          entityType: ENTITY,
+        await this.audit.recordIn(tx, {
+          action: 'outreach.report.attached',
+          entityType: 'outreach_session',
           entityId: sessionId,
-          key: input.key,
-          originalName: input.name,
-        },
-        REPORT,
-        this.auth.userId!,
-      );
-      await this.audit.recordIn(tx, {
-        action: 'outreach.report.attached',
-        entityType: 'outreach_session',
-        entityId: sessionId,
-        summary: `Attached the report for the Saturday of ${day(session.heldOn)}: ${file.originalName}`,
+          summary: `Attached the report for the Saturday of ${day(session.heldOn)}: ${file.originalName}`,
+        });
+        return { id: file.id, name: file.originalName, bytes: file.bytes };
       });
-      return { id: file.id, name: file.originalName, bytes: file.bytes };
-    });
+    } catch (err) {
+      await this.files.discard(key);
+      throw err;
+    }
   }
 
   /** What there is: the current report and its earlier versions, without links. */
@@ -100,8 +99,8 @@ export class ReportsService {
     };
   }
 
-  /** A link to the report, or an earlier version, that works for five minutes. */
-  async link(sessionId: string, fileId?: string) {
+  /** The report, or an earlier version, as bytes to send to someone who may read it. */
+  async read(sessionId: string, fileId?: string) {
     await this.session(sessionId);
     const file = fileId
       ? await this.db.client.file.findFirst({
@@ -109,11 +108,7 @@ export class ReportsService {
         })
       : await this.files.current(this.db.client, ENTITY, sessionId);
     if (!file) throw notFound('This Saturday has no report.');
-    return {
-      url: await this.files.downloadUrl(file),
-      name: file.originalName,
-      expiresAt: new Date(Date.now() + DOWNLOAD_SECONDS * 1000).toISOString(),
-    };
+    return { stream: await this.files.open(file), name: file.originalName, bytes: file.bytes };
   }
 
   private async session(id: string) {

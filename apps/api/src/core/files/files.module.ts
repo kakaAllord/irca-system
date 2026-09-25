@@ -1,14 +1,13 @@
 import { Global, Module } from '@nestjs/common';
 import { FilesService } from './files.service.js';
-import { MemoryFileStorage } from './memory.storage.js';
 
 /**
- * Files in object storage, for every module (D24). See FilesService for how
- * an upload becomes a file, and which storage is used when.
+ * Files on a disk that outlives deploys, for every module (D24). See
+ * FilesService for how an upload becomes a file, and where it is kept.
  */
 @Global()
 @Module({
-  providers: [FilesService, MemoryFileStorage],
-  exports: [FilesService, MemoryFileStorage],
+  providers: [FilesService],
+  exports: [FilesService],
 })
 export class FilesModule {}

@@ -1,38 +1,54 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Header,
+  Headers,
+  HttpCode,
+  Param,
+  Put,
+  Query,
+  Req,
+  StreamableFile,
+} from '@nestjs/common';
+import type { Request } from 'express';
 import { z } from 'zod';
-import { ZodPipe } from '../../core/http/zod.pipe.js';
+import { validation } from '../../core/http/app-error.js';
 import { RequirePermission } from '../../core/rbac/decorators.js';
 import { ReportsService } from './reports.service.js';
 
-const AttachSchema = z.object({
-  key: z.string().min(1).max(300),
+const Upload = z.object({
   name: z.string().trim().min(1).max(200),
+  bytes: z.coerce.number().int().min(1),
 });
 
 /**
- * A Saturday's report, as a PDF. The presign route lives with the session
- * rather than as a general /v1/files: which permission covers an upload is
- * the owning module's to say (08 step 8.9).
+ * A Saturday's report, as a PDF, kept on the church's own file storage. The
+ * routes live with the session rather than as a general /v1/files: which
+ * permission covers a file is the owning module's to say (08 step 8.9).
  */
 @Controller('outreach/sessions/:id/report')
 export class ReportsController {
   constructor(private readonly reports: ReportsService) {}
 
+  /**
+   * The PDF itself is the body, `?name=` its name and `?bytes=` its size, so
+   * a body cut short on the way is refused rather than kept.
+   */
   @RequirePermission('outreach.reports.upload')
-  @Post('upload')
-  @HttpCode(201)
-  upload(@Param('id') id: string) {
-    return this.reports.uploadPolicy(id);
-  }
-
-  @RequirePermission('outreach.reports.upload')
-  @Post()
+  @Put()
   @HttpCode(201)
   attach(
     @Param('id') id: string,
-    @Body(new ZodPipe(AttachSchema)) body: z.infer<typeof AttachSchema>,
+    @Query() query: Record<string, string | undefined>,
+    @Headers('content-type') contentType: string | undefined,
+    @Req() req: Request,
   ) {
-    return this.reports.attach(id, body);
+    const parsed = Upload.safeParse(query);
+    if (!parsed.success) throw validation(z.flattenError(parsed.error).fieldErrors);
+    return this.reports.attach(id, req, {
+      ...parsed.data,
+      contentType: (contentType ?? '').split(';')[0]!.trim(),
+    });
   }
 
   @RequirePermission('outreach.reports.read')
@@ -41,10 +57,20 @@ export class ReportsController {
     return this.reports.describe(id);
   }
 
-  /** A link that works for five minutes: to the report, or with ?file= an earlier one. */
+  /** The report, or with ?file= an earlier one, opened in the browser. */
   @RequirePermission('outreach.reports.read')
   @Get()
-  link(@Param('id') id: string, @Query('file') file?: string) {
-    return this.reports.link(id, file && z.uuid().safeParse(file).success ? file : undefined);
+  // What a report says is not for a shared cache, nor the browser's disk.
+  @Header('Cache-Control', 'private, no-store')
+  async read(@Param('id') id: string, @Query('file') file?: string) {
+    const report = await this.reports.read(
+      id,
+      file && z.uuid().safeParse(file).success ? file : undefined,
+    );
+    return new StreamableFile(report.stream, {
+      type: 'application/pdf',
+      length: report.bytes,
+      disposition: `inline; filename="${report.name.replace(/[^\w .()-]/g, '_')}"`,
+    });
   }
 }

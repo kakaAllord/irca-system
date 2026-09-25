@@ -2,16 +2,13 @@
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { clientApi } from '@/lib/api/client';
-import { ApiRequestError } from '@/lib/api/errors';
+import { ApiRequestError, readApiError } from '@/lib/api/errors';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import type { ReportVersion, ReportVersions } from './types';
 
-/** The bucket refuses more than this; saying so first saves a wasted upload. */
+/** The API refuses more than this; saying so first saves a wasted upload. */
 const MAX_BYTES = 10 * 1_048_576;
-
-type Policy = { url: string; fields: Record<string, string> };
 
 const size = (bytes: number) =>
   bytes < 1_048_576
@@ -21,10 +18,9 @@ const when = (iso: string) =>
   new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
 /**
- * A Saturday's report, as the leader writes it: a PDF of up to 10 MB. It goes
- * from the browser straight to the church's private storage, and opens
- * through a link that works for five minutes. Attaching another keeps this
- * one as an earlier version.
+ * A Saturday's report, as the leader writes it: a PDF of up to 10 MB, kept on
+ * the church's own file storage and opened only by those who may read it.
+ * Attaching another keeps this one as an earlier version.
  */
 export function ReportPanel({
   sessionId,
@@ -41,20 +37,9 @@ export function ReportPanel({
   const [error, setError] = useState<string | null>(null);
   const base = `/outreach/sessions/${sessionId}/report`;
 
-  async function open(version?: ReportVersion) {
-    setError(null);
-    // Opened before the link is fetched, so the browser treats it as the click's own window.
-    const tab = window.open('', '_blank');
-    try {
-      const { url } = await clientApi<{ url: string }>(
-        version ? `${base}?file=${version.id}` : base,
-      );
-      if (tab) tab.location.href = url;
-      else window.location.href = url;
-    } catch (err) {
-      tab?.close();
-      setError(err instanceof ApiRequestError ? err.message : 'Could not open it.');
-    }
+  /** Opened in a tab of its own; the API checks the reader may, on the way. */
+  function open(version?: ReportVersion) {
+    window.open(version ? `/api${base}?file=${version.id}` : `/api${base}`, '_blank', 'noopener');
   }
 
   async function upload(file: File) {
@@ -68,21 +53,19 @@ export function ReportPanel({
       return;
     }
     try {
-      setBusy('Getting ready…');
-      const { key, policy } = await clientApi<{ key: string; policy: Policy }>(`${base}/upload`, {
-        method: 'POST',
-      });
       setBusy('Uploading…');
-      const form = new FormData();
-      for (const [name, value] of Object.entries(policy.fields)) form.append(name, value);
-      form.append('file', file);
-      const res = await fetch(policy.url, { method: 'POST', body: form });
-      if (!res.ok) {
-        setError('The storage refused the file. Check it is a PDF of up to 10 MB, and try again.');
-        return;
-      }
-      setBusy('Saving…');
-      await clientApi(base, { method: 'POST', body: { key, name: file.name } });
+      // The file is the body; its size goes with it, so one cut short on the
+      // way is refused rather than kept.
+      const res = await fetch(
+        `/api${base}?name=${encodeURIComponent(file.name)}&bytes=${file.size}`,
+        {
+          method: 'PUT',
+          credentials: 'same-origin',
+          headers: { 'x-irca-client': 'portal', 'content-type': 'application/pdf' },
+          body: file,
+        },
+      );
+      if (!res.ok) throw await readApiError(res);
       router.refresh();
     } catch (err) {
       setError(

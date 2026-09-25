@@ -59,44 +59,18 @@ export const EnvSchema = z
       }),
 
     /**
-     * The private S3-compatible bucket files are kept in (D24): Cloudflare R2
-     * or Backblaze B2. All five, or none; with none, uploads are refused with
-     * a message saying so, and nothing else changes.
+     * The folder files are kept in (D24): in production, where the Railway
+     * volume is mounted on the API, so they survive every deploy. Unset, uploads
+     * are refused with a message saying so, and nothing else changes.
      */
-    STORAGE_ENDPOINT: z
-      .url()
-      .optional()
-      .or(z.literal('').transform(() => undefined)),
-    STORAGE_REGION: z
+    FILES_DIR: z
       .string()
       .optional()
-      .transform((v) => v || undefined),
-    STORAGE_BUCKET: z
-      .string()
-      .optional()
-      .transform((v) => v || undefined),
-    STORAGE_ACCESS_KEY: z
-      .string()
-      .optional()
-      .transform((v) => v || undefined),
-    STORAGE_SECRET_KEY: z
-      .string()
-      .optional()
-      .transform((v) => v || undefined),
+      .transform((v) => v || undefined)
+      .refine((v) => v === undefined || v.startsWith('/'), {
+        message: 'must be an absolute path, such as /data/files',
+      }),
   })
-  .refine(
-    (env) => {
-      const set = [
-        env.STORAGE_ENDPOINT,
-        env.STORAGE_REGION,
-        env.STORAGE_BUCKET,
-        env.STORAGE_ACCESS_KEY,
-        env.STORAGE_SECRET_KEY,
-      ].filter(Boolean).length;
-      return set === 0 || set === 5;
-    },
-    { message: 'set all five STORAGE_ variables, or none', path: ['STORAGE_BUCKET'] },
-  )
   .refine((env) => env.EMAIL_PROVIDER !== 'resend' || !!env.RESEND_API_KEY, {
     message: 'RESEND_API_KEY is required when EMAIL_PROVIDER is resend',
     path: ['RESEND_API_KEY'],

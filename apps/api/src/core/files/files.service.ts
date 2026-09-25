@@ -1,15 +1,18 @@
 import { randomUUID } from 'node:crypto';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import type { Readable } from 'node:stream';
 import { Injectable } from '@nestjs/common';
 import { ErrorCode } from '@irca/shared';
 import { AppConfig } from '../../config/app-config.js';
 import type { Tx } from '../database/db.service.js';
 import { PrismaDb } from '../database/prisma-clients.js';
 import { AppError } from '../http/app-error.js';
-import type { FileStorage, UploadPolicy } from './file-storage.js';
-import { MemoryFileStorage } from './memory.storage.js';
-import { S3FileStorage } from './s3.storage.js';
+import { DiskFileStorage } from './disk.storage.js';
+import { TooLarge, type FileStorage } from './file-storage.js';
 
-/** What a file must be, checked by the bucket on upload and by the API after. */
+/** What a file must be, checked as it arrives and before it is recorded. */
 export type FileRules = {
   contentType: string;
   maxBytes: number;
@@ -25,46 +28,39 @@ export type NewFile = {
   originalName: string;
 };
 
-/** How long an upload policy is good for: long enough for a slow connection. */
-const UPLOAD_SECONDS = 15 * 60;
-/** How long a download link works (08 step 8.9). */
-export const DOWNLOAD_SECONDS = 5 * 60;
-/** An object with no row after this long was an upload abandoned half-way. */
+/** A file with no row after this long was an upload abandoned half-way. */
 const ORPHAN_AFTER_MS = 24 * 3_600_000;
 
 /**
- * Files, once, for every module (D24).
+ * Files, once, for every module (D24, corrected 25 Sept 2026: kept on a
+ * Railway volume rather than in a bucket).
  *
- * The browser uploads straight to the bucket with a presigned POST whose
- * policy refuses the wrong type and anything too big, then tells the owning
- * module, which calls `record`: the object is looked at — there, the right
- * size, the right type, and starting with the right bytes — before a row says
- * it exists. Which permission covers an upload or a download is the owning
- * module's to say; this only keeps the files.
+ * An upload comes through the API: it is written as it arrives, counted
+ * against the limit and cut off the moment it passes it, then checked — the
+ * whole of it arrived, and it starts with the bytes its kind of file starts
+ * with — before a row says it exists. Reading streams it back from the API,
+ * after the owning module has checked the reader may. Which permission covers
+ * either is the owning module's to say; this only keeps the files.
  */
 @Injectable()
 export class FilesService {
-  private s3: S3FileStorage | null = null;
+  private disk: DiskFileStorage | null = null;
 
   constructor(
     private readonly db: PrismaDb,
     private readonly config: AppConfig,
-    private readonly memory: MemoryFileStorage,
   ) {}
 
-  /** Memory in tests; the bucket when one is set up; otherwise none. */
+  /** A throwaway folder in tests; FILES_DIR when it is set; otherwise none. */
   storage(): FileStorage | null {
-    if (this.config.get('NODE_ENV') === 'test') return this.memory;
-    const endpoint = this.config.get('STORAGE_ENDPOINT');
-    if (!endpoint) return null;
-    this.s3 ??= new S3FileStorage({
-      endpoint,
-      region: this.config.get('STORAGE_REGION')!,
-      bucket: this.config.get('STORAGE_BUCKET')!,
-      accessKey: this.config.get('STORAGE_ACCESS_KEY')!,
-      secretKey: this.config.get('STORAGE_SECRET_KEY')!,
-    });
-    return this.s3;
+    if (this.disk) return this.disk;
+    const dir =
+      this.config.get('NODE_ENV') === 'test'
+        ? mkdtempSync(path.join(tmpdir(), 'irca-files-'))
+        : this.config.get('FILES_DIR');
+    if (!dir) return null;
+    this.disk = new DiskFileStorage(dir);
+    return this.disk;
   }
 
   private required(): FileStorage {
@@ -84,40 +80,53 @@ export class FilesService {
     return `${prefix}/${randomUUID()}.${extension}`;
   }
 
-  uploadPolicy(key: string, rules: FileRules): Promise<UploadPolicy> {
-    return this.required().uploadPolicy(key, {
-      contentType: rules.contentType,
-      maxBytes: rules.maxBytes,
-      expiresSeconds: UPLOAD_SECONDS,
-    });
+  /**
+   * Writes an upload under a new key and checks it: within the limit, the
+   * size the browser said it was (so a body cut short on the way is not
+   * kept), and really the kind of file it claims to be. Anything refused is
+   * removed. Returns the key and size, for `record`.
+   */
+  async receive(
+    key: string,
+    body: Readable,
+    rules: FileRules,
+    declared: { contentType: string; bytes: number },
+  ) {
+    const storage = this.required();
+    const refuse = (status: number, message: string) =>
+      new AppError(status, ErrorCode.VALIDATION_FAILED, message, { file: [message] });
+    if (declared.contentType !== rules.contentType) {
+      throw refuse(415, 'That is not the kind of file that belongs here.');
+    }
+    const limit = `${Math.round(rules.maxBytes / 1_048_576)} MB`;
+    if (declared.bytes > rules.maxBytes) throw refuse(413, `The file is larger than ${limit}.`);
+
+    let bytes: number;
+    try {
+      ({ bytes } = await storage.save(key, body, rules.maxBytes));
+    } catch (err) {
+      if (err instanceof TooLarge) throw refuse(413, `The file is larger than ${limit}.`);
+      throw err;
+    }
+    const start = rules.magic ? await storage.firstBytes(key, rules.magic.length) : null;
+    const problem =
+      bytes !== declared.bytes
+        ? 'The file did not arrive whole. Try again.'
+        : bytes === 0 || (start && start.toString('latin1') !== rules.magic)
+          ? 'That is not the kind of file that belongs here.'
+          : null;
+    if (problem) {
+      await storage.delete(key);
+      throw refuse(422, problem);
+    }
+    return { key, bytes };
   }
 
   /**
-   * Records a file the browser has uploaded, once it has been checked, as
-   * the entity's current file. The one before it is marked replaced and
-   * kept, object and all.
+   * Records a file `receive` has kept, as the entity's current file. The one
+   * before it is marked replaced and kept, file and all.
    */
-  async record(tx: Tx, file: NewFile, rules: FileRules, uploadedById: string) {
-    const storage = this.required();
-    const refuse = (message: string) =>
-      new AppError(422, ErrorCode.VALIDATION_FAILED, message, { key: [message] });
-
-    if (await tx.file.findUnique({ where: { key: file.key } })) {
-      throw refuse('That file has already been recorded.');
-    }
-    const object = await storage.head(file.key);
-    if (!object) throw refuse('The file has not finished uploading. Try again.');
-    if (object.bytes > rules.maxBytes) {
-      throw refuse(`The file is larger than ${Math.round(rules.maxBytes / 1_048_576)} MB.`);
-    }
-    const start = rules.magic ? await storage.firstBytes(file.key, rules.magic.length) : null;
-    if (
-      (object.contentType && object.contentType !== rules.contentType) ||
-      (start && start.toString('latin1') !== rules.magic)
-    ) {
-      throw refuse('That is not the kind of file that belongs here.');
-    }
-
+  async record(tx: Tx, file: NewFile, received: { bytes: number }, rules: FileRules, by: string) {
     await tx.file.updateMany({
       where: { entityType: file.entityType, entityId: file.entityId, deletedAt: null },
       data: { deletedAt: new Date() },
@@ -127,8 +136,8 @@ export class FilesService {
         ...file,
         originalName: file.originalName.slice(0, 200),
         contentType: rules.contentType,
-        bytes: object.bytes,
-        uploadedById,
+        bytes: received.bytes,
+        uploadedById: by,
       },
     });
   }
@@ -141,24 +150,30 @@ export class FilesService {
     });
   }
 
-  /** A link to read it that stops working after five minutes. */
-  downloadUrl(file: { key: string; originalName: string }): Promise<string> {
-    return this.required().downloadUrl(file.key, {
-      filename: file.originalName,
-      expiresSeconds: DOWNLOAD_SECONDS,
-    });
+  /** The bytes of a recorded file, to stream to a reader the owning module has let in. */
+  async open(file: { key: string }): Promise<Readable> {
+    const storage = this.required();
+    if (!(await storage.head(file.key))) {
+      throw new AppError(404, ErrorCode.NOT_FOUND, 'The file is missing from storage.');
+    }
+    return storage.open(file.key);
+  }
+
+  /** Removes a file received but never recorded, when recording it failed. */
+  async discard(key: string) {
+    await this.storage()?.delete(key);
   }
 
   /**
-   * The nightly check (08 step 8.9): objects older than a day with no row
-   * were uploads abandoned half-way, and are removed; rows whose object is
-   * missing are reported, never deleted, for a person to look into.
+   * The nightly check (08 step 8.9): files older than a day with no row were
+   * uploads abandoned half-way, and are removed; rows whose file is missing
+   * are reported, never deleted, for a person to look into.
    */
   async sweep(now = new Date()) {
     const storage = this.storage();
     if (!storage) return { skipped: 'no file storage is set up' };
     const [objects, rows] = await Promise.all([
-      storage.list(''),
+      storage.list(),
       this.db.file.findMany({ select: { key: true } }),
     ]);
     const recorded = new Set(rows.map((r) => r.key));

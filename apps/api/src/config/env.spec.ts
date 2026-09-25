@@ -36,19 +36,9 @@ describe('validateEnv', () => {
     ).not.toThrow();
   });
 
-  it('takes file storage whole or not at all', () => {
-    const storage = {
-      STORAGE_ENDPOINT: 'https://account.r2.cloudflarestorage.com',
-      STORAGE_REGION: 'auto',
-      STORAGE_BUCKET: 'irca-files',
-      STORAGE_ACCESS_KEY: 'key',
-      STORAGE_SECRET_KEY: 'secret',
-    };
-    expect(validateEnv({ ...valid, ...storage }).STORAGE_BUCKET).toBe('irca-files');
-    // Empty, as .env.example leaves them, is none.
-    const none = validateEnv({ ...valid, STORAGE_ENDPOINT: '', STORAGE_BUCKET: '' });
-    expect(none.STORAGE_ENDPOINT).toBeUndefined();
-    const { STORAGE_SECRET_KEY: _s, ...partial } = storage;
-    expect(() => validateEnv({ ...valid, ...partial })).toThrow(/all five STORAGE_/);
+  it('takes the files folder as an absolute path, or none', () => {
+    expect(validateEnv({ ...valid, FILES_DIR: '/data/files' }).FILES_DIR).toBe('/data/files');
+    expect(validateEnv({ ...valid, FILES_DIR: '' }).FILES_DIR).toBeUndefined();
+    expect(() => validateEnv({ ...valid, FILES_DIR: 'data/files' })).toThrow(/absolute path/);
   });
 });

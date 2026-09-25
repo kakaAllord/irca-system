@@ -1,12 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import pg from 'pg';
+import request from 'supertest';
 import { randomUUID } from 'node:crypto';
 import { outreachModule } from '@irca/shared';
 import { RegistrySync } from '../src/core/rbac/registry-sync.service.js';
 import { UsageSnapshot } from '../src/core/usage/usage-snapshot.service.js';
 import { UsageService } from '../src/core/usage/usage.service.js';
-import { MemoryFileStorage } from '../src/core/files/memory.storage.js';
 import {
   createApp,
   createChurch,
@@ -1058,51 +1058,57 @@ describe('Outreach (Phase 8)', () => {
   });
   describe('the session report (8.9)', () => {
     const pdf = (size = 4096) => Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.alloc(size)]);
+    /** An upload as the portal sends it: the file as the body, its name and size in the query. */
+    const upload = (
+      base: string,
+      cookie: string,
+      file: Buffer,
+      name: string,
+      type = 'application/pdf',
+    ) =>
+      request(app.getHttpServer())
+        .put(`${base}?name=${encodeURIComponent(name)}&bytes=${file.length}`)
+        .set('X-IRCA-Client', 'portal')
+        .set('Cookie', cookie)
+        .set('Content-Type', type)
+        .send(file);
 
-    it('uploads straight to the bucket, is checked, and opens through a short-lived link', async () => {
-      const bucket = app.get(MemoryFileStorage);
-      bucket.reset();
+    it('takes a PDF through the API, refuses anything else, and reads it back', async () => {
       const { cookie } = await outreach();
       const session = await portal(app)
         .post('/v1/outreach/sessions', { heldOn: '2026-09-19' }, cookie)
         .expect(201);
       const base = `/v1/outreach/sessions/${session.body.id}/report`;
 
-      const { body } = await portal(app).post(`${base}/upload`, {}, cookie).expect(201);
-      expect(body.key).toMatch(
-        new RegExp(`^outreach/sessions/${session.body.id}/[0-9a-f-]+\\.pdf$`),
-      );
-      expect(body.policy).toMatchObject({ contentType: 'application/pdf', maxBytes: 10_485_760 });
-      // What the bucket makes of a 12 MB file and a Word document under that policy.
-      expect(() => bucket.upload(body.key, pdf(12 * 1_048_576), 'application/pdf')).toThrow();
-      expect(() =>
-        bucket.upload(body.key, Buffer.from('PK'), 'application/vnd.openxmlformats'),
-      ).toThrow();
+      await upload(base, cookie, pdf(12 * 1_048_576), 'huge.pdf').expect(413);
+      await upload(
+        base,
+        cookie,
+        Buffer.from('PK word'),
+        'report.docx',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ).expect(415);
+      await upload(base, cookie, Buffer.from('PK not a pdf'), 'fake.pdf').expect(422);
+      await upload(base, cookie, pdf(), 'Sombetini report.pdf').expect(201);
 
-      // Not uploaded yet, then for another Saturday: both refused.
-      await portal(app).post(base, { key: body.key, name: 'report.pdf' }, cookie).expect(422);
-      await portal(app)
-        .post(base, { key: 'outreach/sessions/elsewhere/x.pdf', name: 'report.pdf' }, cookie)
-        .expect(422);
-
-      bucket.upload(body.key, pdf(), 'application/pdf');
-      await portal(app)
-        .post(base, { key: body.key, name: 'Sombetini report.pdf' }, cookie)
-        .expect(201);
-
-      const link = await portal(app)
-        .get(base, await member())
+      const read = await request(app.getHttpServer())
+        .get(base)
+        .set('X-IRCA-Client', 'portal')
+        .set('Cookie', await member())
+        .buffer(true)
+        .parse((res, done) => {
+          const chunks: Buffer[] = [];
+          res.on('data', (c: Buffer) => chunks.push(c));
+          res.on('end', () => done(null, Buffer.concat(chunks)));
+        })
         .expect(200);
-      expect(link.body.name).toBe('Sombetini report.pdf');
-      expect(bucket.open(link.body.url)).not.toBeNull();
-      expect(bucket.open(link.body.url, Date.now() + 6 * 60_000)).toBeNull();
+      expect(read.headers['content-type']).toBe('application/pdf');
+      expect(read.headers['cache-control']).toBe('private, no-store');
+      expect(read.headers['content-disposition']).toContain('Sombetini report.pdf');
+      expect((read.body as Buffer).equals(pdf())).toBe(true);
 
-      // A second report keeps the first as an earlier version.
-      const again = await portal(app).post(`${base}/upload`, {}, cookie).expect(201);
-      bucket.upload(again.body.key, pdf(8192), 'application/pdf');
-      await portal(app)
-        .post(base, { key: again.body.key, name: 'Corrected.pdf' }, cookie)
-        .expect(201);
+      // A second report keeps the first as an earlier version, which still opens.
+      await upload(base, cookie, pdf(8192), 'Corrected.pdf').expect(201);
       const versions = await portal(app).get(`${base}/versions`, cookie).expect(200);
       expect(versions.body.current.name).toBe('Corrected.pdf');
       expect(versions.body.earlier.map((v: { name: string }) => v.name)).toEqual([
@@ -1111,7 +1117,10 @@ describe('Outreach (Phase 8)', () => {
       const earlier = await portal(app)
         .get(`${base}?file=${versions.body.earlier[0].id}`, cookie)
         .expect(200);
-      expect(earlier.body.name).toBe('Sombetini report.pdf');
+      expect(earlier.headers['content-disposition']).toContain('Sombetini report.pdf');
+      // Only what was kept is on the disk: the refused uploads left nothing.
+      const { rows } = await db.query(`select count(*)::int as n from files`);
+      expect(rows[0].n).toBe(2);
     });
 
     it('leaves attaching to the leaders, and reading to those who may', async () => {
@@ -1120,12 +1129,8 @@ describe('Outreach (Phase 8)', () => {
         .post('/v1/outreach/sessions', { heldOn: '2026-09-19' }, cookie)
         .expect(201);
       const base = `/v1/outreach/sessions/${session.body.id}/report`;
-      await portal(app)
-        .post(`${base}/upload`, {}, await member())
-        .expect(403);
-      await portal(app)
-        .post(`${base}/upload`, {}, await viewer())
-        .expect(403);
+      await upload(base, await member(), pdf(), 'r.pdf').expect(403);
+      await upload(base, await viewer(), pdf(), 'r.pdf').expect(403);
       const outsider = await createUserWithPermissions(db, ['outreach.dashboard.read'], {
         moduleKey: 'outreach',
       });
@@ -1136,6 +1141,7 @@ describe('Outreach (Phase 8)', () => {
       await portal(app).get(base, cookie).expect(404);
     });
   });
+
   describe('proving it (8.10)', () => {
     const ID = '00000000-0000-4000-8000-000000000000';
     const call = (route: { method: string; path: string }, cookie: string) => {

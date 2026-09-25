@@ -1,38 +1,31 @@
-/**
- * Where files are kept (D24): a private S3-compatible bucket, behind one
- * interface, the way text messages sit behind their providers. The bucket in
- * production; memory in tests; and, where no bucket is set up, nothing, which
- * the service turns into a plain refusal.
- */
-export type UploadPolicy = {
-  /** Where the browser posts the file, with these form fields before it. */
-  url: string;
-  fields: Record<string, string>;
-  /** The largest file the bucket itself will take, in bytes. */
-  maxBytes: number;
-  contentType: string;
-  expiresAt: string;
-};
+import type { Readable } from 'node:stream';
 
-export type StoredObject = { key: string; bytes: number; contentType: string; modifiedAt: Date };
+/**
+ * Where files are kept (D24, corrected 25 Sept 2026): a folder on a disk that
+ * outlives deploys — a Railway volume in production, a temporary folder in
+ * tests. Behind one interface, the way text messages sit behind their
+ * providers, so the place can change without the modules that keep files
+ * noticing.
+ */
+export type StoredObject = { key: string; bytes: number; modifiedAt: Date };
 
 export interface FileStorage {
   /**
-   * A presigned POST: the browser uploads straight to the bucket, and the
-   * bucket itself refuses anything but this type and anything over this size.
-   * A large file never passes through the API.
+   * Writes what arrives under a key, counting as it goes, and refuses — and
+   * removes what it wrote — once it passes the limit. Nothing is left under
+   * the key unless the whole of it arrived.
    */
-  uploadPolicy(
-    key: string,
-    rules: { contentType: string; maxBytes: number; expiresSeconds: number },
-  ): Promise<UploadPolicy>;
+  save(key: string, body: Readable, maxBytes: number): Promise<{ bytes: number }>;
   /** What is there under this key, or null. */
   head(key: string): Promise<StoredObject | null>;
-  /** A link that works for this long and then stops. */
-  downloadUrl(key: string, rules: { filename: string; expiresSeconds: number }): Promise<string>;
-  /** Everything under a prefix, for the nightly check. */
-  list(prefix: string): Promise<StoredObject[]>;
-  delete(key: string): Promise<void>;
+  /** The bytes, to send to whoever may read them. */
+  open(key: string): Readable;
   /** The first bytes, to check a file is what it says it is. */
   firstBytes(key: string, count: number): Promise<Buffer>;
+  /** Everything kept, for the nightly check. */
+  list(): Promise<StoredObject[]>;
+  delete(key: string): Promise<void>;
 }
+
+/** Refused while being written: bigger than the limit. */
+export class TooLarge extends Error {}
