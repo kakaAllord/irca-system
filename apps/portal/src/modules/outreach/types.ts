@@ -167,3 +167,38 @@ export type TrainingHistory = {
   trainings: { id: string; topic: string; date: string }[];
   people: { personId: string; name: string; marks: ('ATTENDED' | 'MISSED' | null)[] }[];
 };
+
+export type DashboardFigure = {
+  label: string;
+  hint: string;
+  value: number;
+  /** For a rate: what the value is out of. */
+  of: number | null;
+  /** How things stand now, whatever the period. */
+  now: boolean;
+};
+
+export type Dashboard = {
+  from: string;
+  to: string;
+  figures: Record<string, DashboardFigure>;
+  trends: { metric: string; label: string; points: { day: string; value: number }[] }[];
+};
+
+export type FigureList = {
+  from: string;
+  to: string;
+  key: string;
+  label: string;
+  hint: string;
+  now: boolean;
+  rows: {
+    id: string;
+    title: string;
+    detail: string;
+    day: string | null;
+    href: string;
+    n: number;
+    d: number;
+  }[];
+};
