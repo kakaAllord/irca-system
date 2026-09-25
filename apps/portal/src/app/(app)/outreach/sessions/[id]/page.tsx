@@ -15,10 +15,12 @@ import {
   StatusButtons,
   TeamDrawer,
 } from '@/modules/outreach/SessionControls';
+import { ReportPanel } from '@/modules/outreach/ReportPanel';
 import {
   STATUS_LABEL,
   churchToday,
   longDay,
+  type ReportVersions,
   type Session,
   type Team,
 } from '@/modules/outreach/types';
@@ -45,6 +47,9 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
     session.status !== 'CANCELLED' &&
     session.heldOn <= churchToday(me.church?.timezone);
   const planned = session.status === 'PLANNED';
+  const report = can(me, 'outreach.reports.read')
+    ? await serverApi<ReportVersions>(`/outreach/sessions/${session.id}/report/versions`)
+    : null;
   const [team, areas] =
     manage && planned
       ? await Promise.all([
@@ -167,6 +172,16 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
           </ul>
         )}
       </section>
+
+      {report && (
+        <div className="mt-7 max-w-2xl">
+          <ReportPanel
+            sessionId={session.id}
+            versions={report}
+            canUpload={can(me, 'outreach.reports.upload')}
+          />
+        </div>
+      )}
     </>
   );
 }

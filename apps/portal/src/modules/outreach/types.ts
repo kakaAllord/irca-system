@@ -202,3 +202,12 @@ export type FigureList = {
     d: number;
   }[];
 };
+
+export type ReportVersion = {
+  id: string;
+  name: string;
+  bytes: number;
+  uploadedAt: string;
+  uploadedBy: string | null;
+};
+export type ReportVersions = { current: ReportVersion | null; earlier: ReportVersion[] };
