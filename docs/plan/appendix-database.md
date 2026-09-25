@@ -52,6 +52,14 @@ hand in the migrations, mostly the init migration.
 | `comms_blocked_numbers` | 7 | Numbers that replied STOP, or that the carrier says are dead. | Never messaged again. Kept, without the person's name, when the person is erased. |
 | `comms_inbound` | 7 | Every reply Beem passed on, exactly as it came. | Append-only for the application. |
 | `comms_beem_account` | 7 | The Beem key and secret, sealed with `BEEM_SETTINGS_KEY` (D26), the last four characters of the key, and the sender name. | Exactly one row (`check (id = 1)`). `select` revoked from `irca_readonly`. Never sent to a browser. |
+| `outreach_groups` | 8 | Partner groups: two or three of the Outreach team who usually go out together. | Name unique. Switched off, never deleted (`delete`, `truncate` revoked), because sessions point at them. |
+| `outreach_group_members` | 8 | Who is in each partner group. People, not staff accounts. | Erased with the person. |
+| `outreach_sessions` | 8 | One Saturday: its date, title, status (planned, completed, cancelled) and notes. | Closed or cancelled, never deleted (`delete`, `truncate` revoked). |
+| `outreach_session_teams` | 8 | A team sent to one area on a Saturday, the group it started from, and how many were spoken to without taking details. | `spoken_to_only` cannot be negative. |
+| `outreach_session_team_members` | 8 | Who went out in each team that day. | Erased with the person. |
+| `outreach_reached` | 8 | A person reached on a Saturday: when, where, by whom (`reached_by_ids`, people), whether they still need following up. Their own details are in `people` (D23). | `delete`, `truncate` and `update` revoked, except `needs_follow_up`, `area` and `note`. Erased with the person; an erased team member is taken out of `reached_by_ids` by hand. |
+| `outreach_trainings` | 8 | A Friday training: topic, trainer, when, venue. | Never deleted (`delete`, `truncate` revoked). |
+| `outreach_training_attendance` | 8 | Who came to each training, with the foundation class's marks. | Erased with the person. |
 
 **Database roles:** `irca_owner` owns the schema and runs migrations and
 `person:erase`. `irca_app` is everything the API does, with the revokes above.

@@ -665,6 +665,11 @@ model Person {
   departments  DepartmentMember[]
   messages     CommsRecipient[]
 
+  outreachGroups    OutreachGroupMember[]
+  outreachTeams     OutreachSessionTeamMember[]
+  outreachReached   OutreachReached[]
+  outreachTrainings OutreachTrainingAttendance[]
+
   @@unique([memberNumber])
   @@index([stage])
   @@index([fullName])
@@ -1143,4 +1148,156 @@ model CommsBeemAccount {
   updatedById  String?  @map("updated_by_id") @db.Uuid
 
   @@map("comms_beem_account")
+}
+
+// ── Outreach (Phase 8) ─────────────────────────────────────────────────────
+// The team is the Outreach department's leaders and members (D28), so there
+// is no team table here: these tables point at people. Someone reached is a
+// row in `people` (D23), and what happened with them is on their timeline,
+// `person_interactions`. Sessions and groups are closed or switched off,
+// never deleted, so last year's Saturdays keep their answer.
+
+/// A standing partnership: two or three of the team who usually go out together.
+model OutreachGroup {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  name      String   @unique @db.VarChar(60)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  members OutreachGroupMember[]
+  teams   OutreachSessionTeam[]
+
+  @@map("outreach_groups")
+}
+
+model OutreachGroupMember {
+  groupId  String @map("group_id") @db.Uuid
+  personId String @map("person_id") @db.Uuid
+
+  group  OutreachGroup @relation(fields: [groupId], references: [id])
+  /// Erasing a person (the person:erase command) takes this with them.
+  person Person        @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, personId])
+  @@index([personId])
+  @@map("outreach_group_members")
+}
+
+enum OutreachSessionStatus {
+  PLANNED
+  COMPLETED
+  CANCELLED
+}
+
+/// One Saturday.
+model OutreachSession {
+  id          String                @id @default(uuid(7)) @db.Uuid
+  heldOn      DateTime              @map("held_on") @db.Date
+  title       String                @default("") @db.VarChar(80)
+  status      OutreachSessionStatus @default(PLANNED)
+  notes       String                @default("") @db.VarChar(2000)
+  createdById String                @map("created_by_id") @db.Uuid
+  createdAt   DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  teams   OutreachSessionTeam[]
+  reached OutreachReached[]
+
+  @@index([heldOn(sort: Desc)])
+  @@map("outreach_sessions")
+}
+
+/// A team sent to one area on that Saturday. Its people may differ from the
+/// standing group it started from: partners get swapped on the day.
+model OutreachSessionTeam {
+  id           String  @id @default(uuid(7)) @db.Uuid
+  sessionId    String  @map("session_id") @db.Uuid
+  groupId      String? @map("group_id") @db.Uuid
+  area         String  @db.VarChar(80)
+  /// People spoken to without taking details. Those recorded are counted, not typed.
+  spokenToOnly Int     @default(0) @map("spoken_to_only")
+  notes        String  @default("") @db.VarChar(1000)
+
+  session OutreachSession             @relation(fields: [sessionId], references: [id])
+  group   OutreachGroup?              @relation(fields: [groupId], references: [id])
+  members OutreachSessionTeamMember[]
+  reached OutreachReached[]
+
+  @@index([sessionId])
+  @@map("outreach_session_teams")
+}
+
+model OutreachSessionTeamMember {
+  teamId   String @map("team_id") @db.Uuid
+  personId String @map("person_id") @db.Uuid
+
+  team   OutreachSessionTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  /// Erasing a person (the person:erase command) takes this with them.
+  person Person              @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@id([teamId, personId])
+  @@index([personId])
+  @@map("outreach_session_team_members")
+}
+
+/// A person reached on a Saturday. Their own details live in `people`; this
+/// row says when, where and by whom. Only the area, the note and whether they
+/// still need following up change afterwards.
+model OutreachReached {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  personId      String   @map("person_id") @db.Uuid
+  sessionId     String?  @map("session_id") @db.Uuid
+  teamId        String?  @map("team_id") @db.Uuid
+  reachedOn     DateTime @map("reached_on") @db.Date
+  area          String   @default("") @db.VarChar(80)
+  /// The people who spoke to them: the team, not staff accounts. No foreign
+  /// key, so person:erase takes an erased person out of these by hand.
+  reachedByIds  String[] @default([]) @map("reached_by_ids") @db.Uuid
+  needsFollowUp Boolean  @default(true) @map("needs_follow_up")
+  note          String   @default("") @db.VarChar(1000)
+  recordedById  String   @map("recorded_by_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  /// Erasing a person (the person:erase command) takes this with them.
+  person  Person               @relation(fields: [personId], references: [id], onDelete: Cascade)
+  session OutreachSession?     @relation(fields: [sessionId], references: [id])
+  team    OutreachSessionTeam? @relation(fields: [teamId], references: [id])
+
+  @@index([reachedOn(sort: Desc)])
+  @@index([personId])
+  @@index([sessionId])
+  @@map("outreach_reached")
+}
+
+/// A Friday training.
+model OutreachTraining {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  topic       String   @db.VarChar(120)
+  trainer     String   @default("") @db.VarChar(80)
+  heldAt      DateTime @map("held_at") @db.Timestamptz(6)
+  venue       String   @default("") @db.VarChar(80)
+  notes       String   @default("") @db.VarChar(2000)
+  createdById String   @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  attendance OutreachTrainingAttendance[]
+
+  @@index([heldAt(sort: Desc)])
+  @@map("outreach_trainings")
+}
+
+/// Who came to a training. The same marks the foundation class uses.
+model OutreachTrainingAttendance {
+  trainingId String         @map("training_id") @db.Uuid
+  personId   String         @map("person_id") @db.Uuid
+  mark       AttendanceMark
+  markedById String         @map("marked_by_id") @db.Uuid
+  markedAt   DateTime       @default(now()) @map("marked_at") @db.Timestamptz(6)
+
+  training OutreachTraining @relation(fields: [trainingId], references: [id])
+  /// Erasing a person (the person:erase command) takes this with them.
+  person   Person           @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@id([trainingId, personId])
+  @@index([personId])
+  @@map("outreach_training_attendance")
 }
