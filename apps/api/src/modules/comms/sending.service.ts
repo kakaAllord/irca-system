@@ -267,7 +267,7 @@ export class SendingService {
         : (SMS_LANGS.find((l) => bodies[l]) ?? defaultLang);
     if (r.status !== 'PENDING') return { ...r, lang, body: '', segments: 0, encoding: null };
     const body = renderSms(bodies[lang]!, lang, {
-      ...(r.blanks?.(lang) ?? {}),
+      ...r.blanks?.(lang),
       ...common,
       first_name: firstNameOf(r.name),
       full_name: r.name,
