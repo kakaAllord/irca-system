@@ -148,8 +148,10 @@ export function Alerts({ alerts }: { alerts: AlertsSettings }) {
                 : `${alerts.dbStorageGb} GB, alert past 80%`}
             </span>
           </p>
+          {/* Not "Edit": the church's card above has that, and two buttons with
+              one name cannot be told apart by someone using a screen reader. */}
           <Button size="sm" variant="secondary" onClick={() => setOpen(true)}>
-            Edit
+            Set the size
           </Button>
         </div>
       </div>
