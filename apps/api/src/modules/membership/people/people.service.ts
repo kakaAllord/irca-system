@@ -215,6 +215,7 @@ export class PeopleService {
           dial: input.dial ?? '+255',
           phone: input.phone?.replace(/\D/g, '') ?? '',
           email: input.email?.trim().toLowerCase() ?? '',
+          source: 'OFFICE',
           createdById: this.auth.userId,
         },
       });

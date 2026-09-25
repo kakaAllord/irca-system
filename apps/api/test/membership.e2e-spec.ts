@@ -331,6 +331,19 @@ describe('the Membership portal', () => {
         await appRole.end();
       }
     });
+    it('says where each person came from: the form, or the office', async () => {
+      const { form, cookie } = await church();
+      const { personId: fromForm } = await registered(form);
+      const byHand = await portal(app)
+        .post('/v1/membership/people', { fullName: 'Added By Hand' }, cookie)
+        .expect(201);
+      const { rows } = await db.query<{ id: string; source: string }>(
+        `select id, source from people`,
+      );
+      const source = (id: string) => rows.find((r) => r.id === id)?.source;
+      expect(source(fromForm)).toBe('FORM');
+      expect(source(byHand.body.id)).toBe('OFFICE');
+    });
   });
 
   describe('applications', () => {
