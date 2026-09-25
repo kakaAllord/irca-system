@@ -9,6 +9,7 @@ import { ApiRequestError } from '@/lib/api/errors';
 import { LeadersSection } from '@/modules/departments/LeadersSection';
 import { MembersSection } from '@/modules/departments/MembersSection';
 import type { DepartmentDetail } from '@/modules/departments/types';
+import { DepartmentTabs } from '@/modules/departments/DepartmentTabs';
 
 export const metadata: Metadata = { title: 'Department' };
 
@@ -37,6 +38,7 @@ export default async function MyDepartmentPage({ params }: { params: Promise<{ i
       <div className="mt-2">
         <PageHeader title={department.name} subtitle={department.description || undefined} />
       </div>
+      <DepartmentTabs id={department.id} />
       <div className="flex flex-col gap-7">
         <MembersSection department={department} permission="departments.own.members" />
         <LeadersSection department={department} />
