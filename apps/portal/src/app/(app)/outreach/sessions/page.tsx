@@ -81,7 +81,8 @@ export default async function SessionsPage({
                 </span>
                 <span className="text-[12px] tabular-nums text-fg2">
                   {s.reached} reached
-                  {s.spokenToOnly > 0 && ` · ${s.spokenToOnly} spoken to`} · {s.people} out
+                  {s.spokenToOnly > 0 && ` · ${s.spokenToOnly} spoken to`}
+                  {s.saved > 0 && ` · ${s.saved} saved`} · {s.people} out
                 </span>
               </Link>
             </li>

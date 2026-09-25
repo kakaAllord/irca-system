@@ -15,6 +15,7 @@ export const metadata: Metadata = { title: 'Outreach' };
 const ORDER = [
   'reached',
   'spokenTo',
+  'salvations',
   'awaiting',
   'followups',
   'visited',

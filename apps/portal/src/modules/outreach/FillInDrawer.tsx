@@ -22,6 +22,7 @@ export function FillInDrawer({ row }: { row: ReachedRow }) {
   const [area, setArea] = useState(row.area);
   const [note, setNote] = useState(row.note);
   const [needsFollowUp, setNeedsFollowUp] = useState(row.needsFollowUp);
+  const [saved, setSaved] = useState(row.saved);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,7 +32,7 @@ export function FillInDrawer({ row }: { row: ReachedRow }) {
     try {
       await clientApi(`/outreach/reached/${row.id}`, {
         method: 'PATCH',
-        body: { area, note, needsFollowUp },
+        body: { area, note, needsFollowUp, saved },
       });
       setOpen(false);
       router.refresh();
@@ -85,6 +86,10 @@ export function FillInDrawer({ row }: { row: ReachedRow }) {
               onChange={(e) => setNeedsFollowUp(e.target.checked)}
             />
             Still needs following up
+          </label>
+          <label className="flex items-center gap-2 text-[12.5px]">
+            <input type="checkbox" checked={saved} onChange={(e) => setSaved(e.target.checked)} />
+            Gave their life to Christ
           </label>
         </div>
       </Drawer>

@@ -50,6 +50,8 @@ export type SessionRow = {
   people: number;
   reached: number;
   spokenToOnly: number;
+  /** Recorded as saved, plus the teams' own counts. */
+  saved: number;
 };
 
 export type SessionTeam = {
@@ -58,7 +60,11 @@ export type SessionTeam = {
   group: { id: string; name: string } | null;
   notes: string;
   spokenToOnly: number;
+  /** Of those spoken to without details, how many were saved. */
+  savedOnly: number;
   reached: number;
+  /** Of those recorded, how many were saved. */
+  saved: number;
   people: { personId: string; name: string }[];
 };
 
@@ -82,6 +88,7 @@ export type ReachedRow = {
   reachedOn: string;
   reachedBy: string[];
   needsFollowUp: boolean;
+  saved: boolean;
   note: string;
   session: { id: string; title: string; heldOn: string } | null;
   thin: { phone: boolean; area: boolean };

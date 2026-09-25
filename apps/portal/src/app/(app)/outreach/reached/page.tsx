@@ -118,6 +118,7 @@ export default async function ReachedListPage({ searchParams }: { searchParams: 
                   >
                     {r.name}
                   </Link>
+                  {r.saved && <Badge tone="positive">Saved</Badge>}
                   {r.needsFollowUp && <Badge tone="accent">Follow up</Badge>}
                   {r.thin.phone && <Badge tone="muted">No phone</Badge>}
                   {r.thin.area && <Badge tone="muted">No area</Badge>}

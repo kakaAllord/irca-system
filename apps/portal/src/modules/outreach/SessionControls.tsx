@@ -358,15 +358,21 @@ export function RemoveTeamButton({ sessionId, team }: { sessionId: string; team:
 }
 
 /**
- * People the team spoke to without taking details. Typed, because there is
- * nothing else to count them by; kept apart from those recorded.
+ * People the team spoke to without taking details, and how many of them gave
+ * their life to Christ. Typed, because there is nothing else to count them
+ * by; kept apart from those recorded.
  */
 export function SpokenToField({ team }: { team: SessionTeam }) {
   const router = useRouter();
   const [value, setValue] = useState(String(team.spokenToOnly));
+  const [saved, setSaved] = useState(String(team.savedOnly));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const changed = value !== String(team.spokenToOnly) && /^\d+$/.test(value);
+  const whole = (v: string) => /^\d+$/.test(v);
+  const changed =
+    whole(value) &&
+    whole(saved) &&
+    (value !== String(team.spokenToOnly) || saved !== String(team.savedOnly));
 
   async function save() {
     setBusy(true);
@@ -374,7 +380,7 @@ export function SpokenToField({ team }: { team: SessionTeam }) {
     try {
       await clientApi(`/outreach/teams/${team.id}/spoken-to`, {
         method: 'PUT',
-        body: { spokenToOnly: Number(value) },
+        body: { spokenToOnly: Number(value), savedOnly: Number(saved) },
       });
       router.refresh();
     } catch (err) {
@@ -394,6 +400,16 @@ export function SpokenToField({ team }: { team: SessionTeam }) {
           min={0}
           value={value}
           onChange={(e) => setValue(e.target.value)}
+        />
+      </div>
+      <div className="w-28">
+        <Input
+          label="Of them, saved"
+          type="number"
+          inputMode="numeric"
+          min={0}
+          value={saved}
+          onChange={(e) => setSaved(e.target.value)}
         />
       </div>
       {changed && (

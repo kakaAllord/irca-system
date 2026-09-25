@@ -154,7 +154,11 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
                   <span className="font-semibold text-fg tabular-nums">{t.reached}</span> recorded
                   {' · '}
                   <span className="font-semibold text-fg tabular-nums">{t.spokenToOnly}</span>{' '}
-                  spoken to, no details
+                  spoken to, no details{' · '}
+                  <span className="font-semibold text-fg tabular-nums">
+                    {t.saved + t.savedOnly}
+                  </span>{' '}
+                  saved
                 </p>
                 {record && (
                   <div className="flex flex-wrap items-end justify-between gap-2">

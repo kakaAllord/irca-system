@@ -63,6 +63,7 @@ export function RecordForm({
   const [by, setBy] = useState<string[]>([]);
   const [mayMessage, setMayMessage] = useState(false);
   const [needsFollowUp, setNeedsFollowUp] = useState(true);
+  const [savedNow, setSavedNow] = useState(false);
   const [lang, setLang] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -88,6 +89,7 @@ export function RecordForm({
           ...(lang ? { lang } : {}),
           mayMessage,
           needsFollowUp,
+          saved: savedNow,
           ...(note.trim() ? { note } : {}),
           ...answer,
         },
@@ -97,6 +99,7 @@ export function RecordForm({
       setFullName('');
       setPhone('');
       setMayMessage(false);
+      setSavedNow(false);
       setNeedsFollowUp(true);
       setNote('');
       if (team) setArea('');
@@ -217,6 +220,16 @@ export function RecordForm({
             Ask them first. Left unticked, the church never texts them.
           </span>
         </span>
+      </label>
+
+      <label className="flex items-center gap-2.5 rounded-[8px] border border-border p-3 text-[13px]">
+        <input
+          type="checkbox"
+          className="size-4"
+          checked={savedNow}
+          onChange={(e) => setSavedNow(e.target.checked)}
+        />
+        <span className="font-medium text-fg">Gave their life to Christ</span>
       </label>
 
       <details className="text-[12.5px]">
