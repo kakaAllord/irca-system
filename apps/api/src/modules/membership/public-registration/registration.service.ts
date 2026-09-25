@@ -231,9 +231,7 @@ export class PublicRegistrationService {
     });
     if (!person) return;
     const open = await tx.membershipApplication.findFirst({
-      where: {
-        status: { in: ['UNDER_REVIEW', 'APPROVED'] },
-      },
+      where: { personId: person.id, status: { in: ['UNDER_REVIEW', 'APPROVED'] } },
     });
     if (open) return;
     await tx.membershipApplication.create({

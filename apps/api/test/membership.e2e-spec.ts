@@ -308,10 +308,17 @@ describe('the Membership portal', () => {
     it('arrive by themselves when the form asks to join', async () => {
       const { form, cookie } = await church();
       await registered(form, { interest: ['Joining the church'] });
+      // Someone else's open application is no reason to drop this one: the
+      // check for one already open is about the same person only.
+      await registered(form, {
+        interest: ['Joining the church'],
+        fullname: 'Baraka Laizer',
+        phone: '754000111',
+      });
 
       const list = await portal(app).get('/v1/membership/applications', cookie).expect(200);
-      expect(list.body.rows).toHaveLength(1);
-      expect(list.body.rows[0].source).toBe('FORM');
+      expect(list.body.rows).toHaveLength(2);
+      expect(list.body.rows.map((r: { source: string }) => r.source)).toEqual(['FORM', 'FORM']);
     });
 
     it('send someone back to where they were when rejected', async () => {
