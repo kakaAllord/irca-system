@@ -9,9 +9,10 @@ viewing as someone), **Phase 3** (the Admin portal), **Phase 4** (the Finance
 portal), **Phase 5** (the registration form on this system, and the
 Membership portal), and **Phase 6** — the developer console, the security
 hardening, the commands for setting up and recovering, the written way to
-deploy it, the runbooks and the training guides. What is left of Phase 6 is
-going live, which is the owner's (section 13). Then Communications (Phase 7),
-Outreach (Phase 8) and pledges (Phase 9). Switching the live form over is a
+deploy it, the runbooks and the training guides, and **Phase 7** — the
+church's departments with their leaders and members, and the Communication
+system that texts them. What is left of Phase 6 is going live, which is the
+owner's (section 13). Then Outreach (Phase 8) and pledges (Phase 9). Switching the live form over is a
 job for a Sunday evening, with `docs/runbooks/cutover-registration.md`.
 
 This system serves **one church**. A second church would get its own copy,
@@ -37,7 +38,7 @@ There are three apps and one shared library:
 | Part | What it is |
 | --- | --- |
 | `apps/api` | The server. Everything goes through it: signing in, permissions, the books, the activity log. |
-| `apps/portal` | What staff use in a browser: `/login`, `/admin/…`, `/finance/…`, `/membership/…`, `/dev/…`, `/help`. |
+| `apps/portal` | What staff use in a browser: `/login`, `/admin/…`, `/finance/…`, `/membership/…`, `/comms/…`, `/departments/…`, `/dev/…`, `/help`. |
 | `apps/registration` | The visitor's registration form. One setting chooses its back end: its old database (what the live site uses until the cutover) or this system. |
 | `packages/shared` | The rules both sides need to agree on: what a portal is, what a permission is, what an entry number looks like. |
 
@@ -306,12 +307,83 @@ figure is a count before it is a percentage.
 
 ---
 
+## 8d. Departments, their leaders and their members
+
+The church's departments — the praise team, the choir, the ushers, Finance,
+Communications — are kept by the administrators in **Admin → Departments**
+(decision D28).
+
+- **A department** has a name, what it does, and, if it has one, its portal. A
+  portal belongs to one department, and **Admin → Portals** will not switch a
+  department portal on until a department has been given it. Most departments
+  have no portal at all.
+- **Leaders** are named only by an administrator, only from the confirmed
+  members, each with a title such as Chairperson or Secretary. Naming one who
+  has no account invites them by email; one who has an account keeps it. They
+  hold no role: being a leader is what lets them in, and ending the
+  leadership, or archiving the department, takes that away on their next
+  click.
+- **Members** are added and removed by the department's leaders, from anyone
+  in People, under **My departments**. A leader sees names, stages and the
+  last three digits of a phone number, enough to tell two Johns apart and no
+  more. They cannot touch another department, nor name or end a leader.
+
+Nothing is deleted: departments are archived, leaderships and memberships
+ended, so who led the choir in 2027 keeps an answer.
+
+## 8e. Communications: text messages
+
+One place sends the church's texts, through Beem Africa, with one account, one
+history, one set of approved words and one bill (D21, D22, D25, D26).
+
+- **Templates.** A department's leaders write their department's words in
+  Swahili, English and French, with blanks such as `{{first_name}}` and
+  `{{date}}`, and ask for approval. Communications approves once — never words
+  it wrote itself — and from then on the department uses them without asking.
+  Changing approved words makes the next version; the old one keeps sending
+  until the new one is approved.
+- **Sending.** Communications writes to the whole church, confirmed members,
+  staff, the foundation class, chosen departments, every leader, or the
+  leaders of chosen departments, and may use its own words for what no
+  template covers. A department's leaders write to their own department, from
+  **My departments → Messages**, and to anything wider only once
+  Communications has given it to them in **Comms → Audiences**. Before Send
+  does anything, the page shows how many people, who is left alone and why, a
+  sample in each language, the segments and the cost — "Send to 4 people ·
+  about 120 TZS" — and asks once more.
+- **Refusals say why.** Nothing is sent until Communications saves a daily
+  limit in **Comms → Settings**, and a send that would pass it is refused with
+  the figure. Words that are not approved, another department's people or
+  words, and free text from a department are refused in plain words too.
+- **Everyone is written to in their own language**, the one they answered the
+  form in (the office can change it on the person's page), and **every
+  message says how to stop**. A reply of STOP, ACHA, SIMAMA, TOKA or
+  UNSUBSCRIBE blocks that number for good. The office can also tick **No
+  messages** on a person, and staff can turn texts off on their Account page.
+  Nobody is texted twice for one message, even if they are in a department
+  twice over.
+- **Recurring messages** send on their days at their time, picking one of
+  their approved templates at random and drifting a few minutes so they do not
+  arrive like an alarm, never in quiet hours (21:00–07:00 unless changed).
+  Each time, everything a person pressing Send is checked for is checked
+  again: a leader who has stepped down stops, and the page says why.
+- **What it costs.** **Comms → Overview** shows this month by department: how
+  many messages, to how many people, delivered, failed, and the cost; the
+  credit left; templates waiting; and the replies people sent. **History**
+  shows every message and what happened to each person, with numbers masked
+  unless you may read Membership's sensitive details.
+- **Where the texts go.** Tests keep them in memory; development and a
+  deployment without a Beem account write them to the API's log; production
+  sends through Beem once Communications has saved the account. Anywhere but
+  production, texts reach Beem only with `SMS_LIVE=true` set on purpose.
+
 ## 8a. The developer console
 
 For whoever runs the system, under **Dev** in the sidebar.
 
 - **Health** — the database's size and connections, every background job's
-  last run, the email queue, and the slowest queries.
+  last run, the email and text-message queues, the SMS credit left, and the
+  slowest queries.
 - **Usage** — what the system is used for, day by day: an overview, any four
   numbers on one chart, each table's size and growth, the busiest and slowest
   parts of the server, sign-ins and lockouts, and the last fifty emails with
@@ -391,13 +463,18 @@ The portal is on <http://localhost:3000>, the API on <http://localhost:4000>.
 | `clerk@irca.local` | `clerk-password-123` | Finance clerk (Neema Mollel) |
 | `mhazini@irca.local` | `manager-password-123` | Finance manager (Joyce Mhazini) |
 | `dev@irca.local` | `dev-password-123` | The developer: the dev console, and an administrator too |
+| `comms@irca.local` | `comms-password-123` | Communications lead (named for Allord Archard) |
 
-Membership and Finance are turned on. The registration form runs at <http://localhost:3001>; with
+Membership, Finance and Communications are turned on, each belonging to the
+department of the same name. No department has a leader yet: name one in
+Admin → Departments (they must be a confirmed member, so run `npm run db:demo`
+and confirm someone first). There is no daily SMS limit until you save one in
+Comms → Settings. The registration form runs at <http://localhost:3001>; with
 `REGISTRATION_BACKEND=api` in `apps/registration/.env.local` (and the seed's
 local key in `REGISTRATION_API_KEY`) it writes into this system.
 
 In development, emails are not sent: each one is printed in the API's terminal,
-link and all.
+link and all. Text messages likewise, each with the number shortened.
 
 ---
 
@@ -500,4 +577,8 @@ safety, and the whole recording-and-approving journey in a browser.
   database code (5.19).
 - Backups beyond Neon's own history, load testing and monitoring (Phase 10,
   when the owner says so).
-- Communications, Outreach and pledges (Phases 7 to 9).
+- For Communications to go live: the monthly SMS budget (so Communications can
+  save the daily limit), the Beem account typed into Comms → Settings, and the
+  reply URL given to Beem (`docs/deployment.md`, §6a).
+- Outreach and pledges (Phases 8 and 9). Phase 8's plan must first be
+  corrected for departments, as the note at its top says.
