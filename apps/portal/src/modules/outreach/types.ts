@@ -138,3 +138,32 @@ export type PendingFollowUp = {
   followups: number;
   last: { summary: string; at: string } | null;
 };
+
+export type TrainingRow = {
+  id: string;
+  topic: string;
+  trainer: string;
+  heldAt: string;
+  /** Church time. */
+  date: string;
+  time: string;
+  venue: string;
+  notes: string;
+  attended: number;
+  marked: number;
+};
+
+export type Training = Omit<TrainingRow, 'attended' | 'marked'> & {
+  departmentId: string;
+  register: {
+    personId: string;
+    name: string;
+    onTeam: boolean;
+    mark: 'ATTENDED' | 'MISSED' | null;
+  }[];
+};
+
+export type TrainingHistory = {
+  trainings: { id: string; topic: string; date: string }[];
+  people: { personId: string; name: string; marks: ('ATTENDED' | 'MISSED' | null)[] }[];
+};
