@@ -5,7 +5,10 @@
 > the church gets one place that sends text messages to them, with one
 > account, one history, one set of approved words and one bill.
 
-**Status:** being built. **Comes after:** Phase 6. **Comes before:** Phase 8
+**Status:** built (25 Sept 2026). Left for the owner: the monthly budget, so
+Communications can save a daily limit; the Beem account and the reply URL at
+launch (`docs/deployment.md` §6a); and someone other than the builder walking
+it from a fresh database (7.16). **Comes after:** Phase 6. **Comes before:** Phase 8
 (Outreach is a department, and sends its Friday reminders through this) and
 Phase 9 (pledge reminders).
 
@@ -793,19 +796,30 @@ test fail, and put it back.
 
 ## 7.16 — Phase check
 
-- [ ] Departments exist in Admin, with leaders named only by administrators, and only confirmed members.
-- [ ] A leader is invited, signs in, and adds and removes their department's members.
-- [ ] Ending a leadership takes the leader's access away with nothing else to do.
-- [ ] A department portal cannot be switched on without its department.
-- [ ] Communications can be turned on in Admin → Portals, with three roles.
-- [ ] A template goes Draft → Pending → Active, and its author cannot approve it.
-- [ ] A leader sends to their own department without asking anyone, and cannot reach anyone else unless granted.
-- [ ] Communications sends to the whole church, to departments, to all leaders, and to chosen departments' leaders.
-- [ ] Every message carries the way to stop, and a STOP is honoured for good.
-- [ ] Each person is written to in their own language (`people.lang`).
-- [ ] No send goes out until a daily cap is saved; the cap refuses an over-budget send and names the figure.
-- [ ] A beat sends on its rhythm, from its variants, never in quiet hours.
-- [ ] The Beem key is never shown in full and never sent back to the browser.
-- [ ] Dev → Usage charts messages sent and their cost; Dev → Health shows the credit left.
-- [ ] `appendix-database.md`, `data-inventory.md`, `what-works-now.md` and the metric list are updated.
-- [ ] Someone other than the builder has walked it in a browser from a fresh database.
+- [x] Departments exist in Admin, with leaders named only by administrators, and only confirmed members.
+- [x] A leader is invited, signs in, and adds and removes their department's members.
+- [x] Ending a leadership takes the leader's access away with nothing else to do.
+- [x] A department portal cannot be switched on without its department.
+- [x] Communications can be turned on in Admin → Portals, with three roles.
+- [x] A template goes Draft → Pending → Active, and its author cannot approve it.
+- [x] A leader sends to their own department without asking anyone, and cannot reach anyone else unless granted.
+- [x] Communications sends to the whole church, to departments, to all leaders, and to chosen departments' leaders.
+- [x] Every message carries the way to stop, and a STOP is honoured for good.
+- [x] Each person is written to in their own language (`people.lang`).
+- [x] No send goes out until a daily cap is saved; the cap refuses an over-budget send and names the figure.
+- [x] A beat sends on its rhythm, from its variants, never in quiet hours.
+- [x] The Beem key is never shown in full and never sent back to the browser.
+- [x] Dev → Usage charts messages sent and their cost; Dev → Health shows the credit left.
+- [x] `appendix-database.md`, `data-inventory.md`, `what-works-now.md` and the metric list are updated.
+- [ ] Someone other than the builder has walked it in a browser from a fresh database. *(The owner's.
+      The builder walked it in Chrome against a scratch database on 25 Sept 2026: see the commit
+      "A department's own Messages page".)*
+
+**What changed from this plan while building it**, so the next reader does not
+go looking: delivery reports are asked for rather than pushed, so 7.12 has one
+public route, not two (Beem's documentation, 24 Sept 2026); texts reach Beem
+outside production only with `SMS_LIVE=true` (7.7); an approver can be neither
+the author nor the submitter, refused with 409 like change requests (7.9);
+hand-made "list" audiences were not built, because departments now are the
+lists; and department free text was not built: only Communications sends words
+no template covers.
