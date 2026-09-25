@@ -114,6 +114,9 @@ export const USAGE_METRICS: MetricDef[] = [
   m('Email', 'email.failed', 'counter', 'Emails given up on'),
   m('Email', 'email.retries', 'counter', 'Emails retried'),
 
+  m('Alerts', 'alerts.sent', 'counter', 'Alerts sent to the owner'),
+  m('Alerts', 'alerts.sms', 'counter', 'Alerts also sent as a text'),
+
   m('Registration', 'registrations.started', 'counter', 'Registrations started'),
   m('Registration', 'registrations.submitted', 'counter', 'Registrations finished'),
   m('Registration', 'membership.reminders.sent', 'counter', 'Links sent to finish'),
