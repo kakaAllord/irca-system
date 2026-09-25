@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Res,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { z } from 'zod';
@@ -13,6 +24,7 @@ const ProfileSchema = z.object({
   fullName: z.string().trim().min(2).max(120).optional(),
   phone: z.string().trim().max(20).nullable().optional(),
 });
+const MessagesSchema = z.object({ optOut: z.boolean() });
 const PasswordSchema = z.object({
   currentPassword: z.string().min(1).max(PASSWORD_MAX),
   newPassword: z.string().min(1).max(PASSWORD_MAX),
@@ -31,6 +43,20 @@ export class AccountController {
   @HttpCode(204)
   updateProfile(@Body(new ZodPipe(ProfileSchema)) body: z.infer<typeof ProfileSchema>) {
     return this.account.updateProfile(body);
+  }
+
+  /** Whether the church may text them, and the number it would use. */
+  @AuthenticatedOnly()
+  @Get('messages')
+  messages() {
+    return this.account.messages();
+  }
+
+  @AuthenticatedOnly()
+  @Put('messages')
+  @HttpCode(204)
+  setMessages(@Body(new ZodPipe(MessagesSchema)) body: { optOut: boolean }) {
+    return this.account.setMessages(body.optOut);
   }
 
   @AuthenticatedOnly()

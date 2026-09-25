@@ -12,6 +12,7 @@ import { RemindMenu } from '@/modules/membership/components/RemindMenu';
 import { EnrollDrawer } from '@/modules/membership/components/EnrollDrawer';
 import { STAGE_LABEL, day, when, type PersonDetail } from '@/modules/membership/types';
 import { StageActions } from './StageActions';
+import { MessagingSettings } from '@/modules/membership/components/MessagingSettings';
 
 export const metadata: Metadata = { title: 'Person' };
 
@@ -103,6 +104,12 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
               <EnrollDrawer personId={person.id} name={person.fullName} />
             </div>
           )}
+          <MessagingSettings
+            personId={person.id}
+            lang={person.messaging.lang}
+            optOut={person.messaging.optOut}
+            optOutSource={person.messaging.optOutSource}
+          />
           <ol className="mt-1 flex flex-col gap-1 border-t border-border2 pt-3 text-[12px]">
             {person.history.length === 0 && <li className="text-fg3">No moves yet.</li>}
             {person.history.map((event, i) => (

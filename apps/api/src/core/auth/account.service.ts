@@ -68,6 +68,30 @@ export class AccountService {
   }
 
   /**
+   * Whether the church may text them. Staff are texted too (07 step 7.8), and
+   * may turn it off here; a STOP reply turns it off as well.
+   */
+  async messages(): Promise<{ optOut: boolean; phone: string | null }> {
+    const user = await this.db.user.findUniqueOrThrow({
+      where: { id: this.auth.userId! },
+      include: { person: true },
+    });
+    const phone = user.person?.phone ? `${user.person.dial} ${user.person.phone}` : user.phone;
+    return { optOut: user.smsOptOut, phone: phone || null };
+  }
+
+  async setMessages(optOut: boolean): Promise<void> {
+    const userId = this.auth.userId!;
+    await this.db.user.update({ where: { id: userId }, data: { smsOptOut: optOut } });
+    await this.audit.recordNow({
+      action: optOut ? 'account.messages.off' : 'account.messages.on',
+      entityType: 'user',
+      entityId: userId,
+      summary: optOut ? 'Turned off text messages to themselves' : 'Turned text messages back on',
+    });
+  }
+
+  /**
    * Changing a password signs out everywhere else, because it is usually
    * changed when something has gone wrong. This browser stays signed in, with
    * a new session.

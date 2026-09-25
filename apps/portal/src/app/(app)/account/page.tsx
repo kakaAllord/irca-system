@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/shell/PageHeader';
 import { ProfileForm } from './ProfileForm';
 import { PasswordForm } from './PasswordForm';
 import { Devices } from './Devices';
+import { TextsToggle } from './TextsToggle';
 
 export const metadata: Metadata = { title: 'Account' };
 
@@ -20,6 +21,7 @@ export type Device = {
 export default async function AccountPage() {
   const me = await serverApi<MeResponse>('/auth/me');
   const devices = await serverApi<Device[]>('/me/sessions');
+  const texts = await serverApi<{ optOut: boolean; phone: string | null }>('/me/messages');
   const viewing = me.impersonation !== null;
 
   return (
@@ -30,6 +32,13 @@ export default async function AccountPage() {
           <h2 className="text-[13px] font-semibold text-fg">Your details</h2>
           <div className="mt-3">
             <ProfileForm fullName={me.user.fullName} readOnly={viewing} />
+          </div>
+        </section>
+
+        <section className="rounded-[10px] border border-border bg-surface p-4">
+          <h2 className="text-[13px] font-semibold text-fg">Text messages</h2>
+          <div className="mt-3">
+            <TextsToggle optOut={texts.optOut} phone={texts.phone} readOnly={viewing} />
           </div>
         </section>
 

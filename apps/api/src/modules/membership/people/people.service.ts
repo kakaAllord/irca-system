@@ -285,6 +285,41 @@ export class PeopleService {
     return { id: note.id };
   }
 
+  /**
+   * The language they are written to in, and whether they want messages. The
+   * office turning messages off is recorded as the office's doing; turning
+   * them back on is the office's too, and is written down, because it undoes
+   * what may have been someone's own request.
+   */
+  async setMessaging(id: string, input: { lang: string; optOut: boolean }) {
+    const person = await this.require(id);
+    await this.db.tx(async (tx) => {
+      await tx.person.update({
+        where: { id },
+        data: {
+          lang: input.lang,
+          smsOptOut: input.optOut,
+          ...(input.optOut && !person.smsOptOut
+            ? { smsOptOutAt: new Date(), smsOptOutSource: 'office' }
+            : {}),
+          ...(!input.optOut ? { smsOptOutAt: null, smsOptOutSource: null } : {}),
+        },
+      });
+      const changes = [
+        person.lang !== input.lang && `language ${person.lang} → ${input.lang}`,
+        person.smsOptOut !== input.optOut && (input.optOut ? 'no messages' : 'messages back on'),
+      ].filter(Boolean);
+      if (changes.length) {
+        await this.audit.recordIn(tx, {
+          action: 'membership.person.messaging',
+          entityType: 'person',
+          entityId: id,
+          summary: `Changed how ${person.fullName || 'someone'} is messaged: ${changes.join(', ')}`,
+        });
+      }
+    });
+  }
+
   /** Their own link, and a WhatsApp message to send it with, in their language. */
   async registrationLink(id: string) {
     const person = await this.require(id);

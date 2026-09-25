@@ -2,6 +2,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import pg from 'pg';
 import { RegistrySync } from '../src/core/rbac/registry-sync.service.js';
 import {
+  createPerson,
   createApp,
   createChurch,
   createUserWithPermissions,
@@ -116,6 +117,45 @@ describe('Comms → Settings, and the Beem key kept out of sight (D26)', () => {
       .put('/v1/comms/settings/beem', { apiKey: 'only-a-key', senderId: 'IRCA' }, cookie)
       .expect(422);
     expect(res.body.error.details).toEqual({ secretKey: ['Needed'] });
+  });
+
+  it('lets the office set how a person is written to, and staff turn texts off themselves', async () => {
+    await createChurch(db, 'IRCA', ['admin', 'comms', 'membership']);
+    const office = await createUserWithPermissions(
+      db,
+      ['membership.people.read', 'membership.people.update'],
+      {
+        moduleKey: 'membership',
+      },
+    );
+    const officeCookie = sessionCookie(
+      await portal(app)
+        .post('/v1/auth/login', { email: office.email, password: office.password })
+        .expect(200),
+    );
+    const person = await createPerson(db, { fullName: 'Juma Kessy' });
+    await portal(app)
+      .put(
+        `/v1/membership/people/${person.id}/messaging`,
+        { lang: 'sw', optOut: true },
+        officeCookie,
+      )
+      .expect(204);
+    const detail = await portal(app)
+      .get(`/v1/membership/people/${person.id}`, officeCookie)
+      .expect(200);
+    expect(detail.body.messaging).toEqual({ lang: 'sw', optOut: true, optOutSource: 'office' });
+    const { rows } = await db.query(
+      `select summary from audit_events where action = 'membership.person.messaging'`,
+    );
+    expect(rows[0].summary).toBe(
+      'Changed how Juma Kessy is messaged: language en → sw, no messages',
+    );
+
+    // Staff turn their own texts off on the Account page.
+    expect((await portal(app).get('/v1/me/messages', cookie).expect(200)).body.optOut).toBe(false);
+    await portal(app).put('/v1/me/messages', { optOut: true }, cookie).expect(204);
+    expect((await portal(app).get('/v1/me/messages', cookie).expect(200)).body.optOut).toBe(true);
   });
 
   it('never lets someone viewed as read the sealed account', async () => {
