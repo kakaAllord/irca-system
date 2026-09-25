@@ -32,6 +32,8 @@ import { ChangeRequestService } from './change-requests/change-request.service.j
 import { ScheduledJobs } from './jobs/scheduled-jobs.service.js';
 import { AudienceRegistry } from './comms/audience.registry.js';
 import { AudienceResolver } from './comms/audience.resolver.js';
+import { AlertsService } from './alerts/alerts.service.js';
+import { AlertChecks } from './alerts/alert-checks.service.js';
 
 /**
  * Everything that is true of every request, whatever module serves it: who is
@@ -60,6 +62,8 @@ import { AudienceResolver } from './comms/audience.resolver.js';
     QuotaService,
     JobRunner,
     ScheduledJobs,
+    AlertsService,
+    AlertChecks,
     RegistrySync,
     RouteAudit,
     SequenceService,
@@ -92,6 +96,8 @@ import { AudienceResolver } from './comms/audience.resolver.js';
     UsageSnapshot,
     QuotaService,
     JobRunner,
+    AlertsService,
+    AlertChecks,
     RegistrySync,
     SequenceService,
     ChangeRequestRegistry,

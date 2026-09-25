@@ -6,6 +6,7 @@ import { EmailService } from '../email/email.service.js';
 import { JobRunner } from './job-runner.service.js';
 import { UsageSnapshot } from '../usage/usage-snapshot.service.js';
 import { FilesService } from '../files/files.service.js';
+import { AlertChecks } from '../alerts/alert-checks.service.js';
 
 /**
  * The work that happens on a clock rather than on a request. Each runs through
@@ -20,7 +21,18 @@ export class ScheduledJobs {
     private readonly email: EmailService,
     private readonly snapshot: UsageSnapshot,
     private readonly files: FilesService,
+    private readonly alerts: AlertChecks,
   ) {}
+
+  /**
+   * Failing requests, emails given up on, jobs failing, storage filling
+   * (docs/plan/10, step 10.4). Ten minutes is the window the failure rate is
+   * measured over.
+   */
+  @Cron(CronExpression.EVERY_10_MINUTES, { name: 'alerts' })
+  checkForAlerts() {
+    return this.jobs.run('alerts', () => this.alerts.run());
+  }
 
   /** How big each table is, and what there is, measured before anyone is awake. */
   @Cron('0 2 * * *', { name: 'usage-snapshot', timeZone: 'Africa/Dar_es_Salaam' })
