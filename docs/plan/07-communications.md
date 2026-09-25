@@ -385,8 +385,8 @@ Three roles: **Communications lead** (all but the leadership ones),
 **Communications sender** (read, send, draft, see audiences, schedules and
 costs), **Communications viewer** (read only). Nav: Overview, Compose, History,
 Templates, Recurring, Audiences, Settings. New drawings in `NavIcon`:
-`messages` (an envelope), `templates` (a page with a star), `schedule` (a
-clock), `departments` (three people).
+`messages` (an envelope), `templates` (a page with a star), `schedule` (two arrows
+turning, since History is already a clock), `departments` (three people).
 
 Add `commsModule` and `departmentsModule` to `CHURCH_MODULES`.
 

@@ -166,11 +166,14 @@ const PATHS: Record<Name, React.ReactNode> = {
       <path d="m12.5 11 1 2.1 2.3.3-1.7 1.6.4 2.3-2-1.1-2 1.1.4-2.3-1.7-1.6 2.3-.3Z" />
     </>
   ),
-  // A clock: something that happens on its own, on a rhythm.
+  // Two arrows chasing each other: something that comes round again. (Not a
+  // clock: History already is one.)
   schedule: (
     <>
-      <circle cx="12" cy="12" r="8.5" />
-      <path d="M12 7.5V12l3 2" />
+      <path d="m17 2 3 3-3 3" />
+      <path d="M4 11V9a4 4 0 0 1 4-4h12" />
+      <path d="m7 22-3-3 3-3" />
+      <path d="M20 13v2a4 4 0 0 1-4 4H4" />
     </>
   ),
 };
