@@ -471,7 +471,20 @@ export class DepartmentsService {
 
   /** Whether the signed-in person leads this department now. */
   async leads(departmentId: string): Promise<boolean> {
-    const personId = await this.myPersonId();
+    return this.auth.userId ? this.leadsAs(this.auth.userId, departmentId) : false;
+  }
+
+  /**
+   * Whether this account leads this department now. A beat asks this of the
+   * person who set it up, every time it runs, so a leader who has stepped
+   * down stops sending (07 step 7.11).
+   */
+  async leadsAs(userId: string, departmentId: string): Promise<boolean> {
+    const user = await this.db.client.user.findUnique({
+      where: { id: userId },
+      select: { personId: true, status: true },
+    });
+    const personId = user?.status === 'ACTIVE' ? user.personId : null;
     if (!personId) return false;
     const row = await this.db.client.departmentLeader.findFirst({
       where: { departmentId, personId, endedAt: null, department: { archivedAt: null } },

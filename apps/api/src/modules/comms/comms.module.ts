@@ -7,6 +7,9 @@ import { AudiencesService } from './audiences.service.js';
 import { StaffAudience } from './staff.audience.js';
 import { TemplatesController } from './templates.controller.js';
 import { TemplatesService } from './templates.service.js';
+import { MessagesController } from './messages.controller.js';
+import { MessagesService } from './messages.service.js';
+import { SendingService } from './sending.service.js';
 import { OutboxService } from './outbox.service.js';
 import { CommsJobs } from './comms.jobs.js';
 
@@ -17,15 +20,17 @@ import { CommsJobs } from './comms.jobs.js';
  */
 @Module({
   imports: [DepartmentsModule],
-  controllers: [SettingsController, AudiencesController, TemplatesController],
+  controllers: [SettingsController, AudiencesController, TemplatesController, MessagesController],
   providers: [
     SettingsService,
     AudiencesService,
     StaffAudience,
     TemplatesService,
+    SendingService,
+    MessagesService,
     OutboxService,
     CommsJobs,
   ],
-  exports: [AudiencesService, OutboxService],
+  exports: [AudiencesService, SendingService, OutboxService],
 })
 export class CommsModule {}

@@ -7,10 +7,21 @@ import { AuditService } from '../../core/audit/audit.service.js';
 import { AudienceRegistry, type AudienceProvider } from '../../core/comms/audience.registry.js';
 import { AudienceResolver } from '../../core/comms/audience.resolver.js';
 import { DepartmentsService } from '../departments/departments.service.js';
+import { PermissionResolver } from '../../core/rbac/permission-resolver.service.js';
 import { commsSettings } from './settings.js';
 
 /** Refused for a reason about this sending, not about a permission held: no `required`. */
 const refuse = (message: string) => new AppError(403, ErrorCode.FORBIDDEN, message);
+
+/**
+ * Who is sending: the signed-in person, or — for a beat — the person who set
+ * it up, with their permissions and leadership as they are now.
+ */
+export type Sender = {
+  userId: string | null;
+  has(permission: string): boolean;
+  leads(departmentId: string): Promise<boolean>;
+};
 
 /**
  * Who may reach whom (07 step 7.8, rule 4; D21 as amended by D28).
@@ -30,24 +41,50 @@ export class AudiencesService {
     private readonly registry: AudienceRegistry,
     private readonly resolver: AudienceResolver,
     private readonly departments: DepartmentsService,
+    private readonly permissions: PermissionResolver,
   ) {}
+
+  /** The signed-in person, as a sender. */
+  requestSender(): Sender {
+    return {
+      userId: this.auth.userId,
+      has: (p) => this.auth.has(p),
+      leads: (id) => this.departments.leads(id),
+    };
+  }
+
+  /** Someone who is not at the keyboard — a beat's owner — as they are now. */
+  async senderFor(userId: string): Promise<Sender> {
+    const held = await this.permissions.forUser(userId);
+    return {
+      userId,
+      has: (p) => held.has(p),
+      leads: (id) => this.departments.leadsAs(userId, id),
+    };
+  }
 
   /**
    * May the signed-in person send, for this department (or for
    * Communications when null), to this audience? Throws with the reason.
    * Returns the checked provider and parameters.
    */
-  async authorize(tx: Tx, departmentId: string | null, key: string, raw: unknown) {
+  async authorize(
+    tx: Tx,
+    departmentId: string | null,
+    key: string,
+    raw: unknown,
+    sender: Sender = this.requestSender(),
+  ) {
     const { provider, params } = this.registry.parse(key, raw);
     if (departmentId === null) {
-      if (!this.auth.has('comms.messages.send')) {
+      if (!sender.has('comms.messages.send')) {
         throw refuse(
           'Only Communications sends to the whole church, across departments or to leaders.',
         );
       }
       return { provider, params };
     }
-    await this.requireLeads(departmentId, 'send');
+    await this.requireLeads(departmentId, 'send', sender);
     if (provider.scope === 'department') {
       const named = provider.departmentsOf?.(params);
       if (named === 'all' || !named || named.some((id) => id !== departmentId)) {
@@ -69,9 +106,12 @@ export class AudiencesService {
   }
 
   /** The department's leader now, with the comms permission for it. */
-  async requireLeads(departmentId: string, what: 'send' | 'draft' | 'read') {
-    const permission = `comms.department.${what}`;
-    if (!this.auth.has(permission) || !(await this.departments.leads(departmentId))) {
+  async requireLeads(
+    departmentId: string,
+    what: 'send' | 'draft' | 'read',
+    sender: Sender = this.requestSender(),
+  ) {
+    if (!sender.has(`comms.department.${what}`) || !(await sender.leads(departmentId))) {
       throw refuse('You do not lead this department.');
     }
   }

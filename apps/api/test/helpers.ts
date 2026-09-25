@@ -185,6 +185,65 @@ export async function createLeader(db: pg.Client, departmentId: string, title = 
   return { ...user, personId: person.id, leaderId: leader };
 }
 
+/**
+ * Words Communications has approved, for a department or (null) for itself.
+ * Written as a draft and then made active, because the database refuses to
+ * write the words of anything but a draft.
+ */
+export async function createTemplate(
+  db: pg.Client,
+  opts: {
+    departmentId?: string | null;
+    name?: string;
+    bodies: Record<string, string>;
+    status?: 'ACTIVE' | 'DRAFT';
+    createdById?: string;
+  },
+) {
+  const id = randomUUID();
+  const author = opts.createdById ?? (await createUser(db)).id;
+  const fields = [
+    ...new Set(
+      Object.values(opts.bodies).flatMap((b) =>
+        [...b.matchAll(/\{\{\s*(\w+)\s*\}\}/g)].map((m) => m[1]),
+      ),
+    ),
+  ];
+  await db.query(
+    `insert into comms_templates (id, family_id, department_id, name, fields, created_by_id, updated_at)
+     values ($1, $2, $3, $4, $5, $6, now())`,
+    [id, randomUUID(), opts.departmentId ?? null, opts.name ?? 'Reminder', fields, author],
+  );
+  for (const [lang, body] of Object.entries(opts.bodies)) {
+    await db.query(
+      `insert into comms_template_bodies (template_id, lang, body) values ($1, $2, $3)`,
+      [id, lang, body],
+    );
+  }
+  if ((opts.status ?? 'ACTIVE') === 'ACTIVE') {
+    await db.query(`update comms_templates set status = 'ACTIVE' where id = $1`, [id]);
+  }
+  return { id };
+}
+
+/** Communications' settings, as if saved in Comms → Settings. */
+export async function setCommsSettings(
+  db: pg.Client,
+  settings: { dailyCap?: string | null; pricePerSegment?: string; defaultLang?: string },
+) {
+  for (const [key, value] of Object.entries(settings)) {
+    if (value === null) {
+      await db.query(`delete from settings where key = $1`, [`comms.${key}`]);
+    } else {
+      await db.query(
+        `insert into settings (key, value, updated_at) values ($1, $2, now())
+         on conflict (key) do update set value = excluded.value`,
+        [`comms.${key}`, JSON.stringify(value)],
+      );
+    }
+  }
+}
+
 /** A key the registration form can call the public API with. */
 export async function createApiClient(db: pg.Client, kind = 'REGISTRATION') {
   const key = `irk_${randomUUID().replaceAll('-', '')}`;
