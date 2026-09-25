@@ -33,6 +33,16 @@ export type ChurchSettings = {
   codeLocked: boolean;
 };
 
+/** Dev → Settings → Alerts (docs/plan/10, step 10.4). */
+export type AlertRecipient = { name: string; email: string; phone: string | null };
+export type AlertsSettings = {
+  recipients: AlertRecipient[];
+  /** Hear only about credit and failing texts, as Communications. */
+  commsOnly: AlertRecipient[];
+  active: { key: string; summary: string; raisedAt: string; lastSentAt: string }[];
+  dbStorageGb: number | null;
+};
+
 export type RouteUse = { route: string; calls: number; averageMs: number | null };
 
 export type SentEmail = {
