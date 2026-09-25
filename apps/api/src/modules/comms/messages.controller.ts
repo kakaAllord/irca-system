@@ -1,9 +1,10 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { z } from 'zod';
 import { ZodPipe } from '../../core/http/zod.pipe.js';
-import { RequireAnyPermission } from '../../core/rbac/decorators.js';
+import { RequireAnyPermission, RequirePermission } from '../../core/rbac/decorators.js';
 import { MessagesService } from './messages.service.js';
 import { SendingService } from './sending.service.js';
+import { OverviewService } from './overview.service.js';
 
 const text = z.string().max(2000).optional();
 const SendSchema = z.object({
@@ -28,7 +29,15 @@ export class MessagesController {
   constructor(
     private readonly sending: SendingService,
     private readonly messages: MessagesService,
+    private readonly overview: OverviewService,
   ) {}
+
+  /** This month by department, the credit, what waits for approval, and replies. */
+  @RequirePermission('comms.messages.read')
+  @Get('overview')
+  month() {
+    return this.overview.month();
+  }
 
   @RequireAnyPermission('comms.messages.read', 'comms.department.read')
   @Get()

@@ -16,6 +16,7 @@ import { SchedulesController } from './schedules.controller.js';
 import { SchedulesService } from './schedules.service.js';
 import { InboundController } from './inbound.controller.js';
 import { InboundService } from './inbound.service.js';
+import { OverviewService } from './overview.service.js';
 
 /**
  * The Communication system (Phase 7): templates, audiences, sending, beats,
@@ -42,6 +43,7 @@ import { InboundService } from './inbound.service.js';
     OutboxService,
     SchedulesService,
     InboundService,
+    OverviewService,
     CommsJobs,
   ],
   exports: [AudiencesService, SendingService, OutboxService],

@@ -25,10 +25,10 @@ export default async function HealthPage() {
     <>
       <PageHeader
         title="Health"
-        subtitle="The database, the jobs and the email queue, as they are right now."
+        subtitle="The database, the jobs, the email and text queues and the SMS credit, as they are right now."
       />
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Figure label="Database" value={bytes(health.database.bytes)} />
         <Figure label="Connections open" value={number(health.database.connections)} />
         <Figure
@@ -40,6 +40,15 @@ export default async function HealthPage() {
           label="Emails waiting"
           value={number(waiting)}
           tone={(health.outbox.FAILED ?? 0) > 0 ? 'bad' : 'fine'}
+        />
+        <Figure
+          label="Texts waiting"
+          value={number((health.sms.queue.PENDING ?? 0) + (health.sms.queue.SENDING ?? 0))}
+          tone={(health.sms.queue.FAILED ?? 0) > 0 ? 'bad' : 'fine'}
+        />
+        <Figure
+          label="SMS credit left"
+          value={health.sms.credit ? `${number(health.sms.credit.amount)} TZS` : 'Not read yet'}
         />
       </div>
 

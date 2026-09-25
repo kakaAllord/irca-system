@@ -154,6 +154,23 @@ describe('sending: refused for a reason you can read, whenever it should be (07 
     );
     expect(JSON.stringify(rows)).not.toMatch(/713|\+255/);
 
+    // Communications sees what each department spent this month.
+    const viewer = await signIn(
+      await createUserWithPermissions(db, ['comms.messages.read'], { moduleKey: 'comms' }),
+    );
+    const overview = await portal(app).get('/v1/comms/messages/overview', viewer).expect(200);
+    expect(overview.body.byDepartment).toEqual([
+      {
+        department: { id: dept.id, name: 'Choir' },
+        messages: 1,
+        people: 4,
+        segments: 4,
+        cost: '120.00',
+        delivered: 0,
+        failed: 0,
+      },
+    ]);
+
     // And it is counted.
     await app.get(UsageService).flush();
     const { rows: usage } = await db.query(

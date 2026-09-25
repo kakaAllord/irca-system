@@ -3,7 +3,8 @@ import { Db } from '../../core/database/db.service.js';
 
 /**
  * How the platform itself is doing: the database, the slowest queries, the
- * email backlog, the jobs, and how many requests are failing.
+ * email and text-message backlogs, the SMS credit left, the jobs, and how
+ * many requests are failing.
  */
 @Injectable()
 export class HealthService {
@@ -21,6 +22,14 @@ export class HealthService {
       by: ['status'],
       _count: { _all: true },
     });
+    const sms = await this.db.client.commsRecipient.groupBy({
+      by: ['status'],
+      where: { status: { in: ['PENDING', 'SENDING', 'FAILED'] } },
+      _count: { _all: true },
+    });
+    // The hourly reading of Beem's credit (D25), the latest there is.
+    const [credit] = await this.db.client.$queryRaw<{ day: Date; value: bigint }[]>`
+      select day, value from usage_daily where metric = 'sms.balance' order by day desc limit 1`;
     const jobs = await this.db.client.$queryRaw<
       {
         job: string;
@@ -49,6 +58,12 @@ export class HealthService {
       },
       slowQueries: await this.slowQueries(),
       outbox: Object.fromEntries(outbox.map((o) => [o.status, o._count._all])),
+      sms: {
+        queue: Object.fromEntries(sms.map((o) => [o.status, o._count._all])),
+        credit: credit
+          ? { amount: Number(credit.value), day: credit.day.toISOString().slice(0, 10) }
+          : null,
+      },
       jobs: jobs.map((j) => ({
         job: j.job,
         lastRunAt: j.started_at.toISOString(),
