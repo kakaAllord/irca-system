@@ -19,10 +19,14 @@ export const metadata: Metadata = { title: 'Messages' };
  */
 export default async function DepartmentMessagesPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  /** `?to=everyone` opens with the whole department chosen: Outreach's "Remind the team". */
+  searchParams: Promise<{ to?: string }>;
 }) {
   const { id } = await params;
+  const { to } = await searchParams;
   const found = await leaderDepartment(id);
   if (!found || !can(found.me, 'comms.department.read'))
     return <ForbiddenState what="this department's messages" />;
@@ -56,6 +60,11 @@ export default async function DepartmentMessagesPage({
             templates={templates.filter((t) => t.status === 'ACTIVE')}
             canAdhoc={false}
             historyBase={base}
+            initialAudience={
+              to === 'everyone' && options.audiences.some((a) => a.key === 'departments.everyone')
+                ? { key: 'departments.everyone', params: { departmentIds: [id] } }
+                : null
+            }
           />
         </section>
       )}

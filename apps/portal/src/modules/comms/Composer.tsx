@@ -37,6 +37,7 @@ export function Composer({
   templates,
   canAdhoc,
   historyBase,
+  initialAudience = null,
 }: {
   departmentId: string | null;
   options: AudienceOptions;
@@ -45,9 +46,11 @@ export function Composer({
   canAdhoc: boolean;
   /** Where a sent message's page is: `${historyBase}/${id}`. */
   historyBase: string;
+  /** Chosen already, when a page sends someone here to write to that audience. */
+  initialAudience?: Audience | null;
 }) {
   const router = useRouter();
-  const [audience, setAudience] = useState<Audience | null>(null);
+  const [audience, setAudience] = useState<Audience | null>(initialAudience);
   const [mode, setMode] = useState<'template' | 'free'>('template');
   const [templateId, setTemplateId] = useState('');
   const [bodies, setBodies] = useState<Partial<Record<SmsLang, string>>>({});
