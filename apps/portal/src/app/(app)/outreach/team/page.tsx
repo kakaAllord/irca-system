@@ -19,10 +19,19 @@ export const metadata: Metadata = { title: 'Team' };
  * is added here. Its leaders keep the team in My departments, and this page
  * sends them there.
  */
-export default async function TeamPage() {
+export default async function TeamPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
   const me = await serverApi<MeResponse>('/auth/me');
   if (!can(me, 'outreach.team.read')) return <ForbiddenState what="the Outreach team" />;
   const team = await serverApi<Team>('/outreach/team');
+  // A team may be a hundred or two: a name narrows the list.
+  const q = ((await searchParams).q ?? '').trim();
+  const shown = q
+    ? team.people.filter((p) => p.name.toLowerCase().includes(q.toLowerCase()))
+    : team.people;
   const manage = can(me, 'outreach.groups.manage');
   const active = team.groups.filter((g) => g.active);
   const off = team.groups.filter((g) => !g.active);
@@ -46,16 +55,32 @@ export default async function TeamPage() {
 
       <div className="flex flex-col gap-7">
         <section className="flex flex-col gap-3">
-          <h2 className="text-[14px] font-semibold text-fg">
-            People <span className="font-normal text-fg3">· {team.people.length}</span>
-          </h2>
-          {team.people.length === 0 ? (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-[14px] font-semibold text-fg">
+              People <span className="font-normal text-fg3">· {team.people.length}</span>
+            </h2>
+            {team.people.length > 8 && (
+              <form action="/outreach/team">
+                <input
+                  type="search"
+                  name="q"
+                  defaultValue={q}
+                  placeholder="Find someone"
+                  aria-label="Find someone on the team"
+                  className="h-9 w-56 rounded-[7px] border border-border bg-input px-3 text-[13px] text-fg placeholder:text-fg3"
+                />
+              </form>
+            )}
+          </div>
+          {q && shown.length === 0 ? (
+            <EmptyState title={`Nobody on the team called “${q}”`} />
+          ) : team.people.length === 0 ? (
             <EmptyState title="Nobody on the team yet">
               The department&apos;s leaders add people in My departments → {team.department.name}.
             </EmptyState>
           ) : (
             <Table head={['Name', 'Partner group', 'Saturdays', 'Training']}>
-              {team.people.map((p) => (
+              {shown.map((p) => (
                 <Row key={p.personId}>
                   <Cell>
                     <span className="flex flex-col">

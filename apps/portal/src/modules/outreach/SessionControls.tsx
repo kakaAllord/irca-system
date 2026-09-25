@@ -11,6 +11,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { SubmitButton } from '@/components/ui/SubmitButton';
+import { PeoplePicker } from './PeoplePicker';
 import type { PartnerGroup, Session, SessionStatus, SessionTeam, TeamPerson } from './types';
 
 const message = (err: unknown) =>
@@ -291,28 +292,17 @@ export function TeamDrawer({
               ]}
             />
           )}
-          <fieldset className="flex flex-col gap-2">
-            <legend className="mb-1 text-[12px] font-medium text-fg2">
-              Who is going <span className="font-normal text-fg3">· {picked.length}</span>
-            </legend>
-            {people.map((p) => (
-              <label key={p.personId} className="flex items-center gap-2 text-[12.5px]">
-                <input
-                  type="checkbox"
-                  checked={picked.includes(p.personId)}
-                  onChange={(e) =>
-                    setPicked((all) =>
-                      e.target.checked
-                        ? [...all, p.personId]
-                        : all.filter((id) => id !== p.personId),
-                    )
-                  }
-                />
-                <span className="text-fg">{p.name}</span>
-                {p.group && <span className="text-[11.5px] text-fg3">{p.group}</span>}
-              </label>
-            ))}
-          </fieldset>
+          <PeoplePicker
+            legend="Who is going"
+            people={people.map((p) => ({
+              personId: p.personId,
+              name: p.name,
+              phoneTail: p.phoneTail,
+              note: p.group,
+            }))}
+            picked={picked}
+            onChange={setPicked}
+          />
         </div>
       </Drawer>
     </>

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { SubmitButton } from '@/components/ui/SubmitButton';
+import { PeoplePicker } from './PeoplePicker';
 
 export type TeamChoice = {
   id: string;
@@ -47,7 +48,7 @@ export function RecordForm({
   teams: TeamChoice[];
   defaultTeamId: string | null;
   /** The Outreach team, for someone reached away from a Saturday team. */
-  people: { personId: string; name: string }[];
+  people: { personId: string; name: string; phoneTail?: string }[];
   areas: string[];
 }) {
   const router = useRouter();
@@ -199,27 +200,7 @@ export function RecordForm({
               <option key={a} value={a} />
             ))}
           </datalist>
-          <fieldset className="flex flex-col gap-1.5">
-            <legend className="mb-1 text-[12px] font-medium text-fg2">Who reached them</legend>
-            <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-              {people.map((p) => (
-                <label key={p.personId} className="flex items-center gap-2 text-[12.5px]">
-                  <input
-                    type="checkbox"
-                    checked={by.includes(p.personId)}
-                    onChange={(e) =>
-                      setBy((all) =>
-                        e.target.checked
-                          ? [...all, p.personId]
-                          : all.filter((id) => id !== p.personId),
-                      )
-                    }
-                  />
-                  {p.name}
-                </label>
-              ))}
-            </div>
-          </fieldset>
+          <PeoplePicker legend="Who reached them" people={people} picked={by} onChange={setBy} />
         </>
       )}
 

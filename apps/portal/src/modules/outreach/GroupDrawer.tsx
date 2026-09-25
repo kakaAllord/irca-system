@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Drawer } from '@/components/ui/Drawer';
 import { Input } from '@/components/ui/Input';
 import { SubmitButton } from '@/components/ui/SubmitButton';
+import { PeoplePicker } from './PeoplePicker';
 import type { PartnerGroup, TeamPerson } from './types';
 
 /**
@@ -97,34 +98,18 @@ export function GroupDrawer({
             maxLength={60}
             onChange={(e) => setName(e.target.value)}
           />
-          <fieldset className="flex flex-col gap-2">
-            <legend className="mb-1 text-[12px] font-medium text-fg2">
-              Who is in it <span className="font-normal text-fg3">· {picked.length} of 3</span>
-            </legend>
-            {team.map((p) => {
-              const checked = picked.includes(p.personId);
-              return (
-                <label key={p.personId} className="flex items-center gap-2 text-[12.5px]">
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    disabled={!checked && picked.length >= 3}
-                    onChange={(e) =>
-                      setPicked((all) =>
-                        e.target.checked
-                          ? [...all, p.personId]
-                          : all.filter((id) => id !== p.personId),
-                      )
-                    }
-                  />
-                  <span className="text-fg">{p.name}</span>
-                  {p.group && p.group !== group?.name && (
-                    <span className="text-[11.5px] text-fg3">already in {p.group}</span>
-                  )}
-                </label>
-              );
-            })}
-          </fieldset>
+          <PeoplePicker
+            legend="Who is in it"
+            people={team.map((p) => ({
+              personId: p.personId,
+              name: p.name,
+              phoneTail: p.phoneTail,
+              note: p.group && p.group !== group?.name ? `already in ${p.group}` : null,
+            }))}
+            picked={picked}
+            onChange={setPicked}
+            max={3}
+          />
         </div>
       </Drawer>
     </>

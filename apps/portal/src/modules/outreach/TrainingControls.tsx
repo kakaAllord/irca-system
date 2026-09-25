@@ -178,7 +178,11 @@ export function TrainingRegister({
     }
   }
 
+  const [q, setQ] = useState('');
   const unmarked = training.register.filter((p) => !marks.get(p.personId));
+  const shown = q.trim()
+    ? training.register.filter((p) => p.name.toLowerCase().includes(q.trim().toLowerCase()))
+    : training.register;
   const present = training.register.filter((p) => marks.get(p.personId) === 'ATTENDED').length;
 
   return (
@@ -202,8 +206,18 @@ export function TrainingRegister({
         )}
       </div>
       {error && <Alert tone="error">{error}</Alert>}
+      {training.register.length > 8 && (
+        <input
+          type="search"
+          aria-label="Find someone on the register"
+          placeholder="Type part of a name"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          className="mb-2 h-9 w-full rounded-[7px] border border-border bg-input px-3 text-[13px] text-fg placeholder:text-fg3"
+        />
+      )}
       <ul className="flex flex-col">
-        {training.register.map((p) => {
+        {shown.map((p) => {
           const mark = marks.get(p.personId) ?? null;
           return (
             <li

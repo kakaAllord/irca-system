@@ -79,7 +79,13 @@ export default async function RecordPage({
       <RecordForm
         teams={teams}
         defaultTeamId={teams.some((t) => t.id === params.team) ? params.team! : null}
-        people={team?.people.map((p) => ({ personId: p.personId, name: p.name })) ?? []}
+        people={
+          team?.people.map((p) => ({
+            personId: p.personId,
+            name: p.name,
+            phoneTail: p.phoneTail,
+          })) ?? []
+        }
         areas={areas}
       />
     </>
