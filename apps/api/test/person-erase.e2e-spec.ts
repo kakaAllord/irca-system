@@ -116,6 +116,24 @@ describe('erasing one person, at their request', () => {
                'Added Neema Mollel to the people', '{"fullName":"Neema Mollel"}')`,
       [personId],
     );
+    // A pledge and a payment towards it: never deleted, even now.
+    const campaignId = randomUUID();
+    const pledgeId = randomUUID();
+    await db.query(
+      `insert into pledge_campaigns (id, name, starts_on, created_by_id, updated_at)
+       values ($1, 'Ujenzi 2027', '2026-01-01', $2, now())`,
+      [campaignId, staff.id],
+    );
+    await db.query(
+      `insert into pledges (id, campaign_id, person_id, amount, promised_on, recorded_by_id, client_request_id)
+       values ($1, $2, $3, 100000, '2026-09-01', $4, $5)`,
+      [pledgeId, campaignId, personId, staff.id, randomUUID()],
+    );
+    await db.query(
+      `insert into pledge_payments (id, pledge_id, amount, paid_on, recorded_by_id, client_request_id)
+       values ($1, $2, 25000, '2026-09-20', $3, $4)`,
+      [randomUUID(), pledgeId, staff.id, randomUUID()],
+    );
     return { personId, registrationId };
   }
 
@@ -145,6 +163,7 @@ describe('erasing one person, at their request', () => {
       departments: 1,
       interactions: 1,
       outreach: 1,
+      pledgesKept: 1,
       timelinesRewritten: 1,
       reports: [
         {
@@ -163,6 +182,11 @@ describe('erasing one person, at their request', () => {
       { summary: 'Evangelised by [erased], Sombetini' },
     ]);
     expect(await rows('select 1 from people where id = $1', [personId])).toHaveLength(0);
+    // The money stays, belonging to nobody.
+    expect(await rows('select person_id, amount::text as amount from pledges')).toEqual([
+      { person_id: null, amount: '100000.00' },
+    ]);
+    expect(await rows('select 1 from pledge_payments')).toHaveLength(1);
     for (const table of [
       'person_notes',
       'person_stage_events',

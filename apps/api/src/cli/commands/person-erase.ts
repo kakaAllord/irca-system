@@ -20,6 +20,12 @@ export type EraseResult = {
   /** Outreach: their reaches, teams, partner groups and training marks. */
   outreach: number;
   /**
+   * Their pledges, which are never deleted (the leadership, 25 Sept 2026):
+   * kept with their payments, belonging to nobody, so a campaign still adds
+   * up.
+   */
+  pledgesKept: number;
+  /**
    * The Saturday reports that may name them — every version — which erasure
    * cannot reach inside. Listed for a person to check by hand, and only
    * findable before the erasure, which takes the rows that say which
@@ -149,6 +155,7 @@ export async function erasePerson(options: {
         (await count('select 1 from outreach_training_attendance where person_id = $1', [
           person.id,
         ])),
+      pledgesKept: await count('select 1 from pledges where person_id = $1', [person.id]),
     };
 
     // The person goes first; everything that hangs off them follows by cascade.
@@ -231,6 +238,7 @@ export function reportErasure(result: EraseResult, dryRun: boolean): void {
   console.log(`  text messages         ${result.messages}`);
   console.log(`  timeline lines        ${result.interactions}`);
   console.log(`  outreach records      ${result.outreach}`);
+  console.log(`  pledges kept, unnamed ${result.pledgesKept}`);
   console.log(`  log lines rewritten   ${result.summariesRewritten}`);
   console.log(`  timelines rewritten   ${result.timelinesRewritten}`);
   console.log(`  log details cleared   ${result.detailsCleared}`);

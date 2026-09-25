@@ -24,7 +24,10 @@ to be erased. `docs/data-inventory.md` says what is held about whom.
    Their registration and answers (prayer requests included), notes, journey,
    application, class and Outreach records are deleted. The activity log keeps its
    lines, with their name replaced by "[erased]". Finance entries are not
-   touched: they are money, and name no visitor.
+   touched: they are money, and name no visitor. Their pledges and the
+   payments towards them are not deleted either — pledges are never deleted
+   (`docs/modules/pledges-brief.md`) — but they stop belonging to anyone: the
+   report's "pledges kept, unnamed" line says how many.
 5. **Check the Saturday reports by hand.** Erasure cannot reach inside a PDF.
    Step 3's dry run ends with the reports of every Saturday they were reached
    on or went out on, earlier versions included — run it **before** step 4,
