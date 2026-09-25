@@ -325,8 +325,9 @@ Communications — are kept by the administrators in **Admin → Departments**
   hold no role: being a leader is what lets them in, and ending the
   leadership, or archiving the department, takes that away on their next
   click.
-- **Members** are added and removed by the department's leaders, from anyone
-  in People, under **My departments**. A leader sees names, stages and the
+- **Members** are added and removed by the department's leaders, under **My
+  departments**, from anyone who has filled in the whole registration form;
+  anyone else is not offered, and is asked to register first. A leader sees names, stages and the
   last three digits of a phone number, enough to tell two Johns apart and no
   more. They cannot touch another department, nor name or end a leader.
 

@@ -250,7 +250,8 @@ leader may do, hangs off these three tables (D28).
    - A **leader** must be a person at stage `CONFIRMED_MEMBER` when they are
      named. Refuse otherwise, and say who confirms members (the pastors, in
      Membership → Applications).
-   - A **member** is anyone in People.
+   - A **member** is anyone in People who has filled in the whole
+     registration form (owner, 25 Sept 2026; D28).
    - Leaders are named and ended only with `admin.departments.manage`.
      Members are added and ended by that department's leaders, or by an
      administrator.

@@ -45,12 +45,19 @@ test('a leader messages their department, and a STOP is honoured on the next sen
      values ($1, $2, '+255', $3, $4, 'CONFIRMED_MEMBER', 'en', now())`,
     [leaderPerson, `Rehema Leader ${stamp}`, `71${stamp}9`, `leader${stamp}@example.com`],
   );
+  // Both filled in the registration form, as every department member has.
   const members = [randomUUID(), randomUUID()];
   for (const [i, id] of members.entries()) {
+    const registration = randomUUID();
     await db.query(
-      `insert into people (id, full_name, dial, phone, stage, lang, updated_at)
-       values ($1, $2, '+255', $3, 'VISITOR', 'en', now())`,
-      [id, `Singer ${i + 1} ${stamp}`, phones[i]],
+      `insert into registrations (id, token, status, submitted_at, updated_at)
+       values ($1, $2, 'submitted', now(), now())`,
+      [registration, registration.replace(/-/g, '')],
+    );
+    await db.query(
+      `insert into people (id, registration_id, full_name, dial, phone, stage, lang, updated_at)
+       values ($1, $4, $2, '+255', $3, 'VISITOR', 'en', now())`,
+      [id, `Singer ${i + 1} ${stamp}`, phones[i], registration],
     );
   }
   await db.query(

@@ -53,7 +53,7 @@ export function AddMemberDrawer({ departmentId, name }: { departmentId: string; 
         open={open}
         onClose={close}
         title={`Add someone to ${name}`}
-        description="Anyone in the church's People list. Someone new has to fill in the registration form first."
+        description="Anyone who has filled in the registration form. Someone who has not, fills it in first."
         footer={
           <>
             <Button variant="ghost" onClick={close}>
@@ -76,7 +76,7 @@ export function AddMemberDrawer({ departmentId, name }: { departmentId: string; 
             }
             chosen={chosen}
             onChoose={setChosen}
-            emptyHint={`Nobody by that name who is not already in ${name}.`}
+            emptyHint={`Nobody by that name who has registered on the form and is not already in ${name}.`}
           />
           {error && <Alert tone="error">{error}</Alert>}
         </div>

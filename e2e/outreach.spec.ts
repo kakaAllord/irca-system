@@ -55,10 +55,18 @@ test('a Saturday, from planning to the dashboard', async ({ browser, request }) 
     id: randomUUID(),
     name: `${name} ${stamp}`,
   }));
+  // Each filled in the registration form, as every department member has.
   for (const p of team) {
+    const registration = randomUUID();
     await db.query(
-      `insert into people (id, full_name, stage, updated_at) values ($1, $2, 'VISITOR', now())`,
-      [p.id, p.name],
+      `insert into registrations (id, token, status, submitted_at, updated_at)
+       values ($1, $2, 'submitted', now(), now())`,
+      [registration, registration.replace(/-/g, '')],
+    );
+    await db.query(
+      `insert into people (id, registration_id, full_name, stage, updated_at)
+       values ($1, $3, $2, 'VISITOR', now())`,
+      [p.id, p.name, registration],
     );
   }
   const known = { name: `Neema Known ${stamp}`, phone: `76${stamp}1` };

@@ -137,6 +137,8 @@ export async function createPerson(
     dial?: string;
     email?: string;
     lang?: string;
+    /** Filled in the whole registration form, as every department member has. */
+    registered?: boolean;
   } = {},
 ) {
   const id = randomUUID();
@@ -153,6 +155,15 @@ export async function createPerson(
     ],
   );
   if (opts.lang) await db.query(`update people set lang = $2 where id = $1`, [id, opts.lang]);
+  if (opts.registered) {
+    const registration = randomUUID();
+    await db.query(
+      `insert into registrations (id, token, status, submitted_at, updated_at)
+       values ($1, $2, 'submitted', now(), now())`,
+      [registration, randomUUID().replace(/-/g, '')],
+    );
+    await db.query(`update people set registration_id = $2 where id = $1`, [id, registration]);
+  }
   return { id };
 }
 

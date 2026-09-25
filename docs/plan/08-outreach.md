@@ -480,9 +480,10 @@ groups from it.
    their titles) and members, now, each with their partner group, how many
    Saturdays they went out on in the last three months, and their training
    attendance (8.7). The page's **Add or remove people** link opens **My
-   departments → Outreach**, shown only to its leaders. Anyone in People can
-   be a member, whatever their stage — the owner: *"regardless of their
-   current membership/visitor status"*.
+   departments → Outreach**, shown only to its leaders. Anyone who has filled in the
+   registration form can be a member, whatever their stage — the owner:
+   *"regardless of their current membership/visitor status"*, and (25 Sept
+   2026) *"every member of a department should have already registered"*.
 2. Someone who left the team keeps every row that names them: last year's
    Saturdays still say who was there, because sessions point at people, not at
    memberships.

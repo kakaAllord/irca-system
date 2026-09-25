@@ -516,7 +516,10 @@ The rules that follow:
   (Chairperson, Secretary). A leader must already be a **confirmed member**,
   approved by the pastors; a department's ordinary members need not be.
 - **Leaders add and remove members**, from People, for the departments they
-  lead and no other.
+  lead and no other. *Added 25 Sept 2026 by the owner:* a member must have
+  **filled in the whole registration form**. Someone the office typed in, or
+  whom Outreach reached, fills it in first; a form left half way does not
+  count. Leaders are unchanged: confirmed members, named by administrators.
 - **A leader signs in.** Naming a leader links their person record to a staff
   account (`users.person_id`), and invites them by email if they have none.
   What a leader may do comes from being one, not from a role an administrator

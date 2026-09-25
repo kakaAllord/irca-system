@@ -158,14 +158,27 @@ describe('departments, their leaders and their members (D28)', () => {
     const mine = await portal(app).get('/v1/departments/mine', leader).expect(200);
     expect(mine.body).toMatchObject([{ id: praise.id, name: 'Praise team', title: 'Chairperson' }]);
 
-    // Anyone in People can be a member; a visitor is fine.
-    const singer = await createPerson(db, { fullName: 'Amani Singer', phone: '754000123' });
+    // Anyone who has filled in the registration form can be a member, whatever
+    // their stage; someone the form has not seen is neither offered nor taken.
+    const singer = await createPerson(db, {
+      fullName: 'Amani Singer',
+      phone: '754000123',
+      registered: true,
+    });
+    const typedIn = await createPerson(db, { fullName: 'Amani Typed', phone: '754000456' });
     const found = await portal(app)
       .get(`/v1/departments/${praise.id}/member-candidates?q=amani`, leader)
       .expect(200);
     expect(found.body).toEqual([
       { personId: singer.id, name: 'Amani Singer', stage: 'VISITOR', phoneTail: '…123' },
     ]);
+    const refused = await portal(app)
+      .post(`/v1/departments/${praise.id}/members`, { personId: typedIn.id }, leader)
+      .expect(422);
+    expect(refused.body.error).toMatchObject({
+      code: 'NOT_REGISTERED',
+      message: expect.stringMatching(/Amani Typed has not registered on the form yet/),
+    });
     await portal(app)
       .post(`/v1/departments/${praise.id}/members`, { personId: singer.id }, leader)
       .expect(201);
@@ -205,7 +218,7 @@ describe('departments, their leaders and their members (D28)', () => {
     const ushers = await createDepartment(db, { name: 'Ushers' });
     const leader = await createLeader(db, choir.id);
     const cookie = await signIn(leader.email, leader.password);
-    const someone = await createPerson(db);
+    const someone = await createPerson(db, { registered: true });
 
     await portal(app)
       .post(`/v1/departments/${choir.id}/members`, { personId: someone.id }, cookie)

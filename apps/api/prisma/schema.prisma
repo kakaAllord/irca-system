@@ -933,7 +933,8 @@ model DepartmentLeader {
   @@map("department_leaders")
 }
 
-/// Someone in a department, added by its leaders. Anyone in People can be one.
+/// Someone in a department, added by its leaders. Anyone in People who has
+/// filled in the whole registration form can be one (D28).
 model DepartmentMember {
   id           String    @id @default(uuid(7)) @db.Uuid
   departmentId String    @map("department_id") @db.Uuid

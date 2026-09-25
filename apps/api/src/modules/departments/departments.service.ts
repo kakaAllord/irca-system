@@ -16,6 +16,14 @@ export type NameLeaderInput = { personId: string; title: string; email?: string 
 const phoneTail = (phone: string) => (phone.length >= 3 ? `…${phone.slice(-3)}` : '');
 
 /**
+ * Who may be a department's member: someone who has filled in the whole
+ * registration form (owner, 25 Sept 2026). A person the office typed in, or
+ * one Outreach reached, fills it in first; a form left half way does not
+ * count.
+ */
+const REGISTERED = { registration: { is: { status: 'submitted' } } } as const;
+
+/**
  * The church's departments, who leads them and who is in them (D28).
  *
  * Two kinds of caller. An administrator (`admin.departments.*`) keeps the
@@ -394,6 +402,7 @@ export class DepartmentsService {
           { phone: { contains: term.replace(/\s/g, '') } },
         ],
         departments: { none: { departmentId, endedAt: null } },
+        ...REGISTERED,
       },
       orderBy: { fullName: 'asc' },
       take: 20,
@@ -408,8 +417,18 @@ export class DepartmentsService {
 
   async addMember(departmentId: string, personId: string) {
     const department = await this.requireMayKeepMembers(departmentId);
-    const person = await this.db.client.person.findUnique({ where: { id: personId } });
+    const person = await this.db.client.person.findUnique({
+      where: { id: personId },
+      include: { registration: { select: { status: true } } },
+    });
     if (!person) throw notFound('No such person in People.');
+    if (person.registration?.status !== 'submitted') {
+      throw new AppError(
+        422,
+        ErrorCode.NOT_REGISTERED,
+        `${person.fullName} has not registered on the form yet. Everyone in a department fills in the registration form first.`,
+      );
+    }
     const open = await this.db.client.departmentMember.findFirst({
       where: { departmentId, personId, endedAt: null },
     });
