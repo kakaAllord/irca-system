@@ -41,6 +41,8 @@ phone, and the office afterwards.
 | Every text sent to them: the number, the language and the exact words | `comms_recipients` | Communications (`comms.messages.read`), and the leaders of the department that sent it; the number is masked unless the reader holds `membership.people.read_sensitive` |
 | Replies they sent to a text | `comms_inbound` | Communications, on Comms → Overview; the number cut short unless the reader holds `membership.people.read_sensitive` |
 | That their number asked for no messages | `comms_blocked_numbers` | nobody through the portal; kept so a STOP is honoured for good |
+| Outreach: when and where they were reached, by whom, whether they still need following up, and a note; the Saturdays they went out on and the trainings they came to, if they are on the team | `outreach_reached`, `outreach_session_team_members`, `outreach_group_members`, `outreach_training_attendance` | `outreach.reached.read` (the reached) and `outreach.team.read` (the team) |
+| **Saturday session reports** (PDFs written by the Outreach leader): may contain names, places and what was said | the private file bucket, listed in `files` | `outreach.reports.read`, through a link that stops working after five minutes. **`person:erase` cannot reach inside a PDF**: it lists the reports of the Saturdays the person was part of, and someone checks them by hand (`docs/runbooks/erasure-request.md`) |
 
 **The sensitive line is enforced, not advisory.** A response for someone
 without `membership.people.read_sensitive` does not contain those fields at

@@ -6,6 +6,7 @@ import { outreachModule } from '@irca/shared';
 import { RegistrySync } from '../src/core/rbac/registry-sync.service.js';
 import { UsageSnapshot } from '../src/core/usage/usage-snapshot.service.js';
 import { UsageService } from '../src/core/usage/usage.service.js';
+import { MemoryFileStorage } from '../src/core/files/memory.storage.js';
 import {
   createApp,
   createChurch,
@@ -867,6 +868,86 @@ describe('Outreach (Phase 8)', () => {
         .get('/v1/outreach/dashboard?from=2024-01-01&to=2026-09-01', cookie)
         .expect(422);
       await portal(app).get('/v1/outreach/dashboard/nothing', cookie).expect(404);
+    });
+  });
+  describe('the session report (8.9)', () => {
+    const pdf = (size = 4096) => Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.alloc(size)]);
+
+    it('uploads straight to the bucket, is checked, and opens through a short-lived link', async () => {
+      const bucket = app.get(MemoryFileStorage);
+      bucket.reset();
+      const { cookie } = await outreach();
+      const session = await portal(app)
+        .post('/v1/outreach/sessions', { heldOn: '2026-09-19' }, cookie)
+        .expect(201);
+      const base = `/v1/outreach/sessions/${session.body.id}/report`;
+
+      const { body } = await portal(app).post(`${base}/upload`, {}, cookie).expect(201);
+      expect(body.key).toMatch(
+        new RegExp(`^outreach/sessions/${session.body.id}/[0-9a-f-]+\\.pdf$`),
+      );
+      expect(body.policy).toMatchObject({ contentType: 'application/pdf', maxBytes: 10_485_760 });
+      // What the bucket makes of a 12 MB file and a Word document under that policy.
+      expect(() => bucket.upload(body.key, pdf(12 * 1_048_576), 'application/pdf')).toThrow();
+      expect(() =>
+        bucket.upload(body.key, Buffer.from('PK'), 'application/vnd.openxmlformats'),
+      ).toThrow();
+
+      // Not uploaded yet, then for another Saturday: both refused.
+      await portal(app).post(base, { key: body.key, name: 'report.pdf' }, cookie).expect(422);
+      await portal(app)
+        .post(base, { key: 'outreach/sessions/elsewhere/x.pdf', name: 'report.pdf' }, cookie)
+        .expect(422);
+
+      bucket.upload(body.key, pdf(), 'application/pdf');
+      await portal(app)
+        .post(base, { key: body.key, name: 'Sombetini report.pdf' }, cookie)
+        .expect(201);
+
+      const link = await portal(app)
+        .get(base, await member())
+        .expect(200);
+      expect(link.body.name).toBe('Sombetini report.pdf');
+      expect(bucket.open(link.body.url)).not.toBeNull();
+      expect(bucket.open(link.body.url, Date.now() + 6 * 60_000)).toBeNull();
+
+      // A second report keeps the first as an earlier version.
+      const again = await portal(app).post(`${base}/upload`, {}, cookie).expect(201);
+      bucket.upload(again.body.key, pdf(8192), 'application/pdf');
+      await portal(app)
+        .post(base, { key: again.body.key, name: 'Corrected.pdf' }, cookie)
+        .expect(201);
+      const versions = await portal(app).get(`${base}/versions`, cookie).expect(200);
+      expect(versions.body.current.name).toBe('Corrected.pdf');
+      expect(versions.body.earlier.map((v: { name: string }) => v.name)).toEqual([
+        'Sombetini report.pdf',
+      ]);
+      const earlier = await portal(app)
+        .get(`${base}?file=${versions.body.earlier[0].id}`, cookie)
+        .expect(200);
+      expect(earlier.body.name).toBe('Sombetini report.pdf');
+    });
+
+    it('leaves attaching to the leaders, and reading to those who may', async () => {
+      const { cookie } = await outreach();
+      const session = await portal(app)
+        .post('/v1/outreach/sessions', { heldOn: '2026-09-19' }, cookie)
+        .expect(201);
+      const base = `/v1/outreach/sessions/${session.body.id}/report`;
+      await portal(app)
+        .post(`${base}/upload`, {}, await member())
+        .expect(403);
+      await portal(app)
+        .post(`${base}/upload`, {}, await viewer())
+        .expect(403);
+      const outsider = await createUserWithPermissions(db, ['outreach.dashboard.read'], {
+        moduleKey: 'outreach',
+      });
+      const refused = await portal(app)
+        .get(base, await signIn(outsider.email, outsider.password))
+        .expect(403);
+      expect(refused.body.error.details.required).toEqual(['outreach.reports.read']);
+      await portal(app).get(base, cookie).expect(404);
     });
   });
 });

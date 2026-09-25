@@ -78,10 +78,21 @@ describe('erasing one person, at their request', () => {
     );
     // Reached on a Saturday themselves, and one of the team who reached
     // someone else, whose timeline names them.
+    const saturday = randomUUID();
     await db.query(
-      `insert into outreach_reached (id, person_id, reached_on, reached_by_ids, recorded_by_id)
-       values (gen_random_uuid(), $1, current_date, '{}', $2)`,
-      [personId, staff.id],
+      `insert into outreach_sessions (id, held_on, created_by_id) values ($1, '2026-09-19', $2)`,
+      [saturday, staff.id],
+    );
+    await db.query(
+      `insert into outreach_reached (id, person_id, session_id, reached_on, reached_by_ids, recorded_by_id)
+       values (gen_random_uuid(), $1, $3, current_date, '{}', $2)`,
+      [personId, staff.id, saturday],
+    );
+    // The leader's report of that Saturday, which may name them.
+    await db.query(
+      `insert into files (id, module_key, entity_type, entity_id, key, original_name, content_type, bytes, uploaded_by_id)
+       values (gen_random_uuid(), 'outreach', 'outreach_session', $1, $2, 'Sombetini.pdf', 'application/pdf', 10, $3)`,
+      [saturday, `outreach/sessions/${saturday}/report.pdf`, staff.id],
     );
     const other = randomUUID();
     await db.query(
@@ -135,6 +146,14 @@ describe('erasing one person, at their request', () => {
       interactions: 1,
       outreach: 1,
       timelinesRewritten: 1,
+      reports: [
+        {
+          heldOn: '2026-09-19',
+          name: 'Sombetini.pdf',
+          key: expect.stringMatching(/^outreach\/sessions\//),
+          replaced: false,
+        },
+      ],
     });
     // Baraka, whom they reached, stays; they are gone from his reach and his timeline.
     expect(await rows('select reached_by_ids from outreach_reached')).toEqual([

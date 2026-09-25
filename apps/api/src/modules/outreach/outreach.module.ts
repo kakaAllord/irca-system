@@ -7,6 +7,8 @@ import { FollowupService } from './followup.service.js';
 import { OutreachAudiences } from './outreach.audiences.js';
 import { ReachedController } from './reached.controller.js';
 import { ReachedService } from './reached.service.js';
+import { ReportsController } from './reports.controller.js';
+import { ReportsService } from './reports.service.js';
 import { SessionsController } from './sessions.controller.js';
 import { SessionsService } from './sessions.service.js';
 import { TeamController } from './team.controller.js';
@@ -25,6 +27,7 @@ import { TrainingService } from './training.service.js';
     TeamController,
     SessionsController,
     ReachedController,
+    ReportsController,
     FollowupController,
     TrainingController,
   ],
@@ -33,6 +36,7 @@ import { TrainingService } from './training.service.js';
     TeamService,
     SessionsService,
     ReachedService,
+    ReportsService,
     FollowupService,
     TrainingService,
     OutreachAudiences,

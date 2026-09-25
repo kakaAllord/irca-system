@@ -22,10 +22,25 @@ to be erased. `docs/data-inventory.md` says what is held about whom.
    ```
 
    Their registration and answers (prayer requests included), notes, journey,
-   application and class records are deleted. The activity log keeps its
+   application, class and Outreach records are deleted. The activity log keeps its
    lines, with their name replaced by "[erased]". Finance entries are not
    touched: they are money, and name no visitor.
-5. **Reply** to the person that it is done, within the time the Act allows.
+5. **Check the Saturday reports by hand.** Erasure cannot reach inside a PDF.
+   Step 3's dry run ends with the reports of every Saturday they were reached
+   on or went out on, earlier versions included — run it **before** step 4,
+   because erasing takes the rows that say which Saturdays those were, and
+   keep the list. For each: Portal → **Outreach → Saturdays → that date →
+   Report**, and read it. Where it names them, ask the Outreach leader to
+   attach a version without them. The version with their name is then kept
+   as an earlier version, so remove it too: delete its object in the bucket's
+   dashboard (the key is in the list), then its row, as the database owner:
+
+   ```sql
+   delete from files where key = '<the key>';
+   ```
+
+   The application cannot delete file rows, which is why this is done by hand.
+6. **Reply** to the person that it is done, within the time the Act allows.
 
 It cannot be undone, except by restoring the database
 ([restore.md](restore.md)) — which would also bring back what was erased, so

@@ -19,6 +19,13 @@ export type EraseResult = {
   interactions: number;
   /** Outreach: their reaches, teams, partner groups and training marks. */
   outreach: number;
+  /**
+   * The Saturday reports that may name them — every version — which erasure
+   * cannot reach inside. Listed for a person to check by hand, and only
+   * findable before the erasure, which takes the rows that say which
+   * Saturdays they were part of.
+   */
+  reports: { heldOn: string; name: string; key: string; replaced: boolean }[];
   summariesRewritten: number;
   /** Lines on other people's timelines that named them. */
   timelinesRewritten: number;
@@ -86,6 +93,27 @@ export async function erasePerson(options: {
     await owner.query('begin');
     const count = async (sql: string, params: unknown[]) =>
       (await owner.query(sql, params)).rowCount ?? 0;
+
+    const reports = (
+      await owner.query<{ held_on: string; original_name: string; key: string; replaced: boolean }>(
+        `select s.held_on::text as held_on, f.original_name, f.key, f.deleted_at is not null as replaced
+         from files f
+         join outreach_sessions s on f.entity_type = 'outreach_session' and f.entity_id = s.id
+         where s.id in (
+           select session_id from outreach_reached where person_id = $1
+           union
+           select t.session_id from outreach_session_teams t
+           join outreach_session_team_members m on m.team_id = t.id
+           where m.person_id = $1)
+         order by s.held_on, f.uploaded_at`,
+        [person.id],
+      )
+    ).rows.map((r) => ({
+      heldOn: r.held_on,
+      name: r.original_name,
+      key: r.key,
+      replaced: r.replaced,
+    }));
 
     // Counted before they go, so the report says what was actually erased.
     const before = {
@@ -176,6 +204,7 @@ export async function erasePerson(options: {
       personId: person.id,
       registrationErased,
       ...before,
+      reports,
       summariesRewritten,
       timelinesRewritten,
       detailsCleared,
@@ -205,6 +234,15 @@ export function reportErasure(result: EraseResult, dryRun: boolean): void {
   console.log(`  log lines rewritten   ${result.summariesRewritten}`);
   console.log(`  timelines rewritten   ${result.timelinesRewritten}`);
   console.log(`  log details cleared   ${result.detailsCleared}`);
+  if (result.reports.length) {
+    console.log('');
+    console.log('  Saturday reports that may name them. Erasure cannot reach inside a PDF:');
+    console.log('  check each by hand (docs/runbooks/erasure-request.md, step 5).');
+    for (const r of result.reports) {
+      console.log(`    ${r.heldOn}  ${r.name}${r.replaced ? ' (earlier version)' : ''}`);
+      console.log(`                ${r.key}`);
+    }
+  }
   console.log('');
   console.log(dryRun ? 'Dry run: nothing was changed.' : 'Done. This cannot be undone.');
 }
