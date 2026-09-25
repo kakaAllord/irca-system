@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
 import { z } from 'zod';
 import { ZodPipe } from '../../core/http/zod.pipe.js';
 import { RequirePermission } from '../../core/rbac/decorators.js';
@@ -7,6 +18,11 @@ import { HealthService } from './health.service.js';
 import { ImpersonationLogService } from './impersonations.service.js';
 import { DevLogsService } from './logs.service.js';
 import { DevSettingsService } from './settings.service.js';
+
+const AlertsSchema = z.object({
+  /** The storage the database's plan allows; null stops watching it. */
+  dbStorageGb: z.number().positive('More than 0').max(100_000, 'At most 100,000').nullable(),
+});
 
 const ServerLogSchema = z.object({
   level: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).optional(),
@@ -146,6 +162,26 @@ export class DevController {
   @HttpCode(204)
   async revokeKey(@Param('id') id: string) {
     await this.settings.revokeKey(id);
+  }
+
+  /** Who hears when something is wrong, and what is wrong now (docs/plan/10, step 10.4). */
+  @RequirePermission('dev.church.manage')
+  @Get('alerts')
+  alerts() {
+    return this.settings.alertsPage();
+  }
+
+  @RequirePermission('dev.church.manage')
+  @Put('alerts')
+  saveAlerts(@Body(new ZodPipe(AlertsSchema)) body: z.infer<typeof AlertsSchema>) {
+    return this.settings.saveAlerts(body.dbStorageGb);
+  }
+
+  @RequirePermission('dev.church.manage')
+  @Post('alerts/test')
+  @HttpCode(200)
+  testAlert() {
+    return this.settings.testAlert();
   }
 
   /** What the server wrote, newest first. Held in memory, so empty after a restart. */

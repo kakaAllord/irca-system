@@ -4,6 +4,8 @@ import { Db } from '../../core/database/db.service.js';
 import { AuditService } from '../../core/audit/audit.service.js';
 import { ApiClientService } from '../../core/clients/api-client.service.js';
 import { AppError } from '../../core/http/app-error.js';
+import { AlertsService } from '../../core/alerts/alerts.service.js';
+import { alertSettings, saveStorageSize } from '../../core/alerts/alert-settings.js';
 
 export type ChurchChange = {
   name?: string;
@@ -26,6 +28,7 @@ export class DevSettingsService {
     private readonly db: Db,
     private readonly audit: AuditService,
     private readonly clients: ApiClientService,
+    private readonly alerts: AlertsService,
   ) {}
 
   async church() {
@@ -116,5 +119,76 @@ export class DevSettingsService {
       },
       'feature',
     );
+  }
+
+  /**
+   * Who hears when something is wrong, what is wrong now, and the one
+   * threshold only this church can give: how much storage its plan allows.
+   */
+  async alertsPage() {
+    const [system, comms, active, settings] = await Promise.all([
+      this.alerts.recipients('system'),
+      this.alerts.recipients('comms'),
+      this.alerts.active(),
+      alertSettings(this.db.client),
+    ]);
+    const systemEmails = new Set(system.map((r) => r.email));
+    return {
+      recipients: system,
+      // Communications' people hear about credit and failing texts as well.
+      commsOnly: comms.filter((r) => !systemEmails.has(r.email)),
+      active,
+      dbStorageGb: settings.dbStorageBytes === null ? null : settings.dbStorageBytes / 1024 ** 3,
+    };
+  }
+
+  async saveAlerts(dbStorageGb: number | null) {
+    const before = (await alertSettings(this.db.client)).dbStorageBytes;
+    const bytes = dbStorageGb === null ? null : Math.round(dbStorageGb * 1024 ** 3);
+    await this.db.tx(async (tx) => {
+      await saveStorageSize(tx, bytes);
+      await this.audit.recordIn(tx, {
+        action: 'dev.alerts.changed',
+        entityType: 'settings',
+        entityId: 'alerts',
+        summary:
+          dbStorageGb === null
+            ? 'Stopped watching the database storage'
+            : `Set the database storage to ${dbStorageGb} GB`,
+        before: { dbStorageBytes: before },
+        after: { dbStorageBytes: bytes },
+      });
+    });
+    return this.alertsPage();
+  }
+
+  /** The whole path, on purpose: an email to each recipient, and a text to each phone. */
+  async testAlert() {
+    const to = await this.alerts.recipients('system');
+    if (!to.length) {
+      throw new AppError(
+        409,
+        ErrorCode.CONFLICT,
+        'Nobody would receive it: nobody active may read the Health page.',
+      );
+    }
+    await this.alerts.notify({
+      key: 'test',
+      title: 'A test alert',
+      lines: [
+        'Somebody pressed Send a test alert in Dev → Settings. If this arrived, alerts reach you.',
+      ],
+      sms: true,
+    });
+    await this.audit.recordNow(
+      {
+        action: 'dev.alerts.tested',
+        entityType: 'settings',
+        entityId: 'alerts',
+        summary: `Sent a test alert to ${to.length} ${to.length === 1 ? 'person' : 'people'}`,
+      },
+      'feature',
+    );
+    return { emails: to.length, texts: to.filter((r) => r.phone).length };
   }
 }
