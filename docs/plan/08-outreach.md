@@ -5,8 +5,8 @@
 > four fields on a phone — into the church's one list of people — then follows
 > each person up until they come to church.
 
-**Status:** built (25 Sept 2026), except step 8.1, which waits on the
-Outreach leader; see "What changed on the way" at the end. **Comes after:** Phase 7 (the department, its
+**Status:** built (25 Sept 2026), with step 8.1's answers taken in the same
+day; see "What changed on the way" at the end. **Comes after:** Phase 7 (the department, its
 members and the Friday reminders all come from there). **Comes before:**
 Phase 9, which uses the person timeline this phase builds.
 
@@ -804,7 +804,7 @@ test fail.
 - [x] The session PDF is attached, limited, private, and named in the data inventory and the erasure runbook. *(Walked in a browser on a disk folder; attaching the Railway volume and the redeploy check are `docs/deployment.md` §6b, before launch.)*
 - [x] `appendix-database.md`, `what-works-now.md` and the metric list are updated.
 - [ ] Someone other than the builder has walked it in a browser, at phone width. *(The owner's: `what-works-now.md` §11, steps 24–27.)*
-- [ ] Step 8.1: the Outreach leader's answers are in `outreach-brief.md`. *(The owner's.)*
+- [x] Step 8.1: the answers are in `outreach-brief.md` (25 Sept 2026): a team of any size, all registered on the form; partner groups not bound by time, with their history kept; areas typed per team; reached and salvations reported upward. *(Still open, and not needed by the code: the leader's name, and to whom they report.)*
 
 ---
 

@@ -1,17 +1,26 @@
 # Outreach & Evangelism — department brief
 
-Filled in from the owner's notes of 22 September 2026. **Sections 1 and 3 need
-the Outreach leader's own answers before Phase 8 starts**
-(`docs/plan/08-outreach.md`, step 8.1).
+Filled in from the owner's notes of 22 September 2026, and the answers given on
+25 September 2026 (`docs/plan/08-outreach.md`, step 8.1). What is still open is
+marked **open**.
 
 ## 1. Who is in the department, and who leads it?
 
-- Leader: _TBC._
-- Team size today: _TBC._ Everyone in it is a person in the church's People
-  list; Outreach never creates a second record for them.
-- Partner groups of two or three go out together. Whether these hold for a
-  season or change weekly: _TBC — it decides what the Saturday screen shows
-  first._
+- Leader: named by an administrator in Admin → Departments → Outreach, from
+  the confirmed members. Who it is was not given here (**open**, and not
+  needed by the code).
+- Team size: *"can just be big and more big … even if it is 100 or 200"*
+  (25 Sept 2026). Built and tested for a team of 150 and more: every list of
+  the team can be searched by name.
+- Everyone in the team has **already registered on the registration form**
+  (25 Sept 2026). A leader can add only people who have filled in the whole
+  form; Outreach never creates a second record for them.
+- Partner groups of two or three go out together. They are **not bound by
+  time**, but **who was with whom, from when until when, is kept**
+  (25 Sept 2026): a change to a group ends and starts dated memberships, and
+  the Team page shows each group's history.
+- Areas: **every team goes to a different place**, and types it in; there is
+  no fixed list (25 Sept 2026). Areas already used are only suggested.
 
 Who does what (D28, D29): the team is the **Outreach department** in Admin →
 Departments. Its **leaders**, named by an administrator, run the portal by
@@ -38,7 +47,11 @@ numbers holds **Outreach viewer**.
   details as they are learnt.
 - Approve: nothing internally. Their message templates are approved by
   Comms/Admin once (Phase 7).
-- Report upward: _which figures, and to whom — TBC._
+- Report upward: **how many people were reached, and how many got salvation**
+  (25 Sept 2026). Both are on the dashboard for any period, each opening the
+  list it was counted from; a salvation is ticked when recording someone, or
+  counted by the team for those spoken to without taking details. To whom
+  they report: **open**.
 
 ## 4. What do they need from other portals?
 

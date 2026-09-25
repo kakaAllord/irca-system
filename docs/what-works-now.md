@@ -655,8 +655,7 @@ whole Saturday walked in a browser at phone width.
   when the owner says so).
 - For Communications to go live: the Beem account typed into Comms → Settings, and the
   reply URL given to Beem (`docs/deployment.md`, §6a).
-- For Outreach: the Outreach leader's answers to step 8.1 (how the team
-  works, its areas, which numbers it reports upward), the files volume
+- For Outreach: the files volume
   (`docs/deployment.md` §6b, with its checks before launch), and a
   second person walking it at phone width.
 - Pledges (Phase 9), once the leadership has answered step 9.0.
