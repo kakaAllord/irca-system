@@ -4,6 +4,9 @@ How each app is built, where it runs, what it needs, and the order to bring a
 fresh environment up in. The runbooks in `docs/runbooks/` cover what to do when
 something goes wrong after that.
 
+**Deploying to Railway?** `docs/deploy-railway.md` is this page with
+Railway's own settings, step by step, database and portal included.
+
 One deployment serves one church (D27). A second church would get a second copy
 of everything below — its own database, its own apps, its own domain — never a
 row in this one.
