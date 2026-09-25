@@ -194,4 +194,12 @@ const PATHS: Record<Name, React.ReactNode> = {
       <path d="M2 20v-4.5A2.5 2.5 0 0 1 4.5 13H7l3-2" />
     </>
   ),
+  // An open hand with a coin above it: something promised.
+  pledges: (
+    <>
+      <circle cx="14" cy="6" r="3" />
+      <path d="M2 14h3l4 1.5h3.5a1.5 1.5 0 0 1 0 3H9" />
+      <path d="m12.5 18.5 5.5-2.5a1.8 1.8 0 0 1 2 3l-6.5 3.5H5L2 21" />
+    </>
+  ),
 };

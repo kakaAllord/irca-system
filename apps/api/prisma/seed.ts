@@ -116,10 +116,12 @@ await user('dev@irca.local', 'Dev Account', 'dev-password-123', [
 ]);
 await user('admin@irca.local', 'IRCA Admin', 'admin-password-123', ['admin.administrator']);
 // A second administrator, because nobody decides their own change request,
-// and the pastor who decides membership applications.
+// and the pastor who decides membership applications and, as the leadership
+// agreed, oversees pledges (docs/modules/pledges-brief.md).
 await user('pastor@irca.local', 'Pastor Sarah', 'pastor-password-123', [
   'admin.administrator',
   'membership.pastor',
+  'finance.pledges_overseer',
 ]);
 // The office, and the follow-up team, who must not read prayer requests.
 await user('office@irca.local', 'Grace Office', 'office-password-123', ['membership.secretary']);

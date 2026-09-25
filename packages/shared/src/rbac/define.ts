@@ -48,7 +48,8 @@ export type NavIcon =
   | 'templates'
   | 'schedule'
   | 'sessions'
-  | 'training';
+  | 'training'
+  | 'pledges';
 
 export type NavItem = {
   label: string;

@@ -127,6 +127,12 @@ export const financeModule = defineModule({
       permission: 'finance.transactions.read',
     },
     {
+      label: 'Pledges',
+      href: '/finance/pledges',
+      icon: 'pledges',
+      permission: 'finance.pledges.read',
+    },
+    {
       label: 'Reports',
       href: '/finance/reports',
       icon: 'reports',
