@@ -12,3 +12,13 @@ export const Public = () => SetMetadata(IS_PUBLIC, true);
  * this, @Public nor a permission.
  */
 export const AuthenticatedOnly = () => SetMetadata(AUTHENTICATED_ONLY, true);
+
+export const CALLED_BY_PROVIDER = 'irca:called-by-provider';
+
+/**
+ * Called by an outside service (Beem passing on a reply), never by a
+ * browser: no cookie is read, so there is no session to forge, and the CSRF
+ * header check does not apply. The route must prove the caller itself, with
+ * a secret of its own. Always used with @Public().
+ */
+export const CalledByProvider = () => SetMetadata(CALLED_BY_PROVIDER, true);

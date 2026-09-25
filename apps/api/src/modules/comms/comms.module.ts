@@ -14,6 +14,8 @@ import { OutboxService } from './outbox.service.js';
 import { CommsJobs } from './comms.jobs.js';
 import { SchedulesController } from './schedules.controller.js';
 import { SchedulesService } from './schedules.service.js';
+import { InboundController } from './inbound.controller.js';
+import { InboundService } from './inbound.service.js';
 
 /**
  * The Communication system (Phase 7): templates, audiences, sending, beats,
@@ -28,6 +30,7 @@ import { SchedulesService } from './schedules.service.js';
     TemplatesController,
     MessagesController,
     SchedulesController,
+    InboundController,
   ],
   providers: [
     SettingsService,
@@ -38,6 +41,7 @@ import { SchedulesService } from './schedules.service.js';
     MessagesService,
     OutboxService,
     SchedulesService,
+    InboundService,
     CommsJobs,
   ],
   exports: [AudiencesService, SendingService, OutboxService],

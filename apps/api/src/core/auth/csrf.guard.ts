@@ -1,8 +1,10 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
 import { ErrorCode } from '@irca/shared';
 import { AppConfig } from '../../config/app-config.js';
 import { AppError } from '../http/app-error.js';
+import { CALLED_BY_PROVIDER } from './decorators.js';
 
 const SAFE = new Set(['GET', 'HEAD', 'OPTIONS']);
 const CLIENTS = new Set(['portal', 'registration']);
@@ -18,11 +20,24 @@ const CLIENTS = new Set(['portal', 'registration']);
  */
 @Injectable()
 export class CsrfGuard implements CanActivate {
-  constructor(private readonly config: AppConfig) {}
+  constructor(
+    private readonly config: AppConfig,
+    private readonly reflector: Reflector,
+  ) {}
 
   canActivate(ctx: ExecutionContext): boolean {
     const req = ctx.switchToHttp().getRequest<Request>();
     if (SAFE.has(req.method)) return true;
+    // A provider's callback carries no cookie, so there is nothing to forge;
+    // it proves itself with its own secret instead.
+    if (
+      this.reflector.getAllAndOverride<boolean>(CALLED_BY_PROVIDER, [
+        ctx.getHandler(),
+        ctx.getClass(),
+      ])
+    ) {
+      return true;
+    }
 
     const client = req.get('x-irca-client');
     const origin = req.get('origin');

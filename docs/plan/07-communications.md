@@ -464,12 +464,17 @@ tests never touch the network and development never spends credit.
    (reads the account from `comms_beem_account` **on every send**, D26).
    Tests always get memory; otherwise Beem when an account row exists, else
    the log.
-2. **Beem's API**, as it was understood when this was written — **check it
-   against Beem's current documentation before writing the code**:
+2. **Beem's API**, checked against docs.beem.africa on 24 Sept 2026 — check it
+   again before going live, since it is theirs:
    `POST https://apisms.beem.africa/v1/send`, HTTP Basic (key:secret), body
-   `{ source_addr, schedule_time: '', encoding: 0, message, recipients: [{ recipient_id, dest_addr }] }`
-   with `dest_addr` in international form without the `+`; balance at
-   `GET https://apisms.beem.africa/public/v1/vendors/balance`.
+   `{ source_addr, encoding: 0, schedule_time: '', message, recipients: [{ recipient_id, dest_addr }] }`
+   with `dest_addr` in international form without the `+`, and `code: 100`
+   meaning accepted; the credit at
+   `GET https://apisms.beem.africa/public/v1/vendors/balance`
+   (`data.credit_balance`). **Delivery is asked for, not pushed**:
+   `GET https://dlrapi.beem.africa/public/v1/delivery-reports?dest_addr=&request_id=`,
+   at least five minutes after sending, answers `PENDING`, `DELIVERED` or
+   `UNDELIVERED`.
 3. **The key, encrypted (D26).** `BEEM_SETTINGS_KEY` (32 bytes, base64) in
    `env.ts` and `.env.example`; `core/sms/secret-box.ts` seals with
    AES-256-GCM and a fresh 12-byte nonce per value. With no key set, saving a
@@ -558,9 +563,9 @@ message someone who asked us not to".
    department), and `event_name`, `date`, `time`, `venue` (typed by the sender
    when sending). Any other blank is refused at draft time, by name. (Phase 9
    adds `amount`, `balance`, `due_date`, `campaign_name`.)
-4. **Nobody approves their own**: `comms.templates.approve`, and not the
-   person who submitted it — the same rule and wording as change requests
-   (D17).
+4. **Nobody approves their own**: `comms.templates.approve`, and neither the
+   person who wrote it nor the one who submitted it — the same rule as change
+   requests (D17), refused the same way: 409, `CANNOT_DECIDE_OWN_REQUEST`.
 5. **Never deleted**: a template is only ever retired.
 6. Who drafts what: Communications (`comms.templates.draft`) drafts its own
    and any department's; a leader (`comms.department.draft`) drafts their
@@ -571,7 +576,7 @@ submit, approve, reject, retire.
 
 **Check.** An e2e test: a draft cannot be sent; approving makes it usable;
 editing it makes version 2 while version 1 still sends; approving version 2
-retires version 1; the author cannot approve their own (403, with the reason);
+retires version 1; the author cannot approve their own (409, with the reason);
 `{{nickname}}` is refused and the message names `nickname`.
 
 **Commit.** "Approve the words once, then let the department use them".
@@ -671,25 +676,38 @@ having to notice.
 
 **Do.**
 
-1. `POST /v1/public/comms/inbound` and `POST /v1/public/comms/delivery`,
-   `@Public()`, throttled, 401 without `BEEM_INBOUND_SECRET`. Both store what
-   they received in `comms_inbound` first.
-2. A reply of `stop`, `acha`, `simama`, `unsubscribe` or `toka` blocks the
-   number and sets `sms_opt_out` on the matching person or staff account. Any
-   other reply is kept and shown in Comms → Overview.
-3. A delivery report marks the recipient `DELIVERED` or `FAILED`; a permanent
-   failure also blocks the number.
-4. **Every message carries the way out**, added when the body lacks it:
-   ` Jibu ACHA kuacha.` (sw), ` Reply STOP to stop.` (en),
-   ` Répondez STOP pour arrêter.` (fr). Counted into the segments. It cannot
-   be switched off (D22).
-5. Write the two URLs and the secret into `docs/deployment.md`.
+1. One public route, for Beem to call with a reply:
+   `POST /v1/public/comms/inbound?key=<BEEM_INBOUND_SECRET>`. Beem sends no
+   signature and cannot be given a header, so the secret travels in the URL
+   and is compared in constant time; without it, 401 and nothing written. The
+   route is `@Public()`, throttled, and marked `@CalledByProvider()` so the
+   CSRF check (which wants the portal's header) does not apply — it reads no
+   cookie. It **stores what it received in `comms_inbound` before anything
+   else**, and answers `{ transaction_id, successful: true }` as Beem expects.
+2. **A reply** whose text, trimmed and lower-cased, is one of `stop`, `acha`,
+   `simama`, `unsubscribe`, `toka`: add the number to `comms_blocked_numbers`,
+   set `sms_opt_out` on every person and staff account with that number
+   (matched on digits, since numbers are stored as typed), and send nothing
+   back. Any other reply is kept and shown in Comms → Overview.
+3. **Delivery** is not pushed by Beem (see 7.7), so there is no delivery
+   route: a job every five minutes asks about messages sent between five
+   minutes and two days ago and marks them `DELIVERED` or `FAILED`. A number
+   Beem refuses as impossible when sending is failed and blocked; an
+   undelivered message is not, because a phone that is off is not a dead
+   number. The outbox checks the blocked list once more just before sending,
+   since a STOP may arrive after a scheduled message was written.
+4. **Every message carries the way out**, added when the body does not already
+   contain it: `Jibu ACHA kuacha.` (sw), `Reply STOP to stop.` (en),
+   `Répondez STOP pour arrêter.` (fr). Counted into the segments. It cannot be
+   switched off (D22).
+5. Write the URL and the secret into `docs/deployment.md` (§6a).
 
-**Check.** An e2e test: STOP blocks and the next send skips them; a delivery
-report marks a row `DELIVERED`; a wrong secret gets 401 and writes nothing.
+**Check.** An e2e test (`test/comms-inbound.e2e-spec.ts`): STOP blocks and
+marks the person, and the next preview leaves them alone; any other reply is
+kept as it came; a wrong or missing secret gets 401 and writes nothing.
+`test/comms-sending.e2e-spec.ts` covers delivery being asked for.
 
-**Commit.** "Honour a STOP, for good"; "Keep the delivery reports and what they
-mean".
+**Commit.** "Honour a STOP, for good".
 
 ---
 

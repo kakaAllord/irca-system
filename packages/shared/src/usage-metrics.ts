@@ -62,6 +62,8 @@ export const USAGE_METRICS: MetricDef[] = [
   m('Messages', 'sms.segments', 'counter', 'Segments sent (what the carrier bills)'),
   m('Messages', 'sms.cost', 'counter', 'What messages cost, in TZS'),
   m('Messages', 'sms.balance', 'gauge', 'Beem credit left, in TZS'),
+  m('Messages', 'sms.replies', 'counter', 'Replies kept for Communications to read'),
+  m('Messages', 'sms.replies.stop', 'counter', 'Replies that said STOP'),
   m('Messages', 'comms.templates.approved', 'counter', 'Templates approved'),
 
   m('API', 'api.requests', 'counter', 'Requests'),

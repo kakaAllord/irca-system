@@ -140,6 +140,11 @@ development:
 | `EMAIL_PROVIDER`         | `resend` |
 | `EMAIL_FROM`             | `IRCA <no-reply@<domain>>` |
 | `RESEND_API_KEY`         | from Resend |
+| `BEEM_SETTINGS_KEY`      | 32 random bytes, base64 (`.env.example` says how). Seals the Beem key in the database. Make it once and keep it: a new one makes the saved Beem account unreadable until it is saved again |
+| `BEEM_INBOUND_SECRET`    | at least 24 random characters. The password in the reply URL given to Beem (§6a) |
+
+The Beem key and secret are **not** environment variables: Communications
+types them into Comms → Settings (D26).
 
 The host's environment settings are the only place secrets live. Nothing in
 the repository holds one, and `.env` files are never committed.
@@ -212,6 +217,25 @@ redeploying; its old database stays untouched until the owner retires it.
    before anything else.
 4. Watch **Dev → Usage → Email** for the first week: anything given up on shows
    its reason there.
+
+## 6a. Text messages (Beem)
+
+1. Communications signs in, opens **Comms → Settings**, and saves the Beem key,
+   secret and the sender name Beem registered, then presses **Test
+   connection**. It shows the credit left. Until an account is saved, every
+   message is only written to the API's log.
+2. Communications saves a **daily limit** on the same page. Nothing is sent
+   until there is one (07 step 7.1).
+3. In Beem's dashboard, under two-way SMS, set the callback URL for replies to
+   `https://api.<domain>/v1/public/comms/inbound?key=<BEEM_INBOUND_SECRET>`.
+   Beem signs nothing, so the secret in the URL is what proves the call is
+   Beem's; keep the URL out of screenshots. A reply of STOP (or ACHA, SIMAMA,
+   TOKA, UNSUBSCRIBE) blocks the number for good.
+4. Delivery is not reported to us: the API asks Beem every five minutes about
+   messages sent in the last two days (docs.beem.africa, checked 24 Sept 2026).
+   Nothing to set up.
+5. Send one message to a phone you hold, and watch it become **Delivered** in
+   Comms → History within ten minutes.
 
 ---
 
