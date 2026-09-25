@@ -73,7 +73,12 @@ export class TeamService {
         orderBy: { person: { fullName: 'asc' } },
       }),
       this.db.client.outreachGroup.findMany({
-        include: { members: { include: { person: { select: { id: true, fullName: true } } } } },
+        include: {
+          members: {
+            include: { person: { select: { id: true, fullName: true } } },
+            orderBy: { addedAt: 'asc' },
+          },
+        },
         orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
       }),
       this.db.client.outreachSessionTeamMember.groupBy({
@@ -91,7 +96,7 @@ export class TeamService {
 
     const groupOf = new Map<string, string>();
     for (const g of groups.filter((g) => g.isActive)) {
-      for (const m of g.members) groupOf.set(m.personId, g.name);
+      for (const m of g.members.filter((m) => !m.endedAt)) groupOf.set(m.personId, g.name);
     }
     const out = new Map(outings.map((o) => [o.personId, o._count.personId]));
     const attendance = (personId: string) => {
@@ -128,7 +133,16 @@ export class TeamService {
         id: g.id,
         name: g.name,
         active: g.isActive,
-        people: g.members.map((m) => ({ personId: m.personId, name: m.person.fullName })),
+        people: g.members
+          .filter((m) => !m.endedAt)
+          .map((m) => ({ personId: m.personId, name: m.person.fullName })),
+        // Who was in it, from when until when: partnerships change, the past stays.
+        history: g.members.map((m) => ({
+          personId: m.personId,
+          name: m.person.fullName,
+          from: m.addedAt.toISOString(),
+          to: m.endedAt?.toISOString() ?? null,
+        })),
       })),
     };
   }
@@ -158,10 +172,22 @@ export class TeamService {
       if (!before) throw notFound('No such partner group.');
       const people = await this.checkGroup(tx, input, id);
       await tx.outreachGroup.update({ where: { id }, data: { name: input.name } });
-      // Who is in a group now; the Saturdays it went out on keep their own list.
-      await tx.outreachGroupMember.deleteMany({ where: { groupId: id } });
+      // Whoever left is ended and whoever joined is started; those who stay
+      // keep their row, so each person's time in the group reads unbroken.
+      const wanted = new Set(input.personIds);
+      const open = await tx.outreachGroupMember.findMany({
+        where: { groupId: id, endedAt: null },
+      });
+      const now = new Date();
+      await tx.outreachGroupMember.updateMany({
+        where: { id: { in: open.filter((m) => !wanted.has(m.personId)).map((m) => m.id) } },
+        data: { endedAt: now },
+      });
+      const staying = new Set(open.map((m) => m.personId));
       await tx.outreachGroupMember.createMany({
-        data: [...new Set(input.personIds)].map((personId) => ({ groupId: id, personId })),
+        data: [...wanted]
+          .filter((personId) => !staying.has(personId))
+          .map((personId) => ({ groupId: id, personId, addedAt: now })),
       });
       await this.audit.recordIn(tx, {
         action: 'outreach.group.updated',
@@ -178,7 +204,35 @@ export class TeamService {
     await this.db.tx(async (tx) => {
       const group = await tx.outreachGroup.findUnique({ where: { id } });
       if (!group) throw notFound('No such partner group.');
+      if (group.isActive === active) return;
       await tx.outreachGroup.update({ where: { id }, data: { isActive: active } });
+      const now = new Date();
+      if (!active) {
+        // A group switched off is a partnership ended: its people's rows end.
+        await tx.outreachGroupMember.updateMany({
+          where: { groupId: id, endedAt: null },
+          data: { endedAt: now },
+        });
+      } else {
+        // Brought back with the people it had when it was switched off, those
+        // of them still on the team, from today.
+        const last = await tx.outreachGroupMember.findFirst({
+          where: { groupId: id, endedAt: { not: null } },
+          orderBy: { endedAt: 'desc' },
+        });
+        if (last?.endedAt) {
+          const department = await this.department(tx);
+          const team = await this.teamIds(tx, department.id);
+          const people = await tx.outreachGroupMember.findMany({
+            where: { groupId: id, endedAt: last.endedAt },
+          });
+          await tx.outreachGroupMember.createMany({
+            data: people
+              .filter((m) => team.has(m.personId))
+              .map((m) => ({ groupId: id, personId: m.personId, addedAt: now })),
+          });
+        }
+      }
       await this.audit.recordIn(tx, {
         action: active ? 'outreach.group.restored' : 'outreach.group.retired',
         entityType: 'outreach_group',

@@ -1247,15 +1247,23 @@ model OutreachGroup {
   @@map("outreach_groups")
 }
 
+/// Who was in a partner group, from when until when. Partnerships are not
+/// bound to a season (owner, 25 Sept 2026), so a change to a group ends the
+/// rows of whoever left and starts rows for whoever joined: the history of who
+/// went out with whom is kept, never rewritten. One open row per person per
+/// group, enforced by a partial unique index in the migration.
 model OutreachGroupMember {
-  groupId  String @map("group_id") @db.Uuid
-  personId String @map("person_id") @db.Uuid
+  id       String    @id @default(uuid(7)) @db.Uuid
+  groupId  String    @map("group_id") @db.Uuid
+  personId String    @map("person_id") @db.Uuid
+  addedAt  DateTime  @default(now()) @map("added_at") @db.Timestamptz(6)
+  endedAt  DateTime? @map("ended_at") @db.Timestamptz(6)
 
   group  OutreachGroup @relation(fields: [groupId], references: [id])
   /// Erasing a person (the person:erase command) takes this with them.
   person Person        @relation(fields: [personId], references: [id], onDelete: Cascade)
 
-  @@id([groupId, personId])
+  @@index([groupId])
   @@index([personId])
   @@map("outreach_group_members")
 }

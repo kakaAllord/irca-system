@@ -185,6 +185,63 @@ describe('Outreach (Phase 8)', () => {
       expect(body.groups).toEqual([expect.objectContaining({ name: 'Njiro pair', active: false })]);
     });
 
+    it('keeps who was partnered with whom, from when until when', async () => {
+      const { cookie, members } = await outreach();
+      const [peter, john, grace] = members as [string, string, string];
+      const made = await portal(app)
+        .post('/v1/outreach/groups', { name: 'Njiro pair', personIds: [peter, john] }, cookie)
+        .expect(201);
+      const group = async () =>
+        (await portal(app).get('/v1/outreach/team', cookie).expect(200)).body.groups[0] as {
+          active: boolean;
+          people: { personId: string }[];
+          history: { personId: string; from: string; to: string | null }[];
+        };
+
+      // John makes way for Grace: his row ends, hers starts, Peter's runs on.
+      await portal(app)
+        .put(
+          `/v1/outreach/groups/${made.body.id}`,
+          { name: 'Njiro pair', personIds: [peter, grace] },
+          cookie,
+        )
+        .expect(204);
+      let g = await group();
+      expect(g.people.map((p) => p.personId).sort()).toEqual([peter, grace].sort());
+      const rowOf = (id: string) => g.history.filter((h) => h.personId === id);
+      expect(rowOf(peter)).toEqual([expect.objectContaining({ to: null })]);
+      expect(rowOf(john)).toEqual([expect.objectContaining({ to: expect.any(String) })]);
+      expect(rowOf(grace)).toEqual([expect.objectContaining({ to: null })]);
+
+      // Switched off, the partnership ends; brought back, it starts again with the same people.
+      await portal(app)
+        .put(`/v1/outreach/groups/${made.body.id}/active`, { active: false }, cookie)
+        .expect(204);
+      g = await group();
+      expect(g.people).toEqual([]);
+      expect(g.history.every((h) => h.to !== null)).toBe(true);
+      await portal(app)
+        .put(`/v1/outreach/groups/${made.body.id}/active`, { active: true }, cookie)
+        .expect(204);
+      g = await group();
+      expect(g.people.map((p) => p.personId).sort()).toEqual([peter, grace].sort());
+      expect(g.history).toHaveLength(5);
+
+      // The history is never rewritten by the application.
+      const appRole = new pg.Client({ connectionString: process.env.DATABASE_URL });
+      await appRole.connect();
+      try {
+        await expect(appRole.query('delete from outreach_group_members')).rejects.toThrow(
+          /permission denied/,
+        );
+        await expect(
+          appRole.query('update outreach_group_members set added_at = now()'),
+        ).rejects.toThrow(/permission denied/);
+      } finally {
+        await appRole.end();
+      }
+    });
+
     it('leaves groups to the leaders', async () => {
       const { members } = await outreach();
       const refused = await portal(app)
