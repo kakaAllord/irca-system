@@ -47,6 +47,18 @@ export type RequestSubmittedPayload = {
   link: string;
 };
 
+export type AlertPayload = {
+  /** 'raised' when it starts, 'again' while it lasts, 'resolved' when it clears. */
+  state: 'raised' | 'again' | 'resolved';
+  title: string;
+  lines: string[];
+  link: string;
+};
+
+/** Alerts carry error messages from the system, which may hold anything. */
+const escape = (s: string) =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
 export const TEMPLATES = {
   invitation: (p: InvitationPayload): Rendered => ({
     subject: `You've been given access to ${p.churchName}`,
@@ -127,6 +139,21 @@ export const TEMPLATES = {
       { label: 'Open it', url: p.link },
     ),
   }),
+
+  alert: (p: AlertPayload): Rendered => {
+    const heading =
+      p.state === 'resolved'
+        ? `Resolved: ${p.title}`
+        : `${p.state === 'again' ? 'Still: ' : ''}${p.title}`;
+    return {
+      subject: `IRCA alert — ${heading}`,
+      text: [heading, '', ...p.lines, '', 'The dev console:', p.link].join('\n'),
+      html: layout(escape(heading), p.lines.map(escape), {
+        label: 'Open the dev console',
+        url: p.link,
+      }),
+    };
+  },
 } as const;
 
 export type TemplateName = keyof typeof TEMPLATES;

@@ -1062,6 +1062,23 @@ model DepartmentMember {
   @@map("department_members")
 }
 
+/// What the alert job has told the owner about (docs/plan/10, step 10.4), so
+/// each problem is sent once when it starts, repeated at most twice a day
+/// while it lasts, and followed by a word when it clears. A row that is not
+/// active only remembers how far the job has read, such as how many emails
+/// had been given up on.
+model Alert {
+  key        String   @id @db.VarChar(80)
+  active     Boolean  @default(false)
+  summary    String   @default("") @db.VarChar(300)
+  detail     Json?
+  raisedAt   DateTime @default(now()) @map("raised_at") @db.Timestamptz(6)
+  lastSentAt DateTime @default(now()) @map("last_sent_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("alerts")
+}
+
 /// Settings the office can change, with the defaults in code (probation days,
 /// how many foundation sessions there are).
 model Setting {
