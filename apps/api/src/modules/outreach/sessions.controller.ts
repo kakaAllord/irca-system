@@ -17,7 +17,11 @@ const TeamSchema = z.object({
   personIds: z.array(z.uuid()).max(100),
   notes: z.string().trim().max(1000).optional(),
 });
-const SpokenSchema = z.object({ spokenToOnly: z.number().int().min(0).max(10_000) });
+const SpokenSchema = z.object({
+  spokenToOnly: z.number().int().min(0).max(10_000),
+  /** Of those, how many gave their life to Christ. */
+  savedOnly: z.number().int().min(0).max(10_000).optional(),
+});
 
 const STATUSES = ['PLANNED', 'COMPLETED', 'CANCELLED'] as const;
 
@@ -112,6 +116,6 @@ export class SessionsController {
     @Param('teamId') teamId: string,
     @Body(new ZodPipe(SpokenSchema)) body: z.infer<typeof SpokenSchema>,
   ) {
-    return this.sessions.setSpokenToOnly(teamId, body.spokenToOnly);
+    return this.sessions.setSpokenToOnly(teamId, body.spokenToOnly, body.savedOnly);
   }
 }

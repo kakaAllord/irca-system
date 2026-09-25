@@ -529,6 +529,69 @@ describe('Outreach (Phase 8)', () => {
       expect(refused.body.error.message).toMatch(/has not come yet/);
     });
 
+    it('records who gave their life to Christ, and Membership sees them saved', async () => {
+      const { cookie, members } = await outreach();
+      const saved = await portal(app)
+        .post('/v1/outreach/reached', { ...neema, saved: true }, cookie)
+        .expect(201);
+      const later = await portal(app)
+        .post(
+          '/v1/outreach/reached',
+          { fullName: 'Juma Later', phone: '0713 999 000', mayMessage: true },
+          cookie,
+        )
+        .expect(201);
+      await portal(app)
+        .patch(`/v1/outreach/reached/${later.body.reachedId}`, { saved: true }, cookie)
+        .expect(204);
+
+      const people = await db.query<{ id: string; saved: boolean; stage: string }>(
+        `select id, saved, stage from people where id = any($1::uuid[])`,
+        [[saved.body.personId, later.body.personId]],
+      );
+      expect(people.rows.map((p) => [p.saved, p.stage])).toEqual([
+        [true, 'NEW_CONVERT'],
+        [true, 'NEW_CONVERT'],
+      ]);
+      const lines = await db.query<{ summary: string }>(
+        `select summary from person_interactions where person_id = any($1::uuid[]) order by created_at`,
+        [[saved.body.personId, later.body.personId]],
+      );
+      expect(lines.rows.map((l) => l.summary)).toEqual([
+        'Evangelised — gave their life to Christ',
+        'Evangelised',
+        'Gave their life to Christ when reached',
+      ]);
+
+      // Never more saved than were spoken to.
+      const session = await portal(app)
+        .post('/v1/outreach/sessions', { heldOn: '2026-09-19' }, cookie)
+        .expect(201);
+      const team = await portal(app)
+        .post(
+          `/v1/outreach/sessions/${session.body.id}/teams`,
+          { area: 'Sombetini', personIds: members.slice(0, 1) },
+          cookie,
+        )
+        .expect(201);
+      await portal(app)
+        .put(
+          `/v1/outreach/teams/${team.body.id}/spoken-to`,
+          { spokenToOnly: 3, savedOnly: 4 },
+          cookie,
+        )
+        .expect(422);
+      await portal(app)
+        .put(
+          `/v1/outreach/teams/${team.body.id}/spoken-to`,
+          { spokenToOnly: 3, savedOnly: 2 },
+          cookie,
+        )
+        .expect(204);
+      const list = await portal(app).get('/v1/outreach/sessions', cookie).expect(200);
+      expect(list.body[0]).toMatchObject({ spokenToOnly: 3, saved: 2 });
+    });
+
     it('matches on the name only when there is no number', async () => {
       const { cookie } = await outreach();
       await createPerson(db, { fullName: 'Baraka Swai' });
@@ -872,12 +935,17 @@ describe('Outreach (Phase 8)', () => {
         { area: 'Kaloleni', people: [members[2]!, leader.personId] },
       ]);
       await portal(app)
-        .put(`/v1/outreach/teams/${sept.teams[0]}/spoken-to`, { spokenToOnly: 5 }, cookie)
+        .put(
+          `/v1/outreach/teams/${sept.teams[0]}/spoken-to`,
+          { spokenToOnly: 5, savedOnly: 2 },
+          cookie,
+        )
         .expect(204);
       await portal(app)
         .put(`/v1/outreach/teams/${sept.teams[1]}/spoken-to`, { spokenToOnly: 3 }, cookie)
         .expect(204);
-      const a = await reach(sept.teams[0]!, 'Amina One', '0711 000 001');
+      // Amina gave her life to Christ on the doorstep.
+      const a = await reach(sept.teams[0]!, 'Amina One', '0711 000 001', { saved: true });
       const b = await reach(sept.teams[0]!, 'Baraka Two', '0711 000 002');
       const c = await reach(sept.teams[1]!, 'Cecilia Three', '0711 000 003');
       await reach(sept.teams[1]!, 'Amina One', '0711 000 001', { samePersonId: a });
@@ -919,6 +987,7 @@ describe('Outreach (Phase 8)', () => {
       expect({
         reached: value('reached'),
         spokenTo: value('spokenTo'),
+        salvations: value('salvations'),
         awaiting: value('awaiting'),
         followups: value('followups'),
         visited: value('visited'),
@@ -930,6 +999,7 @@ describe('Outreach (Phase 8)', () => {
       }).toEqual({
         reached: 4, // A twice, B, C; not D in August
         spokenTo: 8,
+        salvations: 3, // Amina, and two of the five the first team counted
         awaiting: 3, // A, B and D; C was done
         followups: 4, // a call, two visits and an invitation; not the Sundays
         visited: 2,

@@ -57,11 +57,29 @@ export class SessionsService {
       take: 200,
       include: {
         teams: {
-          select: { area: true, spokenToOnly: true, _count: { select: { members: true } } },
+          select: {
+            area: true,
+            spokenToOnly: true,
+            savedOnly: true,
+            _count: { select: { members: true } },
+          },
         },
         _count: { select: { reached: true } },
       },
     });
+    // Saved: those recorded as saved, and those the teams typed in.
+    const recorded = await this.db.client.outreachReached.groupBy({
+      by: ['sessionId'],
+      where: { saved: true, sessionId: { in: sessions.map((s) => s.id) } },
+      _count: { _all: true },
+    });
+    const savedOf = new Map(
+      sessions.map((s) => [
+        s.id,
+        (recorded.find((r) => r.sessionId === s.id)?._count._all ?? 0) +
+          s.teams.reduce((n, t) => n + t.savedOnly, 0),
+      ]),
+    );
     return sessions.map((s) => ({
       id: s.id,
       heldOn: day(s.heldOn),
@@ -72,6 +90,7 @@ export class SessionsService {
       people: s.teams.reduce((n, t) => n + t._count.members, 0),
       reached: s._count.reached,
       spokenToOnly: s.teams.reduce((n, t) => n + t.spokenToOnly, 0),
+      saved: savedOf.get(s.id) ?? 0,
     }));
   }
 
@@ -85,6 +104,7 @@ export class SessionsService {
             group: { select: { id: true, name: true } },
             members: { include: { person: { select: { id: true, fullName: true } } } },
             _count: { select: { reached: true } },
+            reached: { where: { saved: true }, select: { id: true } },
           },
         },
         _count: { select: { reached: true } },
@@ -109,6 +129,8 @@ export class SessionsService {
         group: t.group,
         notes: t.notes,
         spokenToOnly: t.spokenToOnly,
+        savedOnly: t.savedOnly,
+        saved: t.reached.length,
         reached: t._count.reached,
         people: t.members
           .map((m) => ({ personId: m.personId, name: m.person.fullName }))
@@ -256,10 +278,11 @@ export class SessionsService {
   }
 
   /**
-   * People spoken to without taking details, typed by the team. Kept apart
-   * from those recorded, who are counted rather than typed (08 step 8.5).
+   * People spoken to without taking details, and how many of them gave their
+   * life to Christ, typed by the team. Kept apart from those recorded, who
+   * are counted rather than typed (08 step 8.5).
    */
-  async setSpokenToOnly(teamId: string, count: number) {
+  async setSpokenToOnly(teamId: string, count: number, savedOnly?: number) {
     await this.db.tx(async (tx) => {
       const team = await tx.outreachSessionTeam.findUnique({
         where: { id: teamId },
@@ -269,14 +292,26 @@ export class SessionsService {
       if (team.session.status === 'CANCELLED') {
         throw new AppError(409, ErrorCode.CONFLICT, 'That Saturday was cancelled.');
       }
-      await tx.outreachSessionTeam.update({ where: { id: teamId }, data: { spokenToOnly: count } });
+      const saved = savedOnly ?? Math.min(team.savedOnly, count);
+      if (saved > count) {
+        throw new AppError(
+          422,
+          ErrorCode.VALIDATION_FAILED,
+          `${saved} saved is more than the ${count} spoken to without details.`,
+          { savedOnly: ['Not more than those spoken to'] },
+        );
+      }
+      await tx.outreachSessionTeam.update({
+        where: { id: teamId },
+        data: { spokenToOnly: count, savedOnly: saved },
+      });
       await this.audit.recordIn(tx, {
         action: 'outreach.session.spoken_to',
         entityType: 'outreach_session',
         entityId: team.sessionId,
-        summary: `The ${team.area} team spoke to ${count} more without taking details`,
-        before: { spokenToOnly: team.spokenToOnly },
-        after: { spokenToOnly: count },
+        summary: `The ${team.area} team spoke to ${count} more without taking details, ${saved} of them saved`,
+        before: { spokenToOnly: team.spokenToOnly, savedOnly: team.savedOnly },
+        after: { spokenToOnly: count, savedOnly: saved },
       });
     });
   }

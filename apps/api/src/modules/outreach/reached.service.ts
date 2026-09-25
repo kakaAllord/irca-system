@@ -8,6 +8,7 @@ import { AuditService } from '../../core/audit/audit.service.js';
 import { UsageService } from '../../core/usage/usage.service.js';
 import { toE164 } from '../../core/sms/phone.js';
 import { commsSettings } from '../comms/settings.js';
+import { moveStage } from '../membership/journey.js';
 import { recordInteraction } from '../membership/timeline.js';
 import { day, toDay } from './sessions.service.js';
 import { TeamService } from './team.service.js';
@@ -24,6 +25,8 @@ export type ReachedInput = {
   /** The evangelist asked, and they said yes (D22). */
   mayMessage: boolean;
   needsFollowUp?: boolean;
+  /** They gave their life to Christ when reached. */
+  saved?: boolean;
   note?: string;
   /** Only for someone reached away from a Saturday; a team brings its own date. */
   reachedOn?: string;
@@ -121,10 +124,12 @@ export class ReachedService {
           area: where.area,
           reachedByIds: where.reachedByIds,
           needsFollowUp: input.needsFollowUp ?? true,
+          saved: input.saved ?? false,
           note: input.note ?? '',
           recordedById: this.auth.userId!,
         },
       });
+      if (input.saved) await this.markSaved(tx, person.id);
 
       const by = names(
         where.reachedByIds.map((id) => reachedBy.find((p) => p.id === id)?.fullName ?? ''),
@@ -134,9 +139,9 @@ export class ReachedService {
         kind: 'EVANGELISED',
         moduleKey: 'outreach',
         byId: this.auth.userId,
-        summary: [by ? `Evangelised by ${by}` : 'Evangelised', where.area]
-          .filter(Boolean)
-          .join(', '),
+        summary:
+          [by ? `Evangelised by ${by}` : 'Evangelised', where.area].filter(Boolean).join(', ') +
+          (input.saved ? ' — gave their life to Christ' : ''),
         // A Saturday typed up on Monday happened on Saturday.
         at: where.reachedOn === (await today(tx)) ? new Date() : toDay(where.reachedOn),
         meta: { reachedId: reached.id, sessionId: where.sessionId },
@@ -146,7 +151,7 @@ export class ReachedService {
         action: 'outreach.reached.recorded',
         entityType: 'person',
         entityId: person.id,
-        summary: `Recorded ${person.fullName} as reached${where.area ? ` in ${where.area}` : ''}${person.known ? ', already known' : ''}`,
+        summary: `Recorded ${person.fullName} as reached${where.area ? ` in ${where.area}` : ''}${input.saved ? ', saved' : ''}${person.known ? ', already known' : ''}`,
       });
       return { reachedId: reached.id, personId: person.id, known: person.known };
     });
@@ -154,8 +159,14 @@ export class ReachedService {
     return saved;
   }
 
-  /** The area, the note, and whether they still need following up: filled in later. */
-  async update(id: string, input: { area?: string; note?: string; needsFollowUp?: boolean }) {
+  /**
+   * The area, the note, whether they still need following up, and whether
+   * they were saved: filled in later, when the team meets after a Saturday.
+   */
+  async update(
+    id: string,
+    input: { area?: string; note?: string; needsFollowUp?: boolean; saved?: boolean },
+  ) {
     await this.db.tx(async (tx) => {
       const before = await tx.outreachReached.findUnique({
         where: { id },
@@ -168,17 +179,31 @@ export class ReachedService {
           ...(input.area !== undefined ? { area: input.area } : {}),
           ...(input.note !== undefined ? { note: input.note } : {}),
           ...(input.needsFollowUp !== undefined ? { needsFollowUp: input.needsFollowUp } : {}),
+          ...(input.saved !== undefined ? { saved: input.saved } : {}),
         },
       });
+      if (input.saved && !before.saved) {
+        await this.markSaved(tx, before.personId);
+        await recordInteraction(tx, {
+          personId: before.personId,
+          kind: 'NOTE',
+          moduleKey: 'outreach',
+          byId: this.auth.userId,
+          summary: 'Gave their life to Christ when reached',
+          at: before.reachedOn,
+          meta: { reachedId: id },
+        });
+      }
       await this.audit.recordIn(tx, {
         action: 'outreach.reached.updated',
         entityType: 'person',
         entityId: before.personId,
         summary: `Filled in the reach of ${before.person.fullName}`,
-        before: { area: before.area, needsFollowUp: before.needsFollowUp },
+        before: { area: before.area, needsFollowUp: before.needsFollowUp, saved: before.saved },
         after: {
           area: input.area ?? before.area,
           needsFollowUp: input.needsFollowUp ?? before.needsFollowUp,
+          saved: input.saved ?? before.saved,
         },
       });
     });
@@ -215,6 +240,7 @@ export class ReachedService {
           reached_on: Date;
           reached_by_ids: string[];
           needs_follow_up: boolean;
+          saved: boolean;
           note: string;
           session_id: string | null;
           session_title: string | null;
@@ -222,7 +248,7 @@ export class ReachedService {
         }[]
       >(sql`
         select r.id, r.person_id, p.full_name, p.dial, p.phone, r.area, r.reached_on,
-               r.reached_by_ids, r.needs_follow_up, r.note,
+               r.reached_by_ids, r.needs_follow_up, r.saved, r.note,
                s.id as session_id, s.title as session_title, s.held_on as session_on
         from outreach_reached r
         join people p on p.id = r.person_id
@@ -255,6 +281,7 @@ export class ReachedService {
         reachedOn: day(r.reached_on),
         reachedBy: r.reached_by_ids.map((id) => nameOf.get(id) ?? 'Someone erased'),
         needsFollowUp: r.needs_follow_up,
+        saved: r.saved,
         note: r.note,
         session: r.session_id
           ? { id: r.session_id, title: r.session_title ?? '', heldOn: day(r.session_on!) }
@@ -262,6 +289,30 @@ export class ReachedService {
         thin: { phone: !r.phone, area: !r.area },
       })),
     };
+  }
+
+  /**
+   * Saved on the doorstep is saved in Membership too, as when the office
+   * marks it: a visitor becomes a new convert, so the person's stage and
+   * timeline agree in every portal. Someone already marked saved is left as
+   * they are, and the office can still correct it.
+   */
+  private async markSaved(tx: Tx, personId: string) {
+    const person = await tx.person.findUniqueOrThrow({ where: { id: personId } });
+    if (person.saved === true) return;
+    await tx.person.update({
+      where: { id: personId },
+      data: { saved: true, savedSetById: this.auth.userId, savedSetAt: new Date() },
+    });
+    if (person.stage === 'VISITOR') {
+      await moveStage(
+        tx,
+        person,
+        'NEW_CONVERT',
+        this.auth.userId,
+        'Gave their life to Christ when Outreach reached them',
+      );
+    }
   }
 
   /**

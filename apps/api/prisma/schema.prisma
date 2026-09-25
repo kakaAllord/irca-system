@@ -1300,6 +1300,9 @@ model OutreachSessionTeam {
   area         String  @db.VarChar(80)
   /// People spoken to without taking details. Those recorded are counted, not typed.
   spokenToOnly Int     @default(0) @map("spoken_to_only")
+  /// Of those spoken to without details, how many gave their life to Christ.
+  /// Typed by the team, like the number spoken to; never more than it.
+  savedOnly    Int     @default(0) @map("saved_only")
   notes        String  @default("") @db.VarChar(1000)
 
   session OutreachSession             @relation(fields: [sessionId], references: [id])
@@ -1338,6 +1341,9 @@ model OutreachReached {
   /// key, so person:erase takes an erased person out of these by hand.
   reachedByIds  String[] @default([]) @map("reached_by_ids") @db.Uuid
   needsFollowUp Boolean  @default(true) @map("needs_follow_up")
+  /// They gave their life to Christ when reached: what the team reports
+  /// upward beside how many it reached (owner, 25 Sept 2026).
+  saved         Boolean  @default(false)
   note          String   @default("") @db.VarChar(1000)
   recordedById  String   @map("recorded_by_id") @db.Uuid
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)

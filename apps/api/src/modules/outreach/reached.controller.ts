@@ -31,6 +31,7 @@ const RecordSchema = z.object({
   lang: z.enum(SMS_LANGS).optional(),
   mayMessage: z.boolean(),
   needsFollowUp: z.boolean().optional(),
+  saved: z.boolean().optional(),
   note: z.string().trim().max(1000).optional(),
   reachedOn: Day.optional(),
   samePersonId: z.uuid().optional(),
@@ -41,6 +42,7 @@ const UpdateSchema = z
     area: z.string().trim().max(80).optional(),
     note: z.string().trim().max(1000).optional(),
     needsFollowUp: z.boolean().optional(),
+    saved: z.boolean().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, 'Nothing to change');
 

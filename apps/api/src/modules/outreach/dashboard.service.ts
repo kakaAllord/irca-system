@@ -61,6 +61,27 @@ export const FIGURES = {
       where s.status <> 'CANCELLED' and t.spoken_to_only > 0
         and s.held_on between ${from}::date and ${to}::date`,
   },
+  salvations: {
+    label: 'Salvations',
+    hint: 'Gave their life to Christ when reached: those recorded, and those the teams counted',
+    trend: true,
+    rows: ({ from, to }) => sql`
+      select r.id::text as id, p.full_name as title,
+             concat_ws(' · ', nullif(r.area, ''), nullif(s.title, '')) as detail,
+             r.reached_on as at_day, ${person(sql`p.id`)} as href, 1 as n, 1 as d
+      from outreach_reached r
+      join people p on p.id = r.person_id
+      left join outreach_sessions s on s.id = r.session_id
+      where r.saved and r.reached_on between ${from}::date and ${to}::date
+      union all
+      select t.id::text, t.area || ', no details',
+             coalesce(nullif(s.title, ''), 'Saturday'),
+             s.held_on, '/outreach/sessions/' || s.id::text, t.saved_only, 1
+      from outreach_session_teams t
+      join outreach_sessions s on s.id = t.session_id
+      where s.status <> 'CANCELLED' and t.saved_only > 0
+        and s.held_on between ${from}::date and ${to}::date`,
+  },
   awaiting: {
     label: 'Awaiting follow-up',
     hint: 'People with a reach still marked as needing following up, now',
