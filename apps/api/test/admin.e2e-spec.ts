@@ -263,6 +263,7 @@ describe('running a church: people, roles and portals', () => {
       'membership',
       'finance',
       'comms',
+      'outreach',
       'departments',
       'admin',
       'dev',
