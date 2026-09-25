@@ -30,6 +30,8 @@ import { LogBufferService, logBuffer } from './logging/log-buffer.service.js';
 import { ChangeRequestRegistry } from './change-requests/registry.service.js';
 import { ChangeRequestService } from './change-requests/change-request.service.js';
 import { ScheduledJobs } from './jobs/scheduled-jobs.service.js';
+import { AudienceRegistry } from './comms/audience.registry.js';
+import { AudienceResolver } from './comms/audience.resolver.js';
 
 /**
  * Everything that is true of every request, whatever module serves it: who is
@@ -63,6 +65,8 @@ import { ScheduledJobs } from './jobs/scheduled-jobs.service.js';
     SequenceService,
     ChangeRequestRegistry,
     ChangeRequestService,
+    AudienceRegistry,
+    AudienceResolver,
     ApiClientService,
     SessionGuard,
     CsrfGuard,
@@ -92,6 +96,8 @@ import { ScheduledJobs } from './jobs/scheduled-jobs.service.js';
     SequenceService,
     ChangeRequestRegistry,
     ChangeRequestService,
+    AudienceRegistry,
+    AudienceResolver,
     ApiClientService,
     SessionGuard,
     CsrfGuard,
