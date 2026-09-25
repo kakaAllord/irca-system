@@ -5,7 +5,8 @@
 > four fields on a phone — into the church's one list of people — then follows
 > each person up until they come to church.
 
-**Status:** in progress. **Comes after:** Phase 7 (the department, its
+**Status:** built (25 Sept 2026), except step 8.1, which waits on the
+Outreach leader; see "What changed on the way" at the end. **Comes after:** Phase 7 (the department, its
 members and the Friday reminders all come from there). **Comes before:**
 Phase 9, which uses the person timeline this phase builds.
 
@@ -789,15 +790,52 @@ test fail.
 
 ## 8.11 — Phase check
 
-- [ ] Outreach can be turned on in Admin → Portals for its department, and its two roles and its leaders' list work.
-- [ ] The team is the Outreach department; nobody is typed twice.
-- [ ] A Saturday can be planned, teams sent to areas, and numbers recorded.
-- [ ] A person is recorded in four fields, on a phone, in under a minute.
-- [ ] A person already known is matched, not duplicated.
-- [ ] One timeline shows the doorstep, the calls, the visits and the first Sunday — in both portals.
-- [ ] Follow-up can happen many times, in any order.
-- [ ] Friday training is recorded, and the team reminded through the department's Messages.
-- [ ] Every dashboard number opens the list behind it.
-- [ ] The session PDF is attached, limited, private, and named in the data inventory and the erasure runbook.
-- [ ] `appendix-database.md`, `what-works-now.md` and the metric list are updated.
-- [ ] Someone other than the builder has walked it in a browser, at phone width.
+- [x] Outreach can be turned on in Admin → Portals for its department, and its two roles and its leaders' list work.
+- [x] The team is the Outreach department; nobody is typed twice.
+- [x] A Saturday can be planned, teams sent to areas, and numbers recorded.
+- [x] A person is recorded in four fields, on a phone, in under a minute. *(Three typed; saving took under two seconds in the browser. The five-person stopwatch test is for the second walker.)*
+- [x] A person already known is matched, not duplicated.
+- [x] One timeline shows the doorstep, the calls, the visits and the first Sunday — in both portals.
+- [x] Follow-up can happen many times, in any order.
+- [x] Friday training is recorded, and the team reminded through the department's Messages.
+- [x] Every dashboard number opens the list behind it.
+- [x] The session PDF is attached, limited, private, and named in the data inventory and the erasure runbook. *(Against the in-memory store; the checks against a real bucket are `docs/deployment.md` §6b, before launch.)*
+- [x] `appendix-database.md`, `what-works-now.md` and the metric list are updated.
+- [ ] Someone other than the builder has walked it in a browser, at phone width. *(The owner's: `what-works-now.md` §11, steps 24–27.)*
+- [ ] Step 8.1: the Outreach leader's answers are in `outreach-brief.md`. *(The owner's.)*
+
+---
+
+## What changed on the way
+
+Built on 25 Sept 2026. Where the code differs from the steps above, the code
+is right, and this is why.
+
+- **Reports are routes of their own too.** Besides the three in 8.9,
+  `GET …/report/versions` lists the current report and its earlier versions,
+  and `GET …/report?file=<id>` opens an earlier one: a version kept but never
+  openable would be kept for nothing.
+- **The dashboard's lists are one route.** `GET /v1/outreach/dashboard/:figure`
+  answers each figure's list, from the same SQL definition the figure is added
+  up from, so the two cannot disagree; the portal shows it at
+  `/outreach/figures/<figure>`.
+- **"Came on Sunday" is a follow-up.** `ATTENDED_SERVICE` goes through the same
+  route as calls and visits, and writes "First time at church" once and "Came
+  to church again" after. Only calls, visits and invitations count as
+  follow-ups on the dashboard.
+- **Nobody is reached before the day.** Recording against a Saturday still to
+  come is refused, and the pages offer only Saturdays that have come;
+  marking a training more than twelve hours before it is refused the same way.
+- **The Saturday page takes the "spoken to" count**, behind
+  `outreach.reached.record` rather than `sessions.manage`, because the team
+  that spoke to people types it.
+- **Numbers go out ready to ring**: `+255712345678`, not the dialling code
+  followed by what was typed, which made call buttons dial nobody.
+- **Erasure lists the reports.** `person:erase --dry-run` lists every report of
+  the Saturdays the person was part of, since erasing removes the rows that
+  say which those were; the runbook has the operator check them first.
+- **Where the office adds someone by hand, `people.source` says `OFFICE`.** It
+  had said `FORM` since 8.3; a migration corrected those saved in between.
+- **The storage library** is the AWS SDK's S3 client, which both R2 and B2
+  speak. Its variables are all five or none, and the API refuses to start with
+  some.

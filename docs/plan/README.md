@@ -18,7 +18,7 @@ file, then `00-decisions.md`, then the phase you are working on.
 | --- | --- |
 | 0–6 | **Built.** What is left of Phase 6 is going live, which is the owner's (`06`, step 6.13). |
 | 7 — Departments and Communications | **Built** (25 Sept 2026). Left for the owner: the SMS budget, the Beem account at launch, and a second person walking it (`07`, step 7.16). |
-| 8 — Outreach | **In progress.** Its plan was corrected for departments (D28) and for a portal's own leaders (D29) before the first commit. Step 8.1 waits on the Outreach leader; the rest is built on the recommendations written into each step. |
+| 8 — Outreach | **Built** (25 Sept 2026), on the recommendations written into each step. Left for the owner: the Outreach leader's answers to step 8.1, the file bucket (`docs/deployment.md` §6b), and a second person walking it (`08`, step 8.11). |
 | 9 — Pledges | After 8, and only once the leadership has answered step 9.0. |
 | 10 — Strengthening | Only when the owner says yes (§3.4a). |
 
@@ -56,7 +56,7 @@ the plan in the same commit and say why (§2).
 | `05-registration-and-membership.md` | Phase 5 (built; cutover is the owner's) — the registration form moved onto the API, live data migrated, and the Membership portal (Dashboard, Members, Applications, Discipleship, Insights) from the design. |
 | `06-dev-console-hardening-launch.md` | Phase 6 (built; launch is the owner's) — the dev console (health, usage, logs, the view-as log, settings and keys), security hardening, the setup and recovery commands, deployment, runbooks and the training guides. Rewritten for D27. Load testing, backups and monitoring are Phase 10. |
 | `07-communications.md` | Phase 7 (built) — departments with their leaders and members (D28), then the Communication system: SMS through Beem, templates approved once and used weekly, audiences, recurring "beat" messages, opt-out, and what it all costs. Central control, departments sending their own routine messages. |
-| `08-outreach.md` | Phase 8 (in progress; corrected for D28 and D29) — the Outreach & Evangelism portal: the team (its department), Saturday sessions, people reached in four fields, follow-up, one timeline per person, Friday training, the dashboard, and the session report as a PDF. |
+| `08-outreach.md` | Phase 8 (built; 8.1 waits on the Outreach leader) — the Outreach & Evangelism portal: the team (its department), Saturday sessions, people reached in four fields, follow-up, one timeline per person, Friday training, the dashboard, and the session report as a PDF. |
 | `09-pledges-and-giving-reminders.md` | Phase 9 — pledges: what someone promised, what they have paid, what is left, and reminding them through Communications. Waits for three decisions by the leadership. |
 | `10-strengthening.md` | Phase 10 — strengthening: performance and load, backups and the restore drill, monitoring and alerts. **Starts only when the owner says so**, after every feature phase is done. |
 | `docs/modules/*-brief.md` | What a department actually does, in its own words, filled in before its module is built (step 6.12). `comms-brief.md` and `outreach-brief.md` exist. |

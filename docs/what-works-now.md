@@ -11,8 +11,10 @@ Membership portal), and **Phase 6** — the developer console, the security
 hardening, the commands for setting up and recovering, the written way to
 deploy it, the runbooks and the training guides, and **Phase 7** — the
 church's departments with their leaders and members, and the Communication
-system that texts them. What is left of Phase 6 is going live, which is the
-owner's (section 13). Then Outreach (Phase 8) and pledges (Phase 9). Switching the live form over is a
+system that texts them, and **Phase 8** — the Outreach & Evangelism portal:
+Saturdays, the people reached, follow-up, one timeline per person, Friday
+training, the dashboard and the session report. What is left of Phase 6 is
+going live, which is the owner's (section 13). Then pledges (Phase 9). Switching the live form over is a
 job for a Sunday evening, with `docs/runbooks/cutover-registration.md`.
 
 This system serves **one church**. A second church would get its own copy,
@@ -38,7 +40,7 @@ There are three apps and one shared library:
 | Part | What it is |
 | --- | --- |
 | `apps/api` | The server. Everything goes through it: signing in, permissions, the books, the activity log. |
-| `apps/portal` | What staff use in a browser: `/login`, `/admin/…`, `/finance/…`, `/membership/…`, `/comms/…`, `/departments/…`, `/dev/…`, `/help`. |
+| `apps/portal` | What staff use in a browser: `/login`, `/admin/…`, `/finance/…`, `/membership/…`, `/comms/…`, `/departments/…`, `/outreach/…`, `/dev/…`, `/help`. |
 | `apps/registration` | The visitor's registration form. One setting chooses its back end: its old database (what the live site uses until the cutover) or this system. |
 | `packages/shared` | The rules both sides need to agree on: what a portal is, what a permission is, what an entry number looks like. |
 
@@ -377,6 +379,52 @@ history, one set of approved words and one bill (D21, D22, D25, D26).
   sends through Beem once Communications has saved the account. Anywhere but
   production, texts reach Beem only with `SMS_LIVE=true` set on purpose.
 
+## 8f. Outreach & Evangelism
+
+The evangelism team's notebook, on a phone (Phase 8). Its team **is** the
+Outreach department: its leaders and members, kept in **My departments →
+Outreach**. The department's leaders run the portal because they lead it, with
+no role (D29); the people who go out and record sign in with the **Outreach
+member** role, and a pastor who only reads has **Outreach viewer**.
+
+- **Team.** Everyone on the team with their partner group, how many Saturdays
+  they went out in the last three months and their training over the last
+  twelve. Leaders make partner groups of two or three; a group is switched
+  off, never deleted.
+- **Saturdays.** A leader plans a Saturday, then sends a team to each area —
+  starting from a partner group or put together for the day, the area
+  suggested from the ones already used. Afterwards it is marked completed or
+  cancelled. Each team types how many it spoke to without taking details.
+- **Recording someone**, standing on a doorstep: each team's *Record someone*
+  asks for a name, a number and one tick — *May the church send them
+  messages?*, unticked unless they said yes — because the team brings the area
+  and who reached them. If the number (or, with no number, the name) is
+  someone the church already knows, it asks *"Neema Mollel, reached 3 Aug in
+  Kaloleni. Same person?"* instead of making a second person. Someone new
+  becomes a visitor in the church's one People list, marked as from Outreach.
+- **Reached** lists everyone recorded, with a number that rings when tapped,
+  and marks who still needs following up or is missing a phone or an area;
+  the area, a note and the follow-up flag are filled in later.
+- **Follow-up** lists who is still waiting, longest first. Each person's page
+  records a call, a visit, an invitation or *Came on Sunday*, as many as it
+  takes, and shows their **timeline** — the same one Membership shows on the
+  person's record, with every portal's lines in order: evangelised, called,
+  visited, first time at church, class, member.
+- **Training.** A leader plans each Friday training and marks who came with
+  the class register's own boxes; a grid shows who has stopped coming.
+  *Remind the team* opens the department's Messages with the whole department
+  chosen. The people Outreach reached are an audience only Communications can
+  give to a department (D22).
+- **Dashboard.** Ten numbers for this week, month or year, or any dates —
+  reached, spoken to, awaiting follow-up, follow-ups done, visited, first-time
+  attenders, Saturdays held, areas, team members out, training attendance —
+  and the weekly trend. **Every number opens the list it was counted from.**
+- **The session report.** A leader attaches the Saturday's report as a PDF of
+  up to 10 MB, straight into the church's private file storage; it opens
+  through a link that works for five minutes, and a new one keeps the old one
+  as an earlier version. Until the bucket is set up (`docs/deployment.md`
+  §6b), attaching says storage is not set up.
+
 ## 8a. The developer console
 
 For whoever runs the system, under **Dev** in the sidebar.
@@ -426,6 +474,11 @@ These hold even if the application code is wrong, which is the point:
 - The activity log cannot be updated or deleted by the application.
 - An amount must be more than zero; an income entry must have a source and an
   expense an item; the month on an entry must match its date.
+- A person's timeline can only be added to, never edited or deleted.
+- Who was reached, and when, cannot be removed or rewritten: only the area,
+  the note and the follow-up flag change afterwards. Saturdays, partner groups
+  and trainings are never deleted.
+- A kept file's row is never deleted; replacing a file only marks the old one.
 
 ---
 
@@ -465,8 +518,8 @@ The portal is on <http://localhost:3000>, the API on <http://localhost:4000>.
 | `dev@irca.local` | `dev-password-123` | The developer: the dev console, and an administrator too |
 | `comms@irca.local` | `comms-password-123` | Communications lead (named for Allord Archard) |
 
-Membership, Finance and Communications are turned on, each belonging to the
-department of the same name. No department has a leader yet: name one in
+Membership, Finance, Communications and Outreach are turned on, each belonging
+to the department of the same name. No department has a leader yet: name one in
 Admin → Departments (they must be a confirmed member, so run `npm run db:demo`
 and confirm someone first). There is no daily SMS limit until you save one in
 Comms → Settings. The registration form runs at <http://localhost:3001>; with
@@ -537,6 +590,22 @@ This is the walk that proves the access rules. Half an hour, in a browser.
 23. View as the clerk, stop, then Dev → **View-as log**: type `log` and find
     the session, then `show` and its id to see every page opened.
 
+**Outreach**
+
+24. As `admin@irca.local`: Admin → Departments → Outreach → name a confirmed
+    member as leader (run `npm run db:demo` first), accept the invitation from
+    the email in the API's terminal, and as that leader add four people in My
+    departments → Outreach. Give `followup@irca.local` the Outreach member role.
+25. As the leader, with the browser at phone width: Outreach → Saturdays →
+    **Plan a Saturday** for today, and add two teams. On a team, **Record
+    someone** four times; use the number of someone already in People for one
+    and answer **Same person**.
+26. As `followup@irca.local`: Follow-up → open one → record a call and a visit.
+    Then as `office@irca.local` open the same person in Membership: the
+    timeline shows both, labelled Outreach.
+27. As the leader: Training → plan one for today and mark it; Dashboard → click
+    each number and check its list.
+
 ---
 
 ## 12. Running the automated tests
@@ -563,7 +632,13 @@ portal opened on the read-only connection; the command line; invitations end to 
 each permission; and for Finance — numbering under fifty simultaneous saves,
 the month rules, near-duplicate names, the database's own refusals, change
 requests including self-approval, staleness and month moves, totals, CSV
-safety, and the whole recording-and-approving journey in a browser.
+safety, and the whole recording-and-approving journey in a browser. For
+Outreach — the team being exactly the department, partner groups, Saturdays,
+recording in four fields, fifty-five overlapping records becoming exactly the
+people there are, consent, the timeline in both portals, a viewer refused
+every write and an Outreach member refused all of Membership, training, every
+dashboard number against a hand-counted month, files and the report, and a
+whole Saturday walked in a browser at phone width.
 
 ---
 
@@ -580,5 +655,8 @@ safety, and the whole recording-and-approving journey in a browser.
 - For Communications to go live: the monthly SMS budget (so Communications can
   save the daily limit), the Beem account typed into Comms → Settings, and the
   reply URL given to Beem (`docs/deployment.md`, §6a).
-- Outreach and pledges (Phases 8 and 9). Phase 8's plan must first be
-  corrected for departments, as the note at its top says.
+- For Outreach: the Outreach leader's answers to step 8.1 (how the team
+  works, its areas, which numbers it reports upward), the file bucket
+  (`docs/deployment.md` §6b, with its checks against the real bucket), and a
+  second person walking it at phone width.
+- Pledges (Phase 9), once the leadership has answered step 9.0.
