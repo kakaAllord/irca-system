@@ -402,6 +402,8 @@ async function writeHistory(staff: Staff) {
         dial: '+255',
         phone: phone(),
         email: '',
+        // Written to in the language they answered in, as the form sets it (D22).
+        lang,
         stage,
         saved: reach >= 1 ? true : null,
         baptised: reach >= 3 ? chance(0.7) : null,
