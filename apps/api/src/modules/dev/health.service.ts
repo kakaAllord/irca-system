@@ -39,8 +39,21 @@ export class HealthService {
         error: string | null;
       }[]
     >`
-      select distinct on (job) job, started_at, finished_at, ok, error
-      from job_runs order by job, started_at desc`;
+      -- Each job's latest run, found by stepping from one job name to the
+      -- next in the index. A plain "distinct on (job)" read every run ever recorded
+      -- instead: 3.5 seconds once a year of runs had built up (10 step 10.1).
+      with recursive jobs as (
+        (select job from job_runs order by job limit 1)
+        union all
+        select (select r.job from job_runs r where r.job > jobs.job order by r.job limit 1)
+        from jobs where jobs.job is not null
+      )
+      select last.* from jobs
+      cross join lateral (
+        select job, started_at, finished_at, ok, error from job_runs
+        where job_runs.job = jobs.job order by started_at desc limit 1
+      ) last
+      order by last.job`;
     const errors = await this.db.client.$queryRaw<
       { day: Date; requests: bigint; errors: bigint }[]
     >`

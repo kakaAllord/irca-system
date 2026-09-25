@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import { financeModule } from '@irca/shared';
 import { RegistrySync } from '../src/core/rbac/registry-sync.service.js';
+import { UsageSnapshot } from '../src/core/usage/usage-snapshot.service.js';
 import {
   createApp,
   createChurch,
@@ -73,6 +74,47 @@ describe('the dev console', () => {
     expect(res.body.database).toBeDefined();
     expect(typeof res.body.database.bytes).toBe('number');
     expect(Array.isArray(res.body.errors)).toBe(true);
+  });
+
+  it("shows each job's latest run, however many there have been", async () => {
+    const cookie = await developer();
+    await db.query(`
+      insert into job_runs (id, job, started_at, finished_at, ok, error) values
+        (gen_random_uuid(), 'drill-a', now() - interval '2 minutes', now(), false, 'down'),
+        (gen_random_uuid(), 'drill-a', now() - interval '1 minute', now(), true, null),
+        (gen_random_uuid(), 'drill-b', now() - interval '1 day', now(), false, 'timeout')`);
+
+    const res = await portal(app).get('/v1/dev/health', cookie).expect(200);
+    // The API's own jobs run during the test too; only the drills are asserted on.
+    const jobs = (res.body.jobs as { job: string; ok: boolean; error: string | null }[]).filter(
+      (j) => j.job.startsWith('drill-'),
+    );
+    expect(jobs.map((j) => [j.job, j.ok, j.error])).toEqual([
+      ['drill-a', true, null],
+      ['drill-b', false, 'timeout'],
+    ]);
+  });
+
+  it('forgets old job runs overnight, and keeps the failures longer', async () => {
+    await createChurch(db, 'IRCA', ['admin', 'dev']);
+    await db.query(`
+      insert into job_runs (id, job, started_at, ok) values
+        (gen_random_uuid(), 'drill-a', now() - interval '31 days', true),
+        (gen_random_uuid(), 'drill-a', now() - interval '29 days', true),
+        (gen_random_uuid(), 'drill-a', now() - interval '31 days', false),
+        (gen_random_uuid(), 'drill-a', now() - interval '181 days', false)`);
+
+    const stats = await app.get(UsageSnapshot).run();
+
+    expect(stats.jobRunsRemoved).toBe(2);
+    const { rows } = await db.query(
+      `select ok, (now() - started_at) < interval '30 days' as recent from job_runs
+       where job = 'drill-a' order by started_at`,
+    );
+    expect(rows).toEqual([
+      { ok: false, recent: false },
+      { ok: true, recent: true },
+    ]);
   });
 
   it('hands back the lines the server has just written', async () => {

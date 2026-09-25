@@ -31,6 +31,13 @@ const MEASURED_TABLES = [
 /** Kept this long after they stop working, for the dev console and support. */
 const SESSION_RETENTION_DAYS = 90;
 const RESET_TOKEN_RETENTION_DAYS = 7;
+/**
+ * The outboxes record a run every fifteen seconds, about five million rows a
+ * year. A month shows how the jobs have been behaving; a failure is kept
+ * longer, for whoever looks into it.
+ */
+const JOB_RUN_RETENTION_DAYS = 30;
+const FAILED_JOB_RUN_RETENTION_DAYS = 180;
 
 /**
  * How big the database is, and what is in it, measured once a night.
@@ -159,7 +166,11 @@ export class UsageSnapshot {
    * Sessions long dead and reset links long used are removed. The activity
    * log is never touched: it is kept forever.
    */
-  private async cleanUp(): Promise<{ sessionsRemoved: number; resetTokensRemoved: number }> {
+  private async cleanUp(): Promise<{
+    sessionsRemoved: number;
+    resetTokensRemoved: number;
+    jobRunsRemoved: number;
+  }> {
     const sessionsRemoved = await this.db.$executeRaw`
       delete from sessions
       where coalesce(revoked_at, expires_at) < now() - make_interval(days => ${SESSION_RETENTION_DAYS})
@@ -167,7 +178,12 @@ export class UsageSnapshot {
     const resetTokensRemoved = await this.db.$executeRaw`
       delete from password_reset_tokens
       where created_at < now() - make_interval(days => ${RESET_TOKEN_RETENTION_DAYS})`;
-    return { sessionsRemoved, resetTokensRemoved };
+    const jobRunsRemoved = await this.db.$executeRaw`
+      delete from job_runs
+      where started_at < now() - make_interval(days => ${JOB_RUN_RETENTION_DAYS})
+        and (ok is distinct from false
+             or started_at < now() - make_interval(days => ${FAILED_JOB_RUN_RETENTION_DAYS}))`;
+    return { sessionsRemoved, resetTokensRemoved, jobRunsRemoved };
   }
 
   /** Every few minutes: the most connections seen at once today. */
