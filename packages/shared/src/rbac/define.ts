@@ -46,7 +46,9 @@ export type NavIcon =
   | 'departments'
   | 'messages'
   | 'templates'
-  | 'schedule';
+  | 'schedule'
+  | 'sessions'
+  | 'training';
 
 export type NavItem = {
   label: string;

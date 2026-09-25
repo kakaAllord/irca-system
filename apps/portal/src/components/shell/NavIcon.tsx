@@ -176,4 +176,22 @@ const PATHS: Record<Name, React.ReactNode> = {
       <path d="M20 13v2a4 4 0 0 1-4 4H4" />
     </>
   ),
+  // A map pin at the end of a winding road: a Saturday out in the area.
+  sessions: (
+    <>
+      <path d="M17 3.5a3.5 3.5 0 0 0-3.5 3.5c0 2.6 3.5 6 3.5 6s3.5-3.4 3.5-6A3.5 3.5 0 0 0 17 3.5Z" />
+      <circle cx="17" cy="7" r="1" />
+      <path d="M17 17H8a2.5 2.5 0 0 1 0-5h2.5a2.5 2.5 0 0 0 0-5H4" />
+      <path d="M4 21h13" />
+    </>
+  ),
+  // A board with someone beside it: the Friday training.
+  training: (
+    <>
+      <path d="M9 4h12v10H9" />
+      <path d="m13 14-1.5 4M17 14l1.5 4" />
+      <circle cx="5" cy="8" r="2" />
+      <path d="M2 20v-4.5A2.5 2.5 0 0 1 4.5 13H7l3-2" />
+    </>
+  ),
 };

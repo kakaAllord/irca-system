@@ -97,6 +97,11 @@ await department(
   'The messages the church sends, and the standards they follow.',
   'comms',
 );
+await department(
+  'Outreach',
+  'Evangelism: the Saturday teams, the people reached, their follow-up and the Friday training.',
+  'outreach',
+);
 await portal('admin');
 await portal('dev');
 
