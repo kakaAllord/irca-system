@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { DepartmentsModule } from '../departments/departments.module.js';
+import { DashboardController } from './dashboard.controller.js';
+import { DashboardService } from './dashboard.service.js';
 import { FollowupController } from './followup.controller.js';
 import { FollowupService } from './followup.service.js';
 import { OutreachAudiences } from './outreach.audiences.js';
@@ -19,6 +21,7 @@ import { TrainingService } from './training.service.js';
 @Module({
   imports: [DepartmentsModule],
   controllers: [
+    DashboardController,
     TeamController,
     SessionsController,
     ReachedController,
@@ -26,6 +29,7 @@ import { TrainingService } from './training.service.js';
     TrainingController,
   ],
   providers: [
+    DashboardService,
     TeamService,
     SessionsService,
     ReachedService,

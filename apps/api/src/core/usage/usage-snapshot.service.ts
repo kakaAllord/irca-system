@@ -15,7 +15,9 @@ const MEASURED_TABLES = [
   'foundation_enrollments',
   'impersonation_sessions',
   'membership_applications',
+  'outreach_reached',
   'people',
+  'person_interactions',
   'person_notes',
   'person_stage_events',
   'registrations',
@@ -127,6 +129,11 @@ export class UsageSnapshot {
       [
         'change_requests.pending',
         Prisma.sql`select count(*)::bigint as n from change_requests where status = 'PENDING'`,
+      ],
+      [
+        'outreach.followups.pending',
+        Prisma.sql`select count(distinct person_id)::bigint as n from outreach_reached
+                   where needs_follow_up`,
       ],
       [
         'auth.sessions.active',

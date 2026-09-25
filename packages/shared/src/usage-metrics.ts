@@ -54,6 +54,13 @@ export const USAGE_METRICS: MetricDef[] = [
   m('Departments', 'departments.leaders.named', 'counter', 'Department leaders named'),
   m('Departments', 'departments.members.added', 'counter', 'People added to departments'),
 
+  m('Outreach', 'outreach.reached', 'counter', 'People recorded as reached'),
+  m('Outreach', 'outreach.followups', 'counter', 'Calls, visits and invitations'),
+  m('Outreach', 'outreach.visits', 'counter', 'Home visits'),
+  m('Outreach', 'outreach.sessions', 'counter', 'Saturdays marked completed'),
+  m('Outreach', 'outreach.training.attendance', 'counter', 'People marked present at training'),
+  m('Outreach', 'outreach.followups.pending', 'gauge', 'People awaiting follow-up'),
+
   m('Messages', 'sms.queued', 'counter', 'Messages queued'),
   m('Messages', 'sms.sent', 'counter', 'Messages sent'),
   m('Messages', 'sms.delivered', 'counter', 'Messages delivered'),

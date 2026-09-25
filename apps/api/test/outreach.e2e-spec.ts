@@ -4,6 +4,8 @@ import pg from 'pg';
 import { randomUUID } from 'node:crypto';
 import { outreachModule } from '@irca/shared';
 import { RegistrySync } from '../src/core/rbac/registry-sync.service.js';
+import { UsageSnapshot } from '../src/core/usage/usage-snapshot.service.js';
+import { UsageService } from '../src/core/usage/usage.service.js';
 import {
   createApp,
   createChurch,
@@ -699,6 +701,172 @@ describe('Outreach (Phase 8)', () => {
         .expect(204);
       const granted = await count().expect(200);
       expect(granted.body).toMatchObject({ reach: 1 });
+    });
+  });
+  describe('the dashboard (8.8)', () => {
+    it('counts a known month by hand, and every number opens its own list', async () => {
+      // Counts earlier tests left in memory are written, and cleared, first.
+      await app.get(UsageService).flush();
+      await db.query('truncate usage_daily');
+      const { cookie, members, leader } = await outreach();
+      const post = (path: string, body: object) =>
+        portal(app)
+          .post(path, body, cookie)
+          .expect((r) => expect(r.status).toBeLessThan(300));
+      const saturday = async (heldOn: string, teams: { area: string; people: string[] }[]) => {
+        const s = await post('/v1/outreach/sessions', { heldOn });
+        const ids: string[] = [];
+        for (const t of teams) {
+          const made = await post(`/v1/outreach/sessions/${s.body.id}/teams`, {
+            area: t.area,
+            personIds: t.people,
+          });
+          ids.push(made.body.id);
+        }
+        return { id: s.body.id as string, teams: ids };
+      };
+      const reach = async (teamId: string, fullName: string, phone: string, extra = {}) =>
+        (
+          await post('/v1/outreach/reached', {
+            teamId,
+            fullName,
+            phone,
+            mayMessage: true,
+            ...extra,
+          })
+        ).body.personId as string;
+      const follow = (personId: string, kind: string, on: string, done = false) =>
+        post(`/v1/outreach/people/${personId}/followups`, { kind, on, done });
+
+      // August: outside the period, but D still needs following up.
+      const august = await saturday('2026-08-29', [{ area: 'Old Town', people: [members[0]!] }]);
+      const d = await reach(august.teams[0]!, 'Daudi Four', '0711 000 004');
+      // A cancelled Saturday in the period counts for nothing.
+      const cancelled = await saturday('2026-09-12', [
+        { area: 'Ngarenaro', people: [members[1]!] },
+      ]);
+      await portal(app)
+        .put(`/v1/outreach/sessions/${cancelled.id}/status`, { status: 'CANCELLED' }, cookie)
+        .expect(204);
+
+      // The Saturday: two teams, eight spoken to without details.
+      const sept = await saturday('2026-09-19', [
+        { area: 'Sombetini', people: [members[0]!, members[1]!] },
+        { area: 'Kaloleni', people: [members[2]!, leader.personId] },
+      ]);
+      await portal(app)
+        .put(`/v1/outreach/teams/${sept.teams[0]}/spoken-to`, { spokenToOnly: 5 }, cookie)
+        .expect(204);
+      await portal(app)
+        .put(`/v1/outreach/teams/${sept.teams[1]}/spoken-to`, { spokenToOnly: 3 }, cookie)
+        .expect(204);
+      const a = await reach(sept.teams[0]!, 'Amina One', '0711 000 001');
+      const b = await reach(sept.teams[0]!, 'Baraka Two', '0711 000 002');
+      const c = await reach(sept.teams[1]!, 'Cecilia Three', '0711 000 003');
+      await reach(sept.teams[1]!, 'Amina One', '0711 000 001', { samePersonId: a });
+      await portal(app)
+        .put(`/v1/outreach/sessions/${sept.id}/status`, { status: 'COMPLETED' }, cookie)
+        .expect(204);
+
+      await follow(a, 'CALL', '2026-09-20');
+      await follow(a, 'VISIT', '2026-09-20');
+      await follow(b, 'VISIT', '2026-09-21');
+      await follow(c, 'INVITED', '2026-09-21', true);
+      await follow(a, 'ATTENDED_SERVICE', '2026-09-20');
+      await follow(a, 'ATTENDED_SERVICE', '2026-09-24');
+
+      const training = await post('/v1/outreach/trainings', {
+        topic: 'Sharing your story',
+        date: '2026-09-18',
+        time: '18:00',
+      });
+      await portal(app)
+        .put(
+          `/v1/outreach/trainings/${training.body.id}/attendance`,
+          {
+            marks: [
+              { personId: members[0], mark: 'ATTENDED' },
+              { personId: members[1], mark: 'ATTENDED' },
+              { personId: members[2], mark: 'MISSED' },
+            ],
+          },
+          cookie,
+        )
+        .expect(204);
+
+      const period = 'from=2026-09-01&to=2026-09-30';
+      const { body } = await portal(app)
+        .get(`/v1/outreach/dashboard?${period}`, await viewer())
+        .expect(200);
+      const value = (key: string) => body.figures[key].value;
+      expect({
+        reached: value('reached'),
+        spokenTo: value('spokenTo'),
+        awaiting: value('awaiting'),
+        followups: value('followups'),
+        visited: value('visited'),
+        firstTime: value('firstTime'),
+        sessions: value('sessions'),
+        areas: value('areas'),
+        participation: value('participation'),
+        training: `${value('training')} of ${body.figures.training.of}`,
+      }).toEqual({
+        reached: 4, // A twice, B, C; not D in August
+        spokenTo: 8,
+        awaiting: 3, // A, B and D; C was done
+        followups: 4, // a call, two visits and an invitation; not the Sundays
+        visited: 2,
+        firstTime: 1, // A, once, however often she comes
+        sessions: 1, // not the cancelled one, not August's
+        areas: 2,
+        participation: 4,
+        training: '2 of 3',
+      });
+      expect(d).toBeTruthy();
+
+      // Every number is the list it opens.
+      for (const [key, figure] of Object.entries(body.figures) as [
+        string,
+        { value: number; of: number | null },
+      ][]) {
+        const list = await portal(app)
+          .get(`/v1/outreach/dashboard/${key}?${period}`, cookie)
+          .expect(200);
+        const sum = list.body.rows.reduce((n: number, r: { n: number }) => n + r.n, 0);
+        expect([key, sum]).toEqual([key, figure.value]);
+      }
+      // The weeks add up to the period's figure too.
+      const reachedWeeks = body.trends.find((t: { metric: string }) => t.metric === 'reached');
+      expect(reachedWeeks.points.reduce((n: number, p: { value: number }) => n + p.value, 0)).toBe(
+        4,
+      );
+
+      // The same work, as the dev console counts it.
+      await app.get(UsageSnapshot).run();
+      await app.get(UsageService).flush();
+      const usage = await db.query<{ metric: string; value: number }>(
+        `select metric, sum(value)::int as value from usage_daily
+         where metric like 'outreach.%' group by metric order by metric`,
+      );
+      expect(Object.fromEntries(usage.rows.map((r) => [r.metric, r.value]))).toEqual({
+        'outreach.followups': 4,
+        'outreach.followups.pending': 3,
+        'outreach.reached': 5,
+        'outreach.sessions': 1,
+        'outreach.training.attendance': 2,
+        'outreach.visits': 2,
+      });
+    });
+
+    it('refuses a period that ends before it starts, or runs past a year', async () => {
+      const { cookie } = await outreach();
+      await portal(app)
+        .get('/v1/outreach/dashboard?from=2026-09-30&to=2026-09-01', cookie)
+        .expect(422);
+      await portal(app)
+        .get('/v1/outreach/dashboard?from=2024-01-01&to=2026-09-01', cookie)
+        .expect(422);
+      await portal(app).get('/v1/outreach/dashboard/nothing', cookie).expect(404);
     });
   });
 });
