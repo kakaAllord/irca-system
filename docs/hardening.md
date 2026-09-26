@@ -63,9 +63,21 @@ Checked on 24 September 2026, on branch `phase-6/finish`.
 
 ## Keeping answers private
 
-(The plan's multi-tenancy section is retired with D27: there is one church,
-so there is no other church's data to keep out. What was never about tenancy
-stays.)
+Multi-tenancy was retired by D27: there is one church, so there is no other
+church's data to keep out. The design is in git history
+(`git show 19ccd4a:docs/plan/multi-tenancy.md`), for anyone who needs to know
+why a commit from Phases 1 to 5 looks the way it does. What it protected that
+was never about churches is still enforced, here:
+
+| Guarantee | Where it is enforced |
+| --- | --- |
+| The activity log cannot be rewritten | Grants in the init migration; `docs/plan/appendix-database.md` |
+| Only devs can read who viewed as whom (D16) | `select` revoked on `audit_events`; the two `security definer` functions |
+| A finance entry changes only through an approved request (D17) | `finance_txn_guard` trigger and the `delete` revoke |
+| Viewing as someone cannot write | The read-only role and `Db` (Access control, below) |
+| No cached answer carries anyone's data | The no-store middleware (below) |
+| Raw SQL cannot be built from strings | The `sql` tag and the lint rule |
+| One person cannot flood the API | The per-address throttler and the per-person limit |
 
 - [x] **No answer is cached anywhere shared.** Every response, refusals and
       404s included, carries `Cache-Control: private, no-store` and

@@ -268,7 +268,8 @@ Tenant isolation is planned across every layer, not just `church_id` columns:
 tenant resolution, authentication, authorization, the database (extension + RLS),
 API endpoints, files, caching, background jobs, logs, backups, monitoring, rate
 limiting and testing. The single description is **`multi-tenancy.md`**. Each
-of its sections names the phase step that builds it.
+of its sections names the phase step that builds it. *(Retired by D27 and
+deleted on 26 Sept 2026; the full text is `git show 19ccd4a:docs/plan/multi-tenancy.md`.)*
 
 | Option | Impact |
 | --- | --- |
@@ -344,6 +345,12 @@ at this decision removed by mistake was put back: the read-only database role
 for viewing as someone, which was never about tenancy. Phases 7, 8, 9 and
 10 were rewritten the same day for one church, and so that someone new to
 the code can follow them step by step.
+
+**26 September 2026:** the owner deleted `multi-tenancy.md`, since nothing
+runs on multi-tenancy any more. Its table of the guarantees that outlived it
+moved to `docs/hardening.md` ("Keeping answers private"), and the full retired
+design is `git show 19ccd4a:docs/plan/multi-tenancy.md`, which is where the plan's older
+references to its numbered sections now point.
 
 ---
 

@@ -727,7 +727,7 @@ church-owned table has no row-level security".
 
 **Goal:** everything that would have to change to give a large church its own
 database later is decided and built now, while it is cheap. The full reasoning
-is in `multi-tenancy.md`, section 13. Today there is one database, and nothing
+is in section 13 of the retired multi-tenancy design, `git show 19ccd4a:docs/plan/multi-tenancy.md`. Today there is one database, and nothing
 behaves differently.
 
 **Do**
@@ -1171,7 +1171,7 @@ will show, cheaply.
 
 **Goal:** no church can use up capacity the others need, and nothing
 church-specific is ever cached where another church could get it
-(`multi-tenancy.md`, sections 8 and 12).
+(sections 8 and 12 of the retired multi-tenancy design, `git show 19ccd4a:docs/plan/multi-tenancy.md`).
 
 **Do**
 
@@ -1229,7 +1229,7 @@ and exports per church"; "Never let church data be cached".
    budget. Record one `job_runs` row per church (add `churchId String?
    @db.Uuid` to `JobRun`). One church failing or running long never stops the
    others. Platform-wide jobs keep using `run()`, with a comment explaining why
-   they must see every church (`multi-tenancy.md`, section 9).
+   they must see every church (section 9 of the retired multi-tenancy design, `git show 19ccd4a:docs/plan/multi-tenancy.md`).
 4. First job: **`impersonation-expiry`** every minute. It ends
    impersonations past `expiresAt` that nobody has touched (the guard ends
    them lazily on the next request, but an abandoned tab would otherwise stay
@@ -1490,7 +1490,7 @@ it for Finance and corrects it where it is wrong):
 - Usage: after `flush()`, `usage_daily` has `api.requests` for the church.
 - Disabled module: a role in a disabled module grants nothing (use a fixture module in tests).
 
-**Multi-tenancy** (`test/tenancy/*.e2e-spec.ts`, see `multi-tenancy.md` section 15):
+**Multi-tenancy** (`test/tenancy/*.e2e-spec.ts`, see section 15 of the retired multi-tenancy design, `git show 19ccd4a:docs/plan/multi-tenancy.md`):
 
 - The **route fuzzer:** every church-scoped `GET` route with an id-like
   parameter, called as church A with church B's ids → `404`. Routes are found

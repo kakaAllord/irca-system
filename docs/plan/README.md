@@ -60,7 +60,6 @@ the plan in the same commit and say why (§2).
 | `09-pledges-and-giving-reminders.md` | Phase 9 (built) — pledges: what someone promised, what they have paid, what is left, and reminding them through Communications, after three decisions by the leadership. |
 | `10-strengthening.md` | Phase 10 (built) — strengthening: performance and load, backups and the restore drill, monitoring and alerts. Started when the owner said so (§3.4a). |
 | `docs/modules/*-brief.md` | What a department actually does, in its own words, filled in before its module is built (step 6.12). `comms-brief.md`, `outreach-brief.md` and `pledges-brief.md` exist. |
-| `multi-tenancy.md` | Retired by D27 (one church, one deployment). Says where each guarantee that outlived it is enforced now. |
 | `appendix-database.md` | Every table in one place, with what owns it and why it exists. |
 
 ---

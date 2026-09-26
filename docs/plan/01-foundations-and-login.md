@@ -1105,7 +1105,7 @@ gets its first dev account without anyone writing SQL.
      add data, **deliberately overlapping** records: the same person names,
      phone numbers, expense item names and entry dates as IRCA. A leak between
      churches then shows as a wrong row in a test, not an empty page. Every e2e
-     run has both churches (`multi-tenancy.md`, section 15).
+     run has both churches (section 15 of the retired multi-tenancy design, `git show 19ccd4a:docs/plan/multi-tenancy.md`).
    - Use `upsert` everywhere, so running the seed twice is harmless.
 2. `src/cli/main.ts` builds a Nest *application context* (no HTTP server) and
    dispatches commands. Use `nest-commander` (`npm i -w @irca/api nest-commander`).

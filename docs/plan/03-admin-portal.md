@@ -97,7 +97,7 @@ request would either lose the email or fail the invitation.
    row **using the caller's transaction**.
 6. Worker job `email-outbox` every 15 s via `JobRunner`:
    - Claim up to 20, **at most 5 per church**, so one church's bulk sending
-     never delays another church's password reset (`multi-tenancy.md`, section 9):
+     never delays another church's password reset (section 9 of the retired multi-tenancy design, `git show 19ccd4a:docs/plan/multi-tenancy.md`):
      ```sql
      -- tenant: core job, all churches, fair share per church
      update email_outbox set status = 'SENDING', attempts = attempts + 1
